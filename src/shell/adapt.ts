@@ -119,7 +119,7 @@ export function toRow(app: App, b: ReaderBook): BookRow {
   const [c1, c2, fg] = coverColors(b.id);
   const title = b.meta.title || '未命名';
   const noteCount = b.notes.highlights.length;
-  /* 分组走 domain.shelfOf（P3-12）：英文 subjects 不再混进中文筛选条 */
+  /* 分组只认手动指定（domain.shelfOf）：书自带题材不参与分类（2026-11-18） */
   const shelf = shelfOf(b);
   const shelves = shelvesOf(b);
 

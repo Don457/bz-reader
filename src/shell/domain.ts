@@ -197,35 +197,29 @@ export function fmtWhen(ts: number, now = Date.now()): string {
 }
 
 /**
- * 书架集合：优先用户自定（业务数据里的 `book.shelf`，经 hydrateLibrary 进壳层），
- * 退回 EPUB 自带的 subjects。
+ * 书架集合：只认用户在 bz Reader 里手动指定的分类（业务数据里的 `book.shelf`，
+ * 经 hydrateLibrary 进壳层）（2026-11-18 用户拍板）。
  *
- * subjects 只在**是中文**时才用（P3-12）：EPUB 里的分类常是 `Fiction` /
- * `Science` / `Literary Collections` 这类英文串，直接塞进筛选条会变成
- * 一排中英混杂的 chip，用户根本不知道自己什么时候建过这些书架。
+ * 不再回退 EPUB 自带的 subjects——那是书自带题材，不是用户的选择。回退会让
+ * 「改/删分类」连带改到只是题材同名的书（明明没归过类，却被改名 / 清空）。
+ * 没指定就是「未分类」；空串也是「未分类」（用户明确移出过分类）。
  */
 export function shelfOf(book: ReaderBook): string {
   const own = getState().shelves[book.id];
-  /* 有这条索引就以它为准，哪怕是空串——空串是「用户明确归到未分类」，
-     不能再回落到 EPUB 自带的分类名，否则删掉这一类之后书还挂在原名下。 */
-  if (own !== undefined) return own || NO_SHELF;
-  const sub = book.meta.subjects?.[0]?.trim();
-  if (sub && /[\u4e00-\u9fff]/.test(sub)) return sub;
-  return NO_SHELF;
+  /* 有这条索引就以它为准，哪怕是空串——空串是「用户明确归到未分类」。 */
+  return own !== undefined ? own || NO_SHELF : NO_SHELF;
 }
 
 /**
  * 一本书的完整分类归属（2026-11-18 多分类）。
  *
  * 优先读业务数据缓存里的完整数组；hydrateLibrary 之前（缓存未建）回退到
- * 主分类或书自带的 subjects。返回空数组表示「未分类」。
+ * 主分类。只认手动指定，同样不回退书自带的 subjects（2026-11-18 拍板）。
+ * 返回空数组表示「未分类」。
  */
 export function shelvesOf(book: ReaderBook): string[] {
   const full = getState().bookShelves[book.id];
   if (full !== undefined) return full;
   const own = getState().shelves[book.id];
-  if (own !== undefined) return own ? [own] : [];
-  const sub = book.meta.subjects?.[0]?.trim();
-  if (sub && /[\u4e00-\u9fff]/.test(sub)) return [sub];
-  return [];
+  return own !== undefined && own ? [own] : [];
 }
