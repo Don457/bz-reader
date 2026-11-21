@@ -10,6 +10,7 @@
  * 无 key 不静默失败：ready() 为 false 时上层给出配置引导，
  * 用户应该被带到设置页，而不是看着按钮点了没反应。
  * ============================================================ */
+import { requestUrl } from 'obsidian';
 import type { ReaderSettings } from './settings';
 import { AI_EVIDENCE_LIMIT } from './ai-budget';
 import { buildEnrichMessages } from './book-enrich';
@@ -330,6 +331,22 @@ export interface AiChatOptions extends AiAskOptions {
 }
 
 /**
+ * 网络通道注入（测试桩；生产不传，走 Obsidian 的 requestUrl）。
+ *
+ * 与 `core/ai-models` 的 `ModelsFetchDeps` 同一思路：把「谁去发请求」变成可替换
+ * 的一层，测试就能模拟「网页跨域被拦、代发成功」而不碰真实网络。
+ */
+export interface AiTransportDeps {
+  requestUrlFn?: (opts: {
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+    body?: string;
+    throw?: boolean;
+  }) => Promise<{ status: number; text: string }>;
+}
+
+/**
  * 这个地址是不是 DeepSeek 官方端点。
  *
  * 只看主机名：用户可能填 `https://api.deepseek.com`、`.../v1`，也可能是
@@ -406,14 +423,14 @@ async function readChatStream(
 }
 
 /**
- * 调 OpenAI 兼容的 `/chat/completions`，返回第一条消息的文字。
+ * 流式通道：网页 `fetch` 直连 `/chat/completions`，边收边给。
  *
- * `messages` 的 content 由调用方决定：普通问答是字符串，视觉识别是
- * `[{type:'text'},{type:'image_url',image_url:{url}}]` 数组——OpenAI、
- * 智谱、Gemini 兼容层都认这个形状，所以不必给「多模态」另开一条请求链路。
- * 失败抛 Error，消息给人看。
+ * 这是首选通道（能逐字出字、能中止），但它受网页跨域限制：服务商不返回
+ * `Access-Control-Allow-Origin` 时，浏览器会在预检阶段直接拦下，请求根本
+ * 发不出去。对外部调用方来说这条通道由 `postChat` 包一层——失败会退回
+ * Obsidian 主进程代发（见下面的 `postChatByHost`）。
  */
-export async function postChat(
+async function postChatStream(
   config: ChatConfig,
   messages: ReadonlyArray<{ role: string; content: unknown }>,
   opts: AiChatOptions = {},
@@ -527,6 +544,115 @@ export async function postChat(
     window.clearTimeout(timer);
     opts.signal?.removeEventListener('abort', onAbort);
   }
+}
+
+/**
+ * 对话入口：先走 fetch 流式；失败（跨域 / 网络）改用 Obsidian 主进程代发。
+ *
+ * 2026-11-22（QQ 群反馈）：模型列表能拉到、对话却连不上。原因不是地址或密钥，
+ * 是两条请求走的通道不一样——拉模型那条 fetch 失败会退回 `requestUrl`
+ * （主进程代发，网页跨域管不到它），对话这条路以前只有 fetch 一条。
+ * bz 主仓一直是「流式失败 → 代发非流式」这条退路（core/ai.ts 的 prompt
+ * → chatNonStream），这里补齐同一口径：用户取消不重试；其余错误先代发一次
+ * 非流式，两路都失败时把两段原因都给人看。代价是代发通道一次性返回、
+ * 没有逐字效果，但总比一句「连不上」好。
+ */
+export async function postChat(
+  config: ChatConfig,
+  messages: ReadonlyArray<{ role: string; content: unknown }>,
+  opts: AiChatOptions = {},
+  deps: AiTransportDeps = {},
+): Promise<string> {
+  try {
+    return await postChatStream(config, messages, opts);
+  } catch (e) {
+    if (opts.signal?.aborted || (e as Error)?.message === '已取消') throw e;
+    try {
+      return await postChatByHost(config, messages, opts, deps);
+    } catch (fallbackError) {
+      const first = (e as Error)?.message || '网络错误';
+      const second = (fallbackError as Error)?.message || '网络错误';
+      throw new Error(`AI 请求失败：${first}（改用 Obsidian 代发也失败：${second}）`);
+    }
+  }
+}
+
+/**
+ * 代发通道：Obsidian 的 `requestUrl`——请求从主进程发出，不受网页跨域限制，
+ * 整份 JSON 一次回来。报文、鉴权、上限与流式通道共用同一份构造，不另开一套。
+ */
+async function postChatByHost(
+  config: ChatConfig,
+  messages: ReadonlyArray<{ role: string; content: unknown }>,
+  opts: AiChatOptions,
+  deps: AiTransportDeps,
+): Promise<string> {
+  const { baseUrl, apiKey, model } = config;
+  const label = opts.label || 'AI';
+  const protocol = config.protocol ?? 'openai';
+  const timeout = Math.max(1, Number(opts.timeoutMs) || AI_TIMEOUT_MS);
+  const thinkingBody =
+    config.thinkingBody ?? (opts.thinking && isDeepSeekChat(baseUrl) ? { thinking: { type: opts.thinking } } : null);
+  const req = buildChatRequest(
+    { endpoint: baseUrl, apiKey, model, protocol, thinkingBody, maxTokens: config.maxTokens },
+    messages,
+    { stream: false, temperature: opts.temperature, maxTokens: opts.maxTokens ?? config.maxTokens },
+  );
+  const requestUrlFn: NonNullable<AiTransportDeps['requestUrlFn']> =
+    deps.requestUrlFn ?? ((o) => requestUrl(o));
+  let timer: number | null = null;
+  const resp = await new Promise<{ status: number; text: string }>((resolve, reject) => {
+    timer = window.setTimeout(
+      () => reject(new Error(`${label} 接口 ${timeout / 1000} 秒没有响应，检查地址与网络后重试`)),
+      timeout,
+    );
+    requestUrlFn({
+      url: req.url,
+      method: 'POST',
+      headers: req.headers,
+      body: JSON.stringify(req.body),
+      throw: false,
+    }).then(
+      (r) => {
+        if (timer !== null) window.clearTimeout(timer);
+        resolve(r);
+      },
+      (e: unknown) => {
+        if (timer !== null) window.clearTimeout(timer);
+        reject(new Error(`连不上 ${label} 接口：${(e as Error)?.message || '网络错误'}`));
+      },
+    );
+  });
+  if (resp.status === 401 || resp.status === 403) {
+    throw new Error(`${label} 接口返回 ${resp.status}（检查 API Key）`);
+  }
+  if (resp.status === 404) {
+    throw new Error(`${label} 接口返回 404（检查接口地址，一般要以 /v1 结尾）`);
+  }
+  if (resp.status < 200 || resp.status >= 300) throw new Error(`${label} 接口返回 ${resp.status}`);
+  let data: {
+    choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown }; finish_reason?: string }>;
+    error?: { message?: string };
+  };
+  try {
+    data = JSON.parse(resp.text);
+  } catch {
+    throw new Error(`${label} 接口没有返回 JSON`);
+  }
+  if (data?.error?.message) throw new Error(`${label} 接口报错：${data.error.message}`);
+  const choice = data.choices?.[0];
+  const text = chatTextOf(protocol, data);
+  if (!text) {
+    throw new Error(emptyChatMessage(choice?.finish_reason, choice?.message?.reasoning_content, model, label));
+  }
+  debugEvent('aichat', {
+    model,
+    finish: choice?.finish_reason ?? '',
+    shape: Array.isArray(choice?.message?.content) ? 'array' : typeof choice?.message?.content,
+    chars: text.length,
+    via: 'host',
+  });
+  return text;
 }
 
 /** 调一次 /chat/completions（读本插件「AI 助手」那一套配置）。 */
