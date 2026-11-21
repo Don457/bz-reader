@@ -1161,6 +1161,11 @@ export const ZH = {
   'settings.ai.customProtocol': '自定义协议',
   'settings.ai.customProtocol.openai': 'OpenAI 兼容',
   'settings.ai.customProtocol.anthropic': 'Anthropic（Claude）',
+  /* 2026-11-22：OpenCode Go 这类网关要一个自定义请求头才能对话；
+     一行一个 Header: value，留空 = 不加任何头 */
+  'settings.ai.customHeaders': '附加请求头',
+  'settings.ai.customHeadersPh': '每行一个，例如 x-opencode-session: 你的会话 ID',
+  'settings.ai.customHeadersDesc': '只有网关明确要求时才填；留空表示不加任何头。',
   'settings.ai.modelName': '模型名称',
   'settings.ai.modelGroup': '模型配置',
   'settings.ai.fetchModels': '获取模型名',

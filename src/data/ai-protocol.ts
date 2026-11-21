@@ -17,6 +17,8 @@ export interface ChatRequestConfig {
   model: string;
   maxTokens?: number;
   thinkingBody?: Record<string, unknown> | null;
+  /** 自定义通道的附加请求头（放最后合并，允许覆盖默认鉴权头——有些网关用自己的头名） */
+  extraHeaders?: Record<string, string>;
 }
 
 export interface ChatRequest {
@@ -86,6 +88,7 @@ export function buildChatRequest(
   if (!anthropic && config.thinkingBody) Object.assign(base, config.thinkingBody);
 
   const endpoint = String(config.endpoint || '').replace(/\/+$/, '');
+  const extra = config.extraHeaders || {};
   return anthropic
     ? {
         url: `${endpoint}/messages`,
@@ -93,6 +96,7 @@ export function buildChatRequest(
           'Content-Type': 'application/json',
           'x-api-key': config.apiKey,
           'anthropic-version': '2023-06-01',
+          ...extra,
         },
         body: toAnthropicBody(base),
       }
@@ -101,6 +105,7 @@ export function buildChatRequest(
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.apiKey}`,
+          ...extra,
         },
         body: base,
       };

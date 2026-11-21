@@ -48,6 +48,9 @@ export interface AiSettings {
   apiKeys: Record<string, string>;
   /** 自定义通道的请求协议：openai / anthropic */
   customProtocol: string;
+  /** 自定义通道的附加请求头（一行一个 `Header: value`；2026-11-22 加，给需要
+   *  会话头 / 网关签名的 OpenAI 兼容端点用，例如 OpenCode Go 的 x-opencode-session） */
+  customHeaders: string;
   /** 每服务商模型覆盖（键 = 注册表 id） */
   modelOverrides: Record<string, string>;
   /** 每服务商最大输出 token 覆盖（键 = 注册表 id） */
@@ -259,6 +262,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
     model: '',
     apiKeys: {},
     customProtocol: 'openai',
+    customHeaders: '',
     modelOverrides: {},
     maxTokensOverrides: {},
     thinkingOverrides: {},
@@ -388,6 +392,7 @@ function normalizeAi(raw: unknown): AiSettings {
     model,
     apiKeys,
     customProtocol: str(ai.customProtocol).toLowerCase() === 'anthropic' ? 'anthropic' : 'openai',
+    customHeaders: str(ai.customHeaders),
     modelOverrides,
     maxTokensOverrides: numberMap(ai.maxTokensOverrides),
     thinkingOverrides: stringMap(ai.thinkingOverrides),

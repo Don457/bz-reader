@@ -18,6 +18,7 @@
  * 供 AI 调用层与设置页共用；上限取「面板覆盖 > 模型官方档 > 注册表默认」。
  * ============================================================ */
 import { resolveModelLimits } from '../core/model-limits';
+import { parseExtraHeaders } from './ai-headers';
 import type { MsgKey } from '../i18n';
 
 /** 思考档位一项：面板档位 → 请求体片段（body = null 表示不注入任何思考参数） */
@@ -69,6 +70,8 @@ export interface AiSettingsLike {
   model?: string;
   apiKeys?: Record<string, string>;
   customProtocol?: string;
+  /** 自定义通道的附加请求头（一行一个 `Header: value`；2026-11-22 加） */
+  customHeaders?: string;
   modelOverrides?: Record<string, string>;
   maxTokensOverrides?: Record<string, number>;
   thinkingOverrides?: Record<string, string>;
@@ -375,6 +378,8 @@ export interface ResolvedAiConfig {
   model: string;
   maxTokens: number;
   thinkingBody: Record<string, unknown> | null;
+  /** 自定义通道的附加请求头（解析后的字典；其余通道为空） */
+  extraHeaders: Record<string, string>;
 }
 
 /**
@@ -415,6 +420,9 @@ export function resolveAiConfig(s: AiSettingsLike, providerId?: string): Resolve
     model,
     maxTokens,
     thinkingBody: thinkingBodyFor(desc.id, s.thinkingOverrides?.[desc.id]),
+    /* 附加头只对自定义通道生效：注册表里的 18 家端点与鉴权都清楚，
+       用户在手填的地址那一档才可能需要会话头 / 网关要求的别的头。 */
+    extraHeaders: custom ? parseExtraHeaders(String(s.customHeaders || '')) : {},
   };
 }
 

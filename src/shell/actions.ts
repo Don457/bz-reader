@@ -2945,6 +2945,7 @@ export function dispatchAction(
                 protocol: c.protocol,
                 thinkingBody: c.thinkingBody,
                 maxTokens: Math.min(c.maxTokens, 512),
+                extraHeaders: c.extraHeaders,
               },
               [{ role: 'user', content: '只回一个字：好' }],
               { timeoutMs: 15000 },

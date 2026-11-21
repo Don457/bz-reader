@@ -1816,4 +1816,7 @@ export const DE: Record<MsgKey, string> = {
   'settings.lic.update': '[TODO] settings.lic.update',
   'ai.follow.locked': '[TODO] ai.follow.locked',
   'ai.follow.locked.extra': '[TODO] ai.follow.locked.extra',
+  'settings.ai.customHeaders': '[TODO] settings.ai.customHeaders',
+  'settings.ai.customHeadersPh': '[TODO] settings.ai.customHeadersPh',
+  'settings.ai.customHeadersDesc': '[TODO] settings.ai.customHeadersDesc',
 };

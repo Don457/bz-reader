@@ -107,6 +107,8 @@ export function borrowAiFromReview(raw: unknown): AiSettings | null {
     model: str(modelOverrides.custom),
     apiKeys,
     customProtocol,
+    /* 2026-11-22：Review 侧的自定义附加头一并借过来（它存的是 aiCustomHeaders） */
+    customHeaders: str(r.aiCustomHeaders),
     modelOverrides,
     maxTokensOverrides: numMap(r.aiMaxTokensOverrides),
     thinkingOverrides: strMap(r.aiThinkingOverrides),

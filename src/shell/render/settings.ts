@@ -968,7 +968,12 @@ export function viewSettings(v: SettingsView): string {
                  <option value="anthropic"${s.ai.customProtocol === 'anthropic' ? ' selected' : ''}>${t(
                    'settings.ai.customProtocol.anthropic',
                  )}</option>
-               </select></div>`
+               </select></div>
+             <div class="bzs-setrow"><label>${t('settings.ai.customHeaders')}</label>
+               <textarea data-role="setting" data-k="ai.customHeaders" rows="2" placeholder="${t(
+                 'settings.ai.customHeadersPh',
+               )}" style="flex:1;resize:vertical"${aiReadonly}>${esc(s.ai.customHeaders)}</textarea></div>
+             <div class="bzs-mini">${esc(t('settings.ai.customHeadersDesc'))}</div>`
           : ''
       }
       <div class="bzs-setrow"><label>${esc(t(desc.apiKeyLabelKey))}</label>

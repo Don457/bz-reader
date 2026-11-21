@@ -308,6 +308,8 @@ export interface ChatConfig {
   thinkingBody?: Record<string, unknown> | null;
   /** 注册表按「覆盖 > 模型档 > 默认值」解析出的 max_tokens */
   maxTokens?: number;
+  /** 自定义通道的附加请求头（2026-11-22；OpenCode Go 这类网关要的会话头从这里来） */
+  extraHeaders?: Record<string, string>;
 }
 
 /** 调一次 /chat/completions 的通用选项。扫描页识别（视觉 OCR）也走这条路 */
@@ -464,7 +466,15 @@ async function postChatStream(
   const thinkingBody =
     config.thinkingBody ?? (opts.thinking && isDeepSeekChat(baseUrl) ? { thinking: { type: opts.thinking } } : null);
   const req = buildChatRequest(
-    { endpoint: baseUrl, apiKey, model, protocol, thinkingBody, maxTokens: config.maxTokens },
+    {
+      endpoint: baseUrl,
+      apiKey,
+      model,
+      protocol,
+      thinkingBody,
+      maxTokens: config.maxTokens,
+      extraHeaders: config.extraHeaders,
+    },
     messages,
     { stream: streaming, temperature: opts.temperature, maxTokens: opts.maxTokens ?? config.maxTokens },
   );
@@ -594,7 +604,15 @@ async function postChatByHost(
   const thinkingBody =
     config.thinkingBody ?? (opts.thinking && isDeepSeekChat(baseUrl) ? { thinking: { type: opts.thinking } } : null);
   const req = buildChatRequest(
-    { endpoint: baseUrl, apiKey, model, protocol, thinkingBody, maxTokens: config.maxTokens },
+    {
+      endpoint: baseUrl,
+      apiKey,
+      model,
+      protocol,
+      thinkingBody,
+      maxTokens: config.maxTokens,
+      extraHeaders: config.extraHeaders,
+    },
     messages,
     { stream: false, temperature: opts.temperature, maxTokens: opts.maxTokens ?? config.maxTokens },
   );
@@ -681,6 +699,7 @@ export async function aiPostChat(
       protocol: c.protocol,
       maxTokens: c.maxTokens,
       thinkingBody: c.thinkingBody,
+      extraHeaders: c.extraHeaders,
     },
     messages,
     opts,
