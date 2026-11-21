@@ -1688,4 +1688,9 @@ export const ZH_TW: Record<MsgKey, string> = {
   'settings.plugin.review.fail.enable': '宿主沒有啟用它',
   'review.notInstalled': 'bz review 還沒安裝，已開啟設定頁的外掛組，點「安裝」就行。',
   'review.notEnabled': 'bz review 還沒啟用，已開啟設定頁的外掛組，點「啟用」就行。',
+  'tier.revoked': '[TODO] tier.revoked {id}',
+  'tier.revokedId': '[TODO] tier.revokedId {id}',
+  'license.revoked': '[TODO] license.revoked',
+  'license.needOnline': '[TODO] license.needOnline',
+  'notice.license.revoked': '[TODO] notice.license.revoked {id}',
 };

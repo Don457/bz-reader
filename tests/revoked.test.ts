@@ -1,0 +1,315 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createSign, generateKeyPairSync } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  REVOKED_STATE_KEY,
+  _resetRevokedForTests,
+  _setRevokedHttpForTests,
+  checkRevoked,
+  clearRevoked,
+  codeHash,
+  markRevoked,
+  parseRevoked,
+  refreshRevoked,
+  revokedCode,
+  revokedSeenAt,
+  revokedSignText,
+  verifyRevoked,
+} from '../src/data/revoked';
+
+/* ============================================================
+ * 停用名单（tests/revoked.test.ts）
+ *
+ * 这一份盯四件事：
+ *   1. 名单是公开文件，**只认码号 / 摘要**，不认码原文；
+ *   2. 必须验签——假名单、改过的名单、旧名单一律当「没拉到」；
+ *   3. 拉不到 = 放行（unknown），不能被网络故障误伤；
+ *   4. 命中之后本地要记住，断网重启也贴不回来；解封要能自动恢复。
+ * 真实通道走真机，网络函数全部注入。
+ * ============================================================ */
+
+const here = dirname(fileURLToPath(import.meta.url));
+const keyPath = join(here, '..', 'scripts', 'keys', 'private.pem');
+const hasKey = existsSync(keyPath);
+const keyPem = hasKey ? readFileSync(keyPath, 'utf8') : '';
+
+const embeds = readFileSync(join(here, '..', 'src', 'data', 'license.ts'), 'utf8');
+const PUB = /PUBKEY_SPKI_B64 =\s*'([^']+)'/;
+
+const b64url = (buf: Buffer | Uint8Array): string =>
+  Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+function derToP1363(der: Buffer): Buffer {
+  let at = 2;
+  const readInt = (): Buffer => {
+    const len = der[at + 1];
+    const val = der.subarray(at + 2, at + 2 + len);
+    at += 2 + len;
+    const out = Buffer.alloc(32);
+    let start = 0;
+    while (start < val.length && val[start] === 0) start += 1;
+    val.copy(out, 32 - (val.length - start), start);
+    return out;
+  };
+  return Buffer.concat([readInt(), readInt()]);
+}
+
+/** 按生产端同样的格式签一份名单 */
+function signed(
+  ids: string[],
+  hashes: string[] = [],
+  updatedAt = 1_800_000_000_000,
+  key = keyPem,
+): string {
+  const text = [
+    'bzr-revoked',
+    '1',
+    String(updatedAt),
+    ids.map((x) => x.trim().toUpperCase()).sort().join(','),
+    hashes.map((x) => x.trim().toLowerCase()).sort().join(','),
+  ].join('\n');
+  const signer = createSign('sha256');
+  signer.update(Buffer.from(text, 'utf8'));
+  const sig = derToP1363(signer.sign({ key, dsaEncoding: 'der' }));
+  return JSON.stringify({ v: 1, updatedAt, ids, hashes, sig: b64url(sig) });
+}
+
+/** 签一枚真码（复用发行方私钥） */
+function issue(payload: object): string {
+  const bytes = Buffer.from(JSON.stringify(payload), 'utf8');
+  const signer = createSign('sha256');
+  signer.update(bytes);
+  const sig = derToP1363(signer.sign({ key: keyPem, dsaEncoding: 'der' }));
+  return `BZR2.${b64url(bytes)}.${b64url(sig)}`;
+}
+
+class MemoryStorage {
+  private m = new Map<string, string>();
+  getItem(k: string): string | null {
+    return this.m.has(k) ? this.m.get(k)! : null;
+  }
+  setItem(k: string, v: string): void {
+    this.m.set(k, String(v));
+  }
+  removeItem(k: string): void {
+    this.m.delete(k);
+  }
+  clear(): void {
+    this.m.clear();
+  }
+  key(i: number): string | null {
+    return [...this.m.keys()][i] ?? null;
+  }
+  get length(): number {
+    return this.m.size;
+  }
+}
+
+const g = globalThis as unknown as Record<string, unknown>;
+let storage: MemoryStorage;
+
+beforeAll(() => {
+  storage = new MemoryStorage();
+  g.window = globalThis;
+  g.localStorage = storage;
+});
+
+afterAll(() => {
+  delete g.localStorage;
+});
+
+function setHttp(fn: (url: string) => string | null | Promise<string | null>): void {
+  _setRevokedHttpForTests(async (url) => await fn(url));
+}
+
+beforeEach(() => {
+  storage.clear();
+  _resetRevokedForTests();
+});
+
+describe('名单解析', () => {
+  it('合法名单原样收下', () => {
+    const doc = parseRevoked(signed(['BZR-AF-2026-0021']));
+    expect(doc?.ids).toEqual(['BZR-AF-2026-0021']);
+    expect(doc?.updatedAt).toBe(1_800_000_000_000);
+    expect(doc?.sig).toBeTruthy();
+  });
+
+  it('空数组合法（还没人被封）', () => {
+    const doc = parseRevoked(signed([]));
+    expect(doc?.ids).toEqual([]);
+    expect(doc?.hashes).toEqual([]);
+  });
+
+  it('结构不对整份作废', () => {
+    expect(parseRevoked('不是 JSON')).toBeNull();
+    expect(parseRevoked('[]')).toBeNull();
+    expect(parseRevoked(JSON.stringify({ v: 2, updatedAt: 1, ids: [], hashes: [], sig: 'x' }))).toBeNull();
+    expect(parseRevoked(JSON.stringify({ v: 1, updatedAt: 0, ids: [], hashes: [], sig: 'x' }))).toBeNull();
+    expect(parseRevoked(JSON.stringify({ v: 1, updatedAt: 1, ids: [], hashes: [] }))).toBeNull();
+  });
+
+  it('单条坏只丢那一条，码号统一大写、摘要统一小写', () => {
+    const raw = JSON.stringify({
+      v: 1,
+      updatedAt: 1_800_000_000_000,
+      ids: ['bzr-af-2026-0021', 'not-a-code', 'BZR-AF-2026-0021'],
+      hashes: ['ABCDEF0123456789', 'xyz', 'abcdef0123456789'],
+      sig: 'x',
+    });
+    const doc = parseRevoked(raw);
+    expect(doc?.ids).toEqual(['BZR-AF-2026-0021']);
+    expect(doc?.hashes).toEqual(['abcdef0123456789']);
+  });
+});
+
+describe('签名串', () => {
+  it('固定格式，数组顺序无关', () => {
+    const a = revokedSignText({ v: 1, updatedAt: 123, ids: ['B', 'A'], hashes: ['y', 'x'] });
+    const b = revokedSignText({ v: 1, updatedAt: 123, ids: ['A', 'B'], hashes: ['x', 'y'] });
+    expect(a).toBe(b);
+    expect(a).toBe('bzr-revoked\n1\n123\nA,B\nx,y');
+  });
+});
+
+describe.runIf(hasKey && PUB.test(embeds))('验签', () => {
+  it('真签名的名单通过', async () => {
+    const doc = parseRevoked(signed(['BZR-AF-2026-0021']));
+    expect(doc).toBeTruthy();
+    expect(await verifyRevoked(doc!)).toBe(true);
+  });
+
+  it('改过码号的名单不通过', async () => {
+    const doc = parseRevoked(signed(['BZR-AF-2026-0021']));
+    expect(doc).toBeTruthy();
+    doc!.ids = ['BZR-AF-2026-0099'];
+    expect(await verifyRevoked(doc!)).toBe(false);
+  });
+
+  it('别的私钥签的名单不通过', async () => {
+    const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const other = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+    const doc = parseRevoked(signed(['BZR-AF-2026-0021'], [], 1_800_000_000_000, other));
+    expect(await verifyRevoked(doc!)).toBe(false);
+  });
+});
+
+describe.runIf(hasKey && PUB.test(embeds))('仓库里的名单', () => {
+  /* 这道断言盯的是「作者改完名单忘了重签」和「签发脚本与插件端的签名串
+     不一致」——两者都会让所有人拉到的名单验签失败，而表现只是「封码没生效」，
+     很难从现场看出来。 */
+  it('docs/revoked.json 当前签名有效', async () => {
+    const raw = readFileSync(join(here, '..', 'docs', 'revoked.json'), 'utf8');
+    const doc = parseRevoked(raw);
+    expect(doc).toBeTruthy();
+    expect(await verifyRevoked(doc!)).toBe(true);
+  });
+});
+
+describe.runIf(hasKey)('判定', () => {
+  /* 在 it 里现签，别在 describe 回调顶层签：runIf 不满足时回调仍会被收集一遍，
+     而 worktree 里 scripts/keys 是 gitignore 的，顶层调用会直接炸在收集期。 */
+  let CODE = '';
+  beforeAll(() => {
+    CODE = issue({ v: 2, id: 'BZR-AF-2026-0021', name: '包仔', plan: 'lifetime' });
+  });
+
+  it('命中码号：hit，本地记住这枚码', async () => {
+    setHttp(() => signed(['BZR-AF-2026-0021']));
+    expect(await checkRevoked(CODE)).toBe('hit');
+    expect(revokedCode()).toBe(CODE);
+  });
+
+  it('大小写不同也算命中', async () => {
+    setHttp(() => signed(['bzr-af-2026-0021']));
+    expect(await checkRevoked(CODE)).toBe('hit');
+  });
+
+  it('名单里没有：clear，且不动本地', async () => {
+    setHttp(() => signed(['BZR-AF-2026-0099']));
+    expect(await checkRevoked(CODE)).toBe('clear');
+    expect(revokedCode()).toBe('');
+  });
+
+  it('两个源都挂：unknown（放行）', async () => {
+    setHttp(() => null);
+    expect(await checkRevoked(CODE)).toBe('unknown');
+    expect(revokedCode()).toBe('');
+  });
+
+  it('假签名：unknown，不能把付费用户打回基础版', async () => {
+    const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const other = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+    setHttp(() => signed(['BZR-AF-2026-0021'], [], 1_800_000_000_000, other));
+    expect(await checkRevoked(CODE)).toBe('unknown');
+  });
+
+  it('旧名单：unknown（防重放，别让已封的码复活）', async () => {
+    markRevoked(CODE, 1_900_000_000_000);
+    setHttp(() => signed(['BZR-AF-2026-0099'], [], 1_800_000_000_000));
+    expect(await checkRevoked(CODE)).toBe('unknown');
+    expect(revokedCode()).toBe(CODE);
+  });
+
+  it('解封：名单里没了就清本地标记', async () => {
+    markRevoked(CODE, 1_800_000_000_000);
+    setHttp(() => signed([], [], 1_900_000_000_000));
+    expect(await checkRevoked(CODE)).toBe('clear');
+    expect(revokedCode()).toBe('');
+  });
+
+  it('同一版本再拉一次仍然判定（不能当成旧名单丢掉）', async () => {
+    setHttp(() => signed(['BZR-AF-2026-0021'], [], 1_800_000_000_000));
+    expect(await checkRevoked(CODE)).toBe('hit');
+    expect(await checkRevoked(CODE)).toBe('hit');
+  });
+
+  it('老码没有码号：按 sha256 摘要封', async () => {
+    const old = issue({ v: 1, name: '老用户' });
+    const h = await codeHash(old);
+    setHttp(() => signed([], [h]));
+    expect(await checkRevoked(old)).toBe('hit');
+    expect(revokedCode()).toBe(old);
+  });
+
+  it('老码：摘要对不上就不算命中', async () => {
+    const old = issue({ v: 1, name: '老用户' });
+    setHttp(() => signed([], ['0123456789abcdef']));
+    expect(await checkRevoked(old)).toBe('clear');
+  });
+});
+
+describe.runIf(hasKey)('后台刷新与持久化', () => {
+  let CODE = '';
+  beforeAll(() => {
+    CODE = issue({ v: 2, id: 'BZR-AF-2026-0021', plan: 'lifetime' });
+  });
+
+  it('force 每次都拉；非 force 在节流窗口内不重复', async () => {
+    let n = 0;
+    setHttp(() => {
+      n += 1;
+      return signed(['BZR-AF-2026-0099']);
+    });
+    // 每份名单会被两个源各取一次
+    expect(await refreshRevoked(CODE, { force: true })).toBe('clear');
+    expect(n).toBe(2);
+    expect(await refreshRevoked(CODE)).toBe('unknown');
+    expect(n).toBe(2);
+  });
+
+  it('本地状态写进 localStorage，重建缓存后还在', async () => {
+    markRevoked(CODE, 1_800_000_000_000);
+    expect(storage.getItem(REVOKED_STATE_KEY)).toContain('BZR2.');
+    _resetRevokedForTests();
+    expect(revokedCode()).toBe(CODE);
+    expect(revokedSeenAt()).toBe(1_800_000_000_000);
+    clearRevoked();
+    _resetRevokedForTests();
+    expect(revokedCode()).toBe('');
+    // 版本号不清：解封后也不能拿旧名单回放
+    expect(revokedSeenAt()).toBe(1_800_000_000_000);
+  });
+});

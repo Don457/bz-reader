@@ -1691,4 +1691,9 @@ export const JA: Record<MsgKey, string> = {
   'settings.plugin.review.fail.enable': 'Obsidian が有効化しなかった',
   'review.notInstalled': 'bz review がまだインストールされていません。設定のプラグインセクションを開きました。「インストール」を押してください。',
   'review.notEnabled': 'bz review がまだ有効になっていません。設定のプラグインセクションを開きました。「有効化」を押してください。',
+  'tier.revoked': '[TODO] tier.revoked {id}',
+  'tier.revokedId': '[TODO] tier.revokedId {id}',
+  'license.revoked': '[TODO] license.revoked',
+  'license.needOnline': '[TODO] license.needOnline',
+  'notice.license.revoked': '[TODO] notice.license.revoked {id}',
 };

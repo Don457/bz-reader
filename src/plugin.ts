@@ -49,7 +49,8 @@ import { isDeferredViewOf } from './view/leaf-reuse';
 import { setShelfSource, setShelfProActions, notifyShelf } from './view/shelf-state';
 import { mountImport } from './ui/import-panel';
 import { releaseCovers } from './data/cover';
-import { activateLicense as applyLicense, can, clearLicense, recordActivity, revalidateLicense, setEntBackend, setProBuild, unlockModeFor } from './data/entitlement';
+import { activateLicense as applyLicense, can, clearLicense, entitlement, recordActivity, revalidateLicense, setEntBackend, setProBuild, unlockModeFor } from './data/entitlement';
+import { REVOKED_POLL_MS, refreshRevoked } from './data/revoked';
 import { forceBaseTier, initDevTier } from './core/dev-tier';
 import { normalizePluginData, type PluginDataFile } from './data/plugin-data';
 import { PROTOCOL, parseProtocolParams, type LinkTarget } from './data/deeplink';
@@ -460,6 +461,12 @@ export function createPlugin(cfg: PluginConfig) {
         console.warn('[bz-reader] license revalidate failed on startup:', e);
         notify(t('notice.license.checkFailed'), 'error');
       }
+      /* 停用名单（2026-11-22）：每次打开 Obsidian 后台拉一次，命中就把
+         高级功能关掉。**不 await**——两个源都挂时最多等 4 秒，不能拖慢启动
+         首帧。已经命中过的用户首帧就是基础版（`entitlement()` 同步读本地
+         标记），不会出现「先给用几秒再收回」。
+         拉不到 = 放行：离线用户不该被这道门卡住，见 data/revoked 文件头。 */
+      this.watchRevoked();
       loadShellState();
 
       this.store = new ReaderStore(this.app);
@@ -1441,6 +1448,38 @@ export function createPlugin(cfg: PluginConfig) {
         notifyShell();
       }
       return res;
+    }
+
+    /**
+     * 停用名单的后台看守（2026-11-22）。
+     *
+     * 两段：启动时立刻拉一次（force，绕过同进程节流），之后每 6 小时一次。
+     * 每次现读 `entitlement().license`——用户中途换了码，轮询要跟着新码走，
+     * 不能拿启动时那枚旧码查到天黑。
+     *
+     * 命中只做两件事：把「这枚码已停用」的人话提示出来（不弹窗、不打断
+     * 阅读），并让界面重绘（书架、设置页、解锁层立刻变成基础版）。码本身
+     * 不删——解封后下次启动自动恢复。
+     *
+     * `registerInterval` 由宿主在卸载时清掉，不会留下一个还在跑的定时器。
+     */
+    private watchRevoked(): void {
+      const pull = (): void => {
+        const code = entitlement().license;
+        if (!code) return;
+        void refreshRevoked(code, { force: true })
+          .then((verdict) => {
+            if (this.closed || verdict !== 'hit') return;
+            const id = entitlement().licenseId ?? '';
+            notify(t('notice.license.revoked', { id }), 'error');
+            notifyShell();
+          })
+          .catch(() => {
+            /* 拉名单失败什么都不说：离线用户不该被打扰 */
+          });
+      };
+      pull();
+      this.registerInterval(window.setInterval(pull, REVOKED_POLL_MS));
     }
 
     /* ── 承载入口 ── */

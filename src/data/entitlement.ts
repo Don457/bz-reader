@@ -31,6 +31,7 @@
 import { locale, t, type Locale } from '../i18n';
 import { planNameZh, type PlanGroupKey, type PlanKey } from '../i18n/plan';
 import { parseLicense, verifyLicense, type LicenseFail, type LicensePayload } from './license';
+import { checkRevoked, revokedCode } from './revoked';
 import type { BookFormat } from './schema';
 
 /** 高级能力。只有能判断的地方才列进来，别造没人问的开关。 */
@@ -172,6 +173,17 @@ export interface EntitlementView {
   /** 赞助人码（payload.patron === true）：设置页「关于」条据此多画一枚徽章 */
   patron: boolean;
   license: string;
+  /**
+   * 这枚码已进停用名单（2026-11-22）。
+   *
+   * 与 `expired` 不同：过期是「时间到了」，停用是「作者叫停了」。两者都不
+   * 放行，但码的处理相反——过期保留码等续费，停用也保留码等解封，只有
+   * 「签名是假的」才清码。判定来源是本地那份停用标记（`data/revoked`），
+   * 同步可读，所以每帧都能算。
+   */
+  revoked: boolean;
+  /** 码号（payload.id）：停用提示与申诉时报这个，不报码原文 */
+  licenseId?: string;
   /** 试用是否因时钟异常被作废 */
   trialVoid: boolean;
   installId: string;
@@ -379,7 +391,10 @@ export function entitlement(now = Date.now()): EntitlementView {
   const payload = payloadOf(e.license);
   const exp = payload?.exp ?? 0;
   const verified = verifyState === 'ok';
-  const paid = verified && !!payload && e.checkedTs > 0 && (exp === 0 || exp > now);
+  /* 停用名单命中：签名仍然是真的，只是作者叫停了这枚码。与过期同一档处理——
+     保留码、只降级，解封后下次启动自动恢复，用户不用翻邮件重新找码。 */
+  const revoked = !!e.license && revokedCode() === e.license;
+  const paid = verified && !!payload && e.checkedTs > 0 && (exp === 0 || exp > now) && !revoked;
 
   // 第 1..TRIAL_DAYS 个活跃日都在试用内；第 TRIAL_DAYS+1 天开始结束
   // TRIAL_ACTIVE=false 时这一支永远不成立（试用不发放，但记录照旧）
@@ -402,6 +417,8 @@ export function entitlement(now = Date.now()): EntitlementView {
     name: payload?.name,
     patron: payload?.patron === true,
     license: e.license,
+    revoked,
+    licenseId: typeof payload?.id === 'string' ? payload.id : undefined,
     trialVoid: e.trialVoid,
     installId: e.installId,
     days,
@@ -435,16 +452,42 @@ export function setLicense(code: string): void {
 }
 
 /**
- * 激活一个码：验签 → 通过才落盘。
+ * 激活一个码：验签 → 联网核对停用名单 → 通过才落盘。
  *
  * 书架设置页与壳层解锁层都必须走这一个入口。以前两条路各写各的：
  * 壳层会 setLicense，另一条只把码写进 settings，于是「界面显示已激活、
  * can() 仍为 false」——用户装好先去的那个入口恰好是坏的。
+ *
+ * 2026-11-22 起**第一次激活必须联网核对一次**：离线签名只能证明「这枚码
+ * 是作者发的」，证明不了「它现在还有效」。核对拉不到就明确要求联网，
+ * 不悄悄放行——否则断网激活一枚已停用的码，就绕过了整套封码。
+ * 已经激活过的用户不受影响：启动时拉不到名单照常可用（见 plugin.onload）。
+ *
+ * 命中时**不清码**：只降级 + 记本地标记。误封 / 解封后下次启动自动恢复，
+ * 用户不必翻邮件重新找码；而同一枚码再贴一次会在第一道判断那里被挡住。
  */
-export async function activateLicense(code: string): Promise<{ ok: boolean; message: string }> {
+export async function activateLicense(
+  code: string,
+): Promise<{ ok: boolean; message: string; revoked?: boolean }> {
   const res = await verifyLicense(code);
-  if (res.ok) setLicense(code);
-  return { ok: res.ok, message: res.message };
+  if (!res.ok) return { ok: false, message: res.message };
+
+  const clean = code.trim();
+  /* 本地已判死的码：断网也贴不回来，不必再等一次网络 */
+  if (revokedCode() === clean) {
+    return { ok: false, message: t('license.revoked'), revoked: true };
+  }
+
+  const verdict = await checkRevoked(clean);
+  if (verdict === 'hit') {
+    return { ok: false, message: t('license.revoked'), revoked: true };
+  }
+  if (verdict === 'unknown') {
+    return { ok: false, message: t('license.needOnline') };
+  }
+
+  setLicense(clean);
+  return { ok: true, message: res.message };
 }
 
 /**
@@ -514,6 +557,12 @@ export function clearLicense(): boolean {
 
 /** 报错用的人话。对外只有两种状态——试用相关信息一律不出现。 */
 export function tierText(v: EntitlementView = entitlement()): string {
+  /* 停用优先于「基础版」：用户手里明明有一枚签名合法的码，只说「基础版」
+     会让他以为插件坏了。这里报码号，方便他申诉时直接报这个号。 */
+  if (v.revoked) {
+    const id = v.licenseId ? t('tier.revokedId', { id: v.licenseId }) : '';
+    return t('tier.revoked', { id });
+  }
   if (v.tier === 'paid') {
     const who = v.name ? t('tier.who', { name: v.name }) : '';
     const until = v.exp ? t('tier.until', { date: new Date(v.exp).toLocaleDateString() }) : t('tier.forever');

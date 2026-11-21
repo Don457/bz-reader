@@ -96,6 +96,30 @@ function spkiToCryptoKey(spki: ArrayBuffer): Promise<CryptoKey> {
   return crypto.subtle.importKey('spki', spki, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
 }
 
+/**
+ * 用发行方公钥验一段任意字节的签名（P1363 裸格式 r||s）。
+ *
+ * 停用名单（data/revoked）复用它：名单是公开文件，必须验签，否则代理 /
+ * 机场塞一份假名单就能把所有付费用户打回基础版——那是比盗版更糟的事故。
+ * 验签环境异常一律返回 false：「验不了」不能当成「验过了」。
+ */
+export async function verifySignedBytes(bytes: Uint8Array, sig: Uint8Array): Promise<boolean> {
+  if (!PUBKEY_SPKI_B64) return false;
+  try {
+    const key = await spkiToCryptoKey(
+      Uint8Array.from(atob(PUBKEY_SPKI_B64), (c) => c.charCodeAt(0)).buffer,
+    );
+    return await crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      key,
+      new Uint8Array(sig).buffer,
+      new Uint8Array(bytes).buffer,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function dateText(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;

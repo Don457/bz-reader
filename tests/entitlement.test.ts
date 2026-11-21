@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSign } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -17,6 +17,7 @@ import {
   setProBuild,
   tierText,
 } from '../src/data/entitlement';
+import { _resetRevokedForTests, _setRevokedHttpForTests } from '../src/data/revoked';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const keyPath = join(here, '..', 'scripts', 'keys', 'private.pem');
@@ -48,6 +49,24 @@ function issue(payload: object): string {
   const sig = derToP1363(signer.sign({ key: keyPem, dsaEncoding: 'der' }));
   return `BZR1.${b64url(payloadBytes)}.${b64url(sig)}`;
 }
+
+/**
+ * 停用名单：默认给一份**合法空名单**，让 `activateLicense` 的「必须联网
+ * 核对」能过。命中 / 拉不到 / 解封这些分支在 `tests/entitlement-revoked.test.ts`
+ * 单独测，别把两份测试的桩混在一起。
+ */
+function signedEmptyRevoked(updatedAt = 1_800_000_000_000): string {
+  const text = ['bzr-revoked', '1', String(updatedAt), '', ''].join('\n');
+  const signer = createSign('sha256');
+  signer.update(Buffer.from(text, 'utf8'));
+  const sig = derToP1363(signer.sign({ key: keyPem, dsaEncoding: 'der' }));
+  return JSON.stringify({ v: 1, updatedAt, ids: [], hashes: [], sig: b64url(sig) });
+}
+
+beforeEach(() => {
+  _resetRevokedForTests();
+  _setRevokedHttpForTests(async () => (hasKey ? signedEmptyRevoked() : null));
+});
 
 /**
  * 回归目标：**激活入口那条路也要真的解锁**。

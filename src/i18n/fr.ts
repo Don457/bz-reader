@@ -1699,4 +1699,9 @@ export const FR: Record<MsgKey, string> = {
   'settings.plugin.review.fail.enable': 'Obsidian ne l\'a pas activé',
   'review.notInstalled': 'bz review n\'est pas encore installé. La section Plugins des réglages est ouverte : cliquez sur « Installer ».',
   'review.notEnabled': 'bz review n\'est pas encore activé. La section Plugins des réglages est ouverte : cliquez sur « Activer ».',
+  'tier.revoked': '[TODO] tier.revoked {id}',
+  'tier.revokedId': '[TODO] tier.revokedId {id}',
+  'license.revoked': '[TODO] license.revoked',
+  'license.needOnline': '[TODO] license.needOnline',
+  'notice.license.revoked': '[TODO] notice.license.revoked {id}',
 };

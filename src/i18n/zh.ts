@@ -97,6 +97,9 @@ export const ZH = {
   'notice.bookmark.added': '已记一枚书签',
   'notice.bookmark.gone': '这枚书签已经不在了',
   'notice.license.checkFailed': '授权校验异常，已按未激活处理；重启插件重试，仍不行请发邮件或加群。',
+  /* 停用名单命中（2026-11-22）：不弹窗，只给一条几秒的提示，不打断阅读。
+     要有这一条——突然掉回基础版而不说原因，用户只会以为插件坏了。 */
+  'notice.license.revoked': '这枚激活码已被停用{id}，高级功能已关闭。',
 
   /* ── 通知：划线 / 标注 ───────────────────────────────────── */
   'notice.mark.created': '已用{color}色划线',
@@ -893,6 +896,12 @@ export const ZH = {
   'tier.who': '（{name}）',
   'tier.until': '有效期到 {date}',
   'tier.forever': '永久有效',
+  /* 停用名单命中（2026-11-22）。只说「停用」，不写退款 / 倒卖这类理由——
+     理由留在作者台账里，公开界面不该替用户的事下结论。 */
+  'tier.revoked': '这枚激活码已被停用{id}，高级功能已关闭。',
+  'tier.revokedId': '（{id}）',
+  'license.revoked': '这枚激活码已被停用，不能再激活。',
+  'license.needOnline': '首次激活需要联网核对一次；网络没通，请检查网络后重试。',
 
   /* ── 设置页：分组标题 ────────────────────────────────────── */
   'settings.grp.ui': '界面',
