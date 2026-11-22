@@ -23,9 +23,9 @@ export type ReviewFlowKind = 'card' | 'reader';
 /**
  * 拿门面；没装 / 没启用 / 版本太老就弹一句人话并返回 null。
  *
- * 2026-11-21 起「没装」不再是一句干巴巴的提示：同时打开设置页的插件组，
- * 用户点两下就能装好或启用。三种提示分开说——没装让人去装、装了没启用
- * 让人去开、版本太老让人去更新，合成一句用户不知道该做哪件事。
+ * 2026-11-21 起「没装」不再是一句干巴巴的提示：同时打开设置页的
+ * 「bz review」组，用户点两下就能装好或启用。三种提示分开说——没装让人去装、
+ * 装了没启用让人去开、版本太老让人去更新，合成一句用户不知道该做哪件事。
  */
 export function requireReviewFlow(app: App | undefined, kind: ReviewFlowKind): ReviewApi | null {
   if (!app) return null;

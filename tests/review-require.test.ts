@@ -30,11 +30,12 @@ describe('requireReviewFlow · 未安装 / 未启用', () => {
     takeSettingsFocus();
   });
 
-  it('未安装：提示一句并打开设置页插件组', () => {
+  it('未安装：提示一句并打开设置页的 bz review 组', () => {
     expect(requireReviewFlow(appWith({}), 'card')).toBeNull();
     expect(openStudySpy).toHaveBeenCalledWith('settings');
-    /* 设置页渲染后会滚到这一组：请求已经排在 pending 里 */
-    expect(takeSettingsFocus()).toBe('plugins');
+    /* 设置页渲染后会滚到这一组：请求已经排在 pending 里。
+       2026-11-22 下载与功能并组之后，落点是 bz review（不再是 plugins）。 */
+    expect(takeSettingsFocus()).toBe('review');
     expect(notifySpy).toHaveBeenCalled();
   });
 
@@ -42,7 +43,7 @@ describe('requireReviewFlow · 未安装 / 未启用', () => {
     const app = appWith({ manifests: { 'bz-review': { id: 'bz-review' } } });
     expect(requireReviewFlow(app, 'card')).toBeNull();
     expect(openStudySpy).toHaveBeenCalledWith('settings');
-    expect(takeSettingsFocus()).toBe('plugins');
+    expect(takeSettingsFocus()).toBe('review');
   });
 
   it('已启用但契约太老：只提示更新，不把用户拽去设置页', () => {
