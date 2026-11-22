@@ -530,11 +530,18 @@ function issueLinkHtml(n?: number): string {
   return `<a class="bzs-chgn-issue" href="${esc(REPO_URL)}/issues/${n}" target="_blank" rel="noopener">#${n} ↗</a>`;
 }
 
-/** 条目尾部的 QQ 频道帖子链接：白名单校验通过才渲染成可点链接 */
+/**
+ * 条目尾部的 QQ 频道帖子链接。
+ *
+ * 非简体中文不渲染——QQ 频道是中文生态，海外/繁体用户打不开也不关心；
+ * 标签走 copy().fbSrcQqChannel，不再写死中文（英文包早有正式翻译）。
+ * 白名单校验保留：链接不可信时宁可不渲染。
+ */
 function qqLinkHtml(raw?: string): string {
+  if (!isChineseUI()) return '';
   const href = safeFeedbackUrl(raw ?? '');
   if (!href) return '';
-  return `<a class="bzs-chgn-qq" href="${esc(href)}" target="_blank" rel="noopener">QQ 频道 ↗</a>`;
+  return `<a class="bzs-chgn-qq" href="${esc(href)}" target="_blank" rel="noopener">${esc(copy().fbSrcQqChannel)} ↗</a>`;
 }
 
 function rowsHtml(list: readonly ChangelogEntry[]): string {
