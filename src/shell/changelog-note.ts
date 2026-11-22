@@ -631,11 +631,14 @@ function mobReleaseHtml(release: ChangelogRelease, newest: boolean): string {
 /* ── 外链入口（桌面页脚 / 手机浮条共用） ───── */
 
 /**
- * 三个纯图标入口，顺序与图标都照 bz：GitHub → QQ 群 → B 站。
+ * 纯图标入口，顺序与图标都照 bz：GitHub → QQ 群 → B 站。
  *
  * 只给图标是因为这一行最后还要放一枚带文字的「支持作者」胶囊；三段文字
  * 并排会压成字墙。可发现性交给悬停提示与读屏（`title` / `aria-label`），
  * 交流群那枚还要说清点下去是**复制群号**——它不开链接。
+ *
+ * QQ 群与 B 站教程都是中文生态，非简体中文一律不渲染，只留 GitHub；
+ * 这与点击处的 `isChineseUI()` 拦截是两道闸（后者挡旧 DOM / 脚本注入）。
  *
  * 行为键带 `chgn` 前缀：这个弹窗不在壳层里，但同一套 `data-act` 口径
  * 容易被全局动作表误认，前缀是给自己留的隔离带。
@@ -644,8 +647,12 @@ function linksHtml(): string {
   const c = copy();
   const items = [
     { act: 'chgnrepo', label: c.github, icon: githubIcon(15) },
-    { act: 'chgnqq', label: c.qqHint(GROUP_ID), icon: QQ_SVG },
-    ...(isChineseUI() ? [{ act: 'chgnvideo', label: c.video, icon: BILI_SVG }] : []),
+    ...(isChineseUI()
+      ? [
+          { act: 'chgnqq', label: c.qqHint(GROUP_ID), icon: QQ_SVG },
+          { act: 'chgnvideo', label: c.video, icon: BILI_SVG },
+        ]
+      : []),
   ];
   return items
     .map(

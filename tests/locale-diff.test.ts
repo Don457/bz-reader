@@ -70,7 +70,7 @@ function settingsHtml(): string {
 /* 只盯「入口标记」，不盯视频 URL 常量——URL 是点击时 window.open 的，
    不落在 HTML 上，其正确性由 ai-tutorial / tts-tutorial 等测试盯着。 */
 const TUTORIAL_MARKS = ['data-act="aboutvideo"', 'data-act="aichattut"', 'data-act="bztut"', 'data-act="aitutorial"', 'data-role="clipempty-tutorial"', 'data-act="openvid"', 'data-act="chgnvideo"', CLIP_TUTORIAL_URL];
-const GROUP_MARKS = ['data-act="copygroup"'];
+const GROUP_MARKS = ['data-act="copygroup"', 'data-act="chgnqq"'];
 
 describe('界面语言判定', () => {
   it('简中是中文生态', () => {
@@ -123,14 +123,14 @@ describe('视频教程入口 · 按语言显隐', () => {
 describe('QQ 群入口 · 按语言显隐', () => {
   it('简中保留 QQ 群入口', () => {
     setLocale('zh');
-    const html = settingsHtml() + overlayUnlock();
+    const html = settingsHtml() + overlayUnlock() + changelogNoteHtml(oneRelease);
     for (const mark of GROUP_MARKS) expect(html).toContain(mark);
   });
 
   it('英文与繁体去掉 QQ 群入口', () => {
     for (const lang of ['en', 'zh-TW'] as const) {
       setLocale(lang);
-      const html = settingsHtml() + overlayUnlock();
+      const html = settingsHtml() + overlayUnlock() + changelogNoteHtml(oneRelease);
       for (const mark of GROUP_MARKS) expect(html, `${lang} 不应有 ${mark}`).not.toContain(mark);
     }
   });
