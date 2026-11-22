@@ -50,7 +50,7 @@ import { setShelfSource, setShelfProActions, notifyShelf } from './view/shelf-st
 import { mountImport } from './ui/import-panel';
 import { releaseCovers } from './data/cover';
 import { activateLicense as applyLicense, can, clearLicense, entitlement, recordActivity, revalidateLicense, setEntBackend, setProBuild, unlockModeFor } from './data/entitlement';
-import { REVOKED_POLL_MS, refreshRevoked } from './data/revoked';
+import { refreshRevoked } from './data/revoked';
 import { forceBaseTier, initDevTier } from './core/dev-tier';
 import { normalizePluginData, type PluginDataFile } from './data/plugin-data';
 import { PROTOCOL, parseProtocolParams, type LinkTarget } from './data/deeplink';
@@ -838,6 +838,7 @@ export function createPlugin(cfg: PluginConfig) {
         openBookId: () => this.activeReader()?.currentBookId ?? '',
         goToChapter: (title) => this.activeReader()?.goToChapter(title),
         activate: (code) => this.activateLicense(code),
+        recheck: () => this.recheckRevoked(),
         dataDir: () => dataDirOf(),
         migrateDataDir: (dir) => this.migrateDataDir(dir),
         migrateDir: (kind, from, to) => this.migrateDir(kind, from, to),
@@ -1453,33 +1454,51 @@ export function createPlugin(cfg: PluginConfig) {
     /**
      * 停用名单的后台看守（2026-11-22）。
      *
-     * 两段：启动时立刻拉一次（force，绕过同进程节流），之后每 6 小时一次。
-     * 每次现读 `entitlement().license`——用户中途换了码，轮询要跟着新码走，
-     * 不能拿启动时那枚旧码查到天黑。
+     * **只在启动时查一次**，而且 24 小时内不重复（节流在 data/revoked 里，
+     * 靠本地记下的 `checkedAt`）。反复启停、切库、插件重载都不会把两个
+     * CDN 当接口刷。
      *
      * 命中只做两件事：把「这枚码已停用」的人话提示出来（不弹窗、不打断
      * 阅读），并让界面重绘（书架、设置页、解锁层立刻变成基础版）。码本身
      * 不删——解封后下次启动自动恢复。
      *
-     * `registerInterval` 由宿主在卸载时清掉，不会留下一个还在跑的定时器。
+     * 想立刻生效走设置页的「核对」按钮（`recheckRevoked`），那条路 force。
      */
     private watchRevoked(): void {
-      const pull = (): void => {
-        const code = entitlement().license;
-        if (!code) return;
-        void refreshRevoked(code, { force: true })
-          .then((verdict) => {
-            if (this.closed || verdict !== 'hit') return;
-            const id = entitlement().licenseId ?? '';
-            notify(t('notice.license.revoked', { id }), 'error');
-            notifyShell();
-          })
-          .catch(() => {
-            /* 拉名单失败什么都不说：离线用户不该被打扰 */
-          });
-      };
-      pull();
-      this.registerInterval(window.setInterval(pull, REVOKED_POLL_MS));
+      const code = entitlement().license;
+      if (!code) return;
+      void refreshRevoked(code)
+        .then((verdict) => {
+          if (this.closed || verdict !== 'hit') return;
+          const id = entitlement().licenseId ?? '';
+          notify(t('notice.license.revoked', { id }), 'error');
+          notifyShell();
+        })
+        .catch(() => {
+          /* 拉名单失败什么都不说：离线用户不该被打扰 */
+        });
+    }
+
+    /**
+     * 设置页「核对」按钮：跳过 24 小时，立刻拉一次。
+     *
+     * 三种结果各给人话：命中（停用）、没有（正常，可能顺带把之前误判的解封了）、
+     * 拉不到（网络）。不管哪种都重绘——用户点它就是为了看到新状态。
+     */
+    async recheckRevoked(): Promise<'hit' | 'clear' | 'unknown' | 'skipped'> {
+      const code = entitlement().license;
+      if (!code) return 'unknown';
+      const verdict = await refreshRevoked(code, { force: true });
+      if (verdict === 'hit') {
+        const id = entitlement().licenseId ?? '';
+        notify(t('notice.license.revoked', { id }), 'error');
+      } else if (verdict === 'clear') {
+        notify(t('notice.license.rechecked'));
+      } else {
+        notify(t('notice.license.recheckFailed'), 'error');
+      }
+      notifyShell();
+      return verdict;
     }
 
     /* ── 承载入口 ── */

@@ -33,11 +33,13 @@ export const REVOKED_URLS: readonly string[] = [
 /** 本地状态键。带版本号：将来换结构时老状态自动作废 */
 export const REVOKED_STATE_KEY = 'bz-reader:revoked:v1';
 
-/** 长开进程的轮询间隔。封码是人工动作，6 小时足够——瓶颈在「发现」不在「拉取」 */
-export const REVOKED_POLL_MS = 6 * 60 * 60 * 1000;
-
-/** 同一进程内两次后台拉取的最短间隔（插件反复加载时别把 CDN 当接口刷） */
-export const REVOKED_GAP_MS = 10 * 60 * 1000;
+/**
+ * 自动核对的间隔（2026-11-22 定）：只在启动时查一次，**24 小时内不重复**。
+ *
+ * 反复启停 Obsidian、切库、插件重载都不该把两个 CDN 当接口刷。用户想立刻
+ * 生效就点设置页那枚「核对」——那条路 force，不走这个间隔。
+ */
+export const REVOKED_CHECK_GAP_MS = 24 * 60 * 60 * 1000;
 
 /** 激活时等名单的上限。激活是用户主动等待，可以比后台宽 */
 export const REVOKED_ACTIVATE_TIMEOUT_MS = 8_000;
@@ -59,20 +61,21 @@ export interface RevokedDoc {
 
 export type RevokedHttp = (url: string, timeoutMs: number) => Promise<string | null>;
 
-/** clear = 名单拉到了且没有这枚码；hit = 命中；unknown = 没拉到 / 验签不过 / 旧名单 */
-export type RevokedVerdict = 'clear' | 'hit' | 'unknown';
+/** clear = 名单拉到了且没有这枚码；hit = 命中；unknown = 没拉到 / 验签不过 / 旧名单；skipped = 24 小时内已经查过 */
+export type RevokedVerdict = 'clear' | 'hit' | 'unknown' | 'skipped';
 
 interface State {
   /** 已被判死的码原文；空 = 没有 */
   code: string;
   /** 见过的最大名单版本（updatedAt） */
   at: number;
+  /** 上次成功拉到名单的时刻（0 = 从没成功过）：24 小时节流用它 */
+  checkedAt: number;
 }
 
-const EMPTY: State = { code: '', at: 0 };
+const EMPTY: State = { code: '', at: 0, checkedAt: 0 };
 
 let cached: State | null = null;
-let lastAttempt = 0;
 let inflight: Promise<RevokedVerdict> | null = null;
 
 /* ── 本地状态 ─────────────────────────────────────────────── */
@@ -85,6 +88,10 @@ function readState(): State {
     return {
       code: typeof o?.code === 'string' ? o.code : '',
       at: typeof o?.at === 'number' && Number.isFinite(o.at) && o.at > 0 ? o.at : 0,
+      checkedAt:
+        typeof o?.checkedAt === 'number' && Number.isFinite(o.checkedAt) && o.checkedAt > 0
+          ? o.checkedAt
+          : 0,
     };
   } catch {
     return EMPTY;
@@ -114,10 +121,15 @@ export function revokedSeenAt(): number {
   return st().at;
 }
 
+/** 上次成功核对名单的时刻（0 = 从没成功过） */
+export function revokedCheckedAt(): number {
+  return st().checkedAt;
+}
+
 /** 记下这枚码已停用。`at` 只往大里走，别被旧名单顶回去 */
 export function markRevoked(code: string, at: number): void {
   const cur = st();
-  const next: State = { code: code.trim(), at: Math.max(at, cur.at) };
+  const next: State = { code: code.trim(), at: Math.max(at, cur.at), checkedAt: cur.checkedAt };
   cached = next;
   writeState(next);
 }
@@ -126,7 +138,7 @@ export function markRevoked(code: string, at: number): void {
 export function clearRevoked(): void {
   const cur = st();
   if (!cur.code) return;
-  const next: State = { code: '', at: cur.at };
+  const next: State = { code: '', at: cur.at, checkedAt: cur.checkedAt };
   cached = next;
   writeState(next);
 }
@@ -304,11 +316,17 @@ export async function checkRevoked(
   const seen = revokedSeenAt();
   /* 旧名单：拿一份几天前的合法名单回来就能让已封的码复活，直接丢掉 */
   if (doc.updatedAt < seen) return 'unknown';
-  if (doc.updatedAt > seen) {
-    const next: State = { code: st().code, at: doc.updatedAt };
-    cached = next;
-    writeState(next);
-  }
+
+  /* 拉到可用的名单 = 这次核对成功：版本号与「上次核对时间」一起更新。
+     24 小时节流只看 checkedAt，所以失败（网络/验签/旧名单）不会把下一次
+     自动核对推迟一天。 */
+  const next: State = {
+    code: st().code,
+    at: Math.max(seen, doc.updatedAt),
+    checkedAt: Date.now(),
+  };
+  cached = next;
+  writeState(next);
 
   if (await revokedHit(clean, doc)) {
     markRevoked(clean, doc.updatedAt);
@@ -320,22 +338,22 @@ export async function checkRevoked(
 }
 
 /**
- * 后台刷新（启动、轮询用）。带节流，拉不到就返回 unknown，不打扰任何人。
+ * 自动核对（启动时调一次）。**24 小时内不重复**：成功拉到过名单就把
+ * checkedAt 写下来，插件反复加载、切库、重载都不会再打 CDN。
  *
- * `force` 只给「启动」那一次用：用户每次打开 Obsidian 都应该看到最新名单，
- * 但同一进程里插件反复加载时不该每次都打两条 CDN。
+ * `force` 给设置页那枚「核对」按钮用：用户主动要最新结果，跳过 24 小时。
+ * 返回值里的 `skipped` = 这 24 小时内已经查过，不是失败。
  */
 export async function refreshRevoked(
   code: string,
   opts: { force?: boolean } = {},
 ): Promise<RevokedVerdict> {
   if (inflight) return inflight;
-  const now = Date.now();
-  if (!opts.force && now - lastAttempt < REVOKED_GAP_MS) return 'unknown';
-  lastAttempt = now;
-
   const clean = code.trim();
   if (!clean) return 'unknown';
+
+  const now = Date.now();
+  if (!opts.force && now - revokedCheckedAt() < REVOKED_CHECK_GAP_MS) return 'skipped';
 
   inflight = (async () => {
     try {
@@ -352,7 +370,6 @@ export async function refreshRevoked(
 /** 清空会话状态（**不动** localStorage：持久化用例要用它） */
 export function _resetRevokedForTests(): void {
   cached = null;
-  lastAttempt = 0;
   inflight = null;
   http = requestText;
 }

@@ -1696,4 +1696,7 @@ export const JA: Record<MsgKey, string> = {
   'license.revoked': '[TODO] license.revoked',
   'license.needOnline': '[TODO] license.needOnline',
   'notice.license.revoked': '[TODO] notice.license.revoked {id}',
+  'notice.license.rechecked': '[TODO] notice.license.rechecked',
+  'notice.license.recheckFailed': '[TODO] notice.license.recheckFailed',
+  'settings.lic.recheck': '[TODO] settings.lic.recheck',
 };

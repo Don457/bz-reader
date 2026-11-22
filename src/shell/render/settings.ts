@@ -1046,9 +1046,16 @@ export function viewSettings(v: SettingsView): string {
   const editingLicense = paid && !!v.relicense;
   /* 赞助人码在状态行也画一枚小铜印（2026-11-10）：这一句本来只有文字，
      和关于条的身份标记呼应不上。普通码不加，免得人人都有印。 */
-  const licStatus = paid && ent.patron
-    ? `<span class="bzs-mini bzs-licstat" style="flex:1">${ico('seal', 'bzs-lic-seal')}${esc(tierText(ent))}</span>`
-    : `<span class="bzs-mini" style="flex:1">${esc(tierText(ent))}</span>`;
+  /* 「核对」按钮（2026-11-22）：自动核对每天只跑一次，想立刻看到封 / 解封
+     结果就点它。没有码时不显示——没东西可核对。 */
+  const recheckBtn = ent.license
+    ? `<button class="bzs-btn sm" data-act="recheck">${t('settings.lic.recheck')}</button>`
+    : '';
+  const licStatus = `${
+    paid && ent.patron
+      ? `<span class="bzs-mini bzs-licstat" style="flex:1">${ico('seal', 'bzs-lic-seal')}${esc(tierText(ent))}</span>`
+      : `<span class="bzs-mini" style="flex:1">${esc(tierText(ent))}</span>`
+  }${recheckBtn}`;
   const licGrp = grp(
     'lic',
     t('settings.grp.lic'),

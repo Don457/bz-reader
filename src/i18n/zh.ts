@@ -100,6 +100,9 @@ export const ZH = {
   /* 停用名单命中（2026-11-22）：不弹窗，只给一条几秒的提示，不打断阅读。
      要有这一条——突然掉回基础版而不说原因，用户只会以为插件坏了。 */
   'notice.license.revoked': '这枚激活码已被停用{id}，高级功能已关闭。',
+  /* 手动核对（2026-11-22）：设置页那枚「核对」按钮的另外两种结果。 */
+  'notice.license.rechecked': '核对完成，授权正常。',
+  'notice.license.recheckFailed': '核对失败：网络没通，稍后再试。',
 
   /* ── 通知：划线 / 标注 ───────────────────────────────────── */
   'notice.mark.created': '已用{color}色划线',
@@ -1091,6 +1094,7 @@ export const ZH = {
   'settings.lic.status': '状态',
   'settings.lic.code': '激活码',
   'settings.lic.relicense': '重新激活',
+  'settings.lic.recheck': '核对',
   'settings.lic.activate': '激活',
   'settings.lic.paid': '高级版',
   'settings.lic.benefits': '导出、统计、全库搜索、AI 与多格式等',

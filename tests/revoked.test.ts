@@ -287,7 +287,7 @@ describe.runIf(hasKey)('后台刷新与持久化', () => {
     CODE = issue({ v: 2, id: 'BZR-AF-2026-0021', plan: 'lifetime' });
   });
 
-  it('force 每次都拉；非 force 在节流窗口内不重复', async () => {
+  it('24 小时内不重复；force 每次真拉', async () => {
     let n = 0;
     setHttp(() => {
       n += 1;
@@ -296,8 +296,20 @@ describe.runIf(hasKey)('后台刷新与持久化', () => {
     // 每份名单会被两个源各取一次
     expect(await refreshRevoked(CODE, { force: true })).toBe('clear');
     expect(n).toBe(2);
-    expect(await refreshRevoked(CODE)).toBe('unknown');
+    // 24 小时内再自动查：不请求，直接 skipped（不是失败）
+    expect(await refreshRevoked(CODE)).toBe('skipped');
     expect(n).toBe(2);
+    // 手动核对（force）绕过 24 小时
+    expect(await refreshRevoked(CODE, { force: true })).toBe('clear');
+    expect(n).toBe(4);
+  });
+
+  it('拉不到不算核对成功：下一次启动还会试', async () => {
+    setHttp(() => null);
+    expect(await refreshRevoked(CODE)).toBe('unknown');
+    setHttp(() => signed(['BZR-AF-2026-0099']));
+    // 上一次没写 checkedAt，所以这次不会被 24 小时节流挡掉
+    expect(await refreshRevoked(CODE)).toBe('clear');
   });
 
   it('本地状态写进 localStorage，重建缓存后还在', async () => {

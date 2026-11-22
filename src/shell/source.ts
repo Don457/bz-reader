@@ -157,6 +157,13 @@ export interface ShellSource {
    * 书架设置页与解锁弹层都必须走它，否则会出现「显示已激活、功能锁死」。
    */
   activate: (code: string) => Promise<{ ok: boolean; message: string }>;
+  /**
+   * 手动核对停用名单（设置页「核对」按钮）。
+   *
+   * 跳过 24 小时节流，立刻拉一次：封的封、解封的解。返回 'skipped' 表示
+   * 这次没发请求（没有码），调用方按「没得核对」处理。
+   */
+  recheck?: () => Promise<'hit' | 'clear' | 'unknown' | 'skipped'>;
   /** 收藏 / 取消收藏。写进业务数据（book.favorite），换设备跟着走 */
   setFavorite: (id: string, on: boolean) => void;
   /**

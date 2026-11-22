@@ -2364,6 +2364,14 @@ export function dispatchAction(
         box?.select();
       }, 0);
       break;
+    case 'recheck': {
+      /* 手动核对停用名单（2026-11-22）：自动核对每天只跑一次，用户想立刻
+         看到封 / 解封结果就点这里。提示与重绘都在插件侧做完，这里只管叫它。 */
+      const src = getShellSource();
+      if (!src?.recheck) break;
+      void src.recheck().then(() => rerender());
+      break;
+    }
     case 'activate': {
       /* 取当前弹层里的那个输入框：设置页也有一枚 data-role="license"，
          全局 querySelector 会先命中它，于是从解锁层粘贴的码永远读不到。 */
