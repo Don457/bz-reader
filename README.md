@@ -515,7 +515,7 @@ Released under the [MIT](LICENSE) license. The rendering engine is [foliate-js](
 
 ## 繁體中文
 
-把 Obsidian 變成一個能讀書的地方。桌面端 + 行動端、多格式（包括 PDF）、多語言支援、AI 全書問答、雙向連結，資料全部本地。
+把 Obsidian 變成一個能讀書的地方。桌面端 + 行動端、多格式（包括 PDF、漫畫）、多語言支援、AI 全書問答、雙向連結，資料全部本地。
 
 ### 安裝
 
@@ -619,7 +619,7 @@ Released under the [MIT](LICENSE) license. The rendering engine is [foliate-js](
 
 ## 日本語
 
-Obsidian を「本を読む場所」に。デスクトップ + モバイル、複数フォーマット（PDF を含む）、多言語対応、AI 全書 Q&A、双方向リンク。データはすべてローカル。
+Obsidian を「本を読む場所」に。デスクトップ + モバイル、複数フォーマット（PDF・漫画を含む）、多言語対応、AI 全書 Q&A、双方向リンク。データはすべてローカル。
 
 ### インストール
 
@@ -719,7 +719,7 @@ Obsidian を「本を読む場所」に。デスクトップ + モバイル、�
 
 ## Deutsch
 
-Mach aus Obsidian einen Ort zum Lesen. Desktop und Mobil, mehrere Formate (einschließlich PDF), mehrsprachige Oberfläche, KI-Fragen zum ganzen Buch, Wikilinks. Alle Daten bleiben lokal.
+Mach aus Obsidian einen Ort zum Lesen. Desktop und Mobil, mehrere Formate (einschließlich PDF und Comics), mehrsprachige Oberfläche, KI-Fragen zum ganzen Buch, Wikilinks. Alle Daten bleiben lokal.
 
 ### Installation
 
@@ -817,7 +817,7 @@ Veröffentlicht unter der [MIT](LICENSE)-Lizenz. Die Rendering-Engine ist [folia
 
 ## Français
 
-Faites d'Obsidian un endroit où lire. Bureau et mobile, plusieurs formats (dont PDF), interface multilingue, questions IA sur tout le livre, wikiliens. Toutes les données restent en local.
+Faites d'Obsidian un endroit où lire. Bureau et mobile, plusieurs formats (dont PDF et BD), interface multilingue, questions IA sur tout le livre, wikiliens. Toutes les données restent en local.
 
 ### Installation
 
@@ -915,7 +915,7 @@ Publié sous licence [MIT](LICENSE). Le moteur de rendu est [foliate-js](https:/
 
 ## Español
 
-Convierte Obsidian en un lugar donde leer. Escritorio y móvil, varios formatos (incluido PDF), interfaz multilingüe, preguntas de IA sobre todo el libro, wikienlaces. Todos los datos se guardan en local.
+Convierte Obsidian en un lugar donde leer. Escritorio y móvil, varios formatos (incluido PDF y cómics), interfaz multilingüe, preguntas de IA sobre todo el libro, wikienlaces. Todos los datos se guardan en local.
 
 ### Instalación
 
@@ -1013,7 +1013,7 @@ Publicado bajo licencia [MIT](LICENSE). El motor de renderizado es [foliate-js](
 
 ## Português
 
-Transforme o Obsidian num lugar para ler. Desktop e celular, vários formatos (incluindo PDF), interface multilíngue, perguntas de IA sobre o livro inteiro, wikilinks. Todos os dados ficam locais.
+Transforme o Obsidian num lugar para ler. Desktop e celular, vários formatos (incluindo PDF e quadrinhos), interface multilíngue, perguntas de IA sobre o livro inteiro, wikilinks. Todos os dados ficam locais.
 
 ### Instalação
 

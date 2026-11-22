@@ -138,8 +138,8 @@ Solange die Prüfung läuft oder die Suche nichts findet: mit [BRAT](https://git
 |  | Vorlesen: EPUB, TXT und PDF, blättert automatisch weiter | — | ✓ |
 |  | Zwei Bücher nebeneinander lesen | — | ✓ |
 |  | Buchübersicht | — | ✓ |
+|  | Manga-Modus: Panels, rechts nach links, Doppelseiten | — | ✓ |
 |  | PDF reflow: fixed layouts read as flowing text | — | — |
-|  | Manga mode: panels, right-to-left, spreads | — | — |
 |  | Chapter translation: source and translation side by side | — | — |
 |  | Review: reread in full, with AI flashcards and quizzes | — | — |
 |  | E Ink optimization: crisper black and white, no page-turn flashing | — | — |

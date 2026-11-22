@@ -138,8 +138,8 @@ Obsidian を「本を読む場所」に。デスクトップ + モバイル、�
 |  | 読み上げ：EPUB・TXT・PDF、読み終えたら自動で次のページ | — | ✓ |
 |  | 別の本と並べて対照 | — | ✓ |
 |  | 全体マップ | — | ✓ |
+|  | マンガモード：コマ割り・右から左・見開き | — | ✓ |
 |  | PDF reflow: fixed layouts read as flowing text | — | — |
-|  | Manga mode: panels, right-to-left, spreads | — | — |
 |  | Chapter translation: source and translation side by side | — | — |
 |  | Review: reread in full, with AI flashcards and quizzes | — | — |
 |  | E Ink optimization: crisper black and white, no page-turn flashing | — | — |

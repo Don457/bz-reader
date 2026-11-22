@@ -138,8 +138,8 @@ Mientras la revisión esté pendiente, o si la búsqueda no lo encuentra, añade
 |  | Lectura en voz alta: EPUB, TXT y PDF, pasa de página sola | — | ✓ |
 |  | Leer dos libros en paralelo | — | ✓ |
 |  | Vista general del libro | — | ✓ |
+|  | Modo manga: viñetas, derecha a izquierda, dobles páginas | — | ✓ |
 |  | PDF reflow: fixed layouts read as flowing text | — | — |
-|  | Manga mode: panels, right-to-left, spreads | — | — |
 |  | Chapter translation: source and translation side by side | — | — |
 |  | Review: reread in full, with AI flashcards and quizzes | — | — |
 |  | E Ink optimization: crisper black and white, no page-turn flashing | — | — |
