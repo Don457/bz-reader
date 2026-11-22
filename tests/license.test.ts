@@ -107,10 +107,10 @@ describe.runIf(hasKey && PUB.test(embeds))('激活码验签（端到端，需要
   });
 });
 
-/* 2026-11-22：群里分发的试用码要跟版本号绑定。
-   口径（作者定）：只有 plan === 'trial' 的码看版本字段；永久码与赞助人码
-   一概不看——那些是买断的，不能因为多写了一个字段就把老用户挡在外面。 */
-describe.runIf(hasKey && PUB.test(embeds))('试用码的版本绑定', () => {
+
+/* 2026-11-22 口径：试用码里不写版本，运行期要求「必须是最新版」。
+   这里只测验码本身（签名 / 到期 / 文案），版本判定在 entitlement 里测。 */
+describe.runIf(hasKey && PUB.test(embeds))('试用码', () => {
   const trial = (extra: object = {}): string =>
     issue(
       {
@@ -118,92 +118,48 @@ describe.runIf(hasKey && PUB.test(embeds))('试用码的版本绑定', () => {
         id: 'BZR-TR-2026-0001',
         plan: 'trial',
         exp: Date.now() + 7 * 86_400_000,
-        verMin: '1.4.0',
-        verBefore: '1.5.0',
         ...extra,
       },
       keyPem,
     );
 
-  it('当前版本在区间内：通过，文案带剩余天数与版本范围', async () => {
-    const res = await verifyLicense(trial(), { version: '1.4.2' });
-    expect(res.ok).toBe(true);
-    expect(res.message).toContain('试用');
-    expect(res.message).toContain('1.4.x');
-  });
-
-  it('当前版本低于下界：报版本不符，不是「验签失败」', async () => {
-    const res = await verifyLicense(trial(), { version: '1.3.9' });
-    expect(res.ok).toBe(false);
-    expect(res.reason).toBe('version');
-    expect(res.message).toContain('1.4.x');
-    expect(res.message).toContain('1.3.9');
-  });
-
-  it('当前版本到了上界（不含）：同样拦下', async () => {
-    const res = await verifyLicense(trial(), { version: '1.5.0' });
-    expect(res.reason).toBe('version');
-  });
-
-  it('不给当前版本 = 调用方不判版本（兼容旧调用点与测试）', async () => {
+  it('验签通过，文案写清剩余天数与到期日', async () => {
     const res = await verifyLicense(trial());
     expect(res.ok).toBe(true);
+    expect(res.message).toContain('试用');
+    expect(res.message).toContain('剩余');
+    expect(res.message).toContain('到期');
   });
 
-  it('永久码与赞助人码即使带版本字段也一概不看', async () => {
-    for (const payload of [
-      { plan: 'lifetime', verMin: '9.0.0', verBefore: '9.1.0' },
-      { plan: 'lifetime', patron: true, verMin: '9.0.0' },
-    ]) {
-      const res = await verifyLicense(issue({ v: 2, id: 'BZR-O-1', ...payload }, keyPem), {
-        version: '1.6.0',
-      });
-      expect(res.ok).toBe(true);
-    }
+  it('过期的试用码报过期', async () => {
+    const res = await verifyLicense(trial({ exp: Date.now() - 1000 }));
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('expired');
   });
 
-  it('老码（BZR1、只有 exp 没有 plan）不绑版本', async () => {
+  it('老码（BZR1、只有 exp 没有 plan）照旧可用，不参与试用判定', async () => {
     const code = issue({ v: 1, name: '老用户', exp: Date.now() + 86_400_000 }, keyPem);
-    expect((await verifyLicense(code, { version: '9.9.9' })).ok).toBe(true);
+    const res = await verifyLicense(code);
+    expect(res.ok).toBe(true);
+    expect(res.payload?.plan).toBeUndefined();
   });
 
-  it('试用码没有版本字段 = 不限版本（兼容刚发的短期码）', async () => {
-    const code = issue({ v: 2, id: 'BZR-TR-2', plan: 'trial', exp: Date.now() + 86_400_000 }, keyPem);
-    expect((await verifyLicense(code, { version: '1.6.0' })).ok).toBe(true);
-  });
-
-  it('过期的试用码先报过期：时间到了比版本更根本', async () => {
-    const code = issue({ v: 2, plan: 'trial', exp: Date.now() - 1000, verMin: '9.0.0' }, keyPem);
-    expect((await verifyLicense(code, { version: '1.6.0' })).reason).toBe('expired');
+  it('payload 里即使残留旧版本字段也不影响验签（运行期不再读它）', async () => {
+    const code = trial({ verMin: '9.0.0', verBefore: '9.1.0' });
+    const res = await verifyLicense(code);
+    expect(res.ok).toBe(true);
   });
 });
 
-describe.runIf(hasKey && PUB.test(embeds))('试用码的文案', () => {
-  it('licenseSummary 写清剩余天数与版本范围', () => {
+describe.runIf(hasKey && PUB.test(embeds))('试用码文案', () => {
+  it('licenseSummary 写清剩余天数', () => {
     const code = issue(
-      {
-        v: 2,
-        name: '小明',
-        plan: 'trial',
-        exp: Date.now() + 3 * 86_400_000,
-        verMin: '1.4.0',
-        verBefore: '1.5.0',
-      },
+      { v: 2, name: '小明', plan: 'trial', exp: Date.now() + 3 * 86_400_000 },
       keyPem,
     );
-    const text = licenseSummary(code, { version: '1.4.2' });
+    const text = licenseSummary(code);
+    expect(text).toContain('试用');
     expect(text).toContain('剩余');
-    expect(text).toContain('1.4.x');
-  });
-
-  it('版本不符时状态行给换码的下一步', () => {
-    const code = issue(
-      { v: 2, plan: 'trial', exp: Date.now() + 86_400_000, verMin: '1.4.0', verBefore: '1.5.0' },
-      keyPem,
-    );
-    const text = licenseSummary(code, { version: '1.6.0' });
-    expect(text).toContain('1.4.x');
-    expect(text).toMatch(/换|更新/);
   });
 });
 

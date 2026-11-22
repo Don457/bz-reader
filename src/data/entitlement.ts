@@ -30,15 +30,16 @@
 
 import { locale, t, type Locale } from '../i18n';
 import { planNameZh, type PlanGroupKey, type PlanKey } from '../i18n/plan';
-import { inVersionRange, versionRangeText } from '../core/version';
+import { compareVersions } from '../core/version';
 import {
+  isTrialCode,
   parseLicense,
   trialDaysLeft,
-  trialRange,
   verifyLicense,
   type LicenseFail,
   type LicensePayload,
 } from './license';
+import { ensureLatestVersion } from './plugin-update';
 import { checkRevoked, revokedCode } from './revoked';
 import type { BookFormat } from './schema';
 
@@ -187,15 +188,19 @@ export interface EntitlementView {
   trial: boolean;
   /** 试用剩余天数（向上取整）；非试用 / 已过期 / 无到期时间为 0 */
   trialDaysLeft: number;
-  /** 试用码写的版本区间（展示用，如 `1.4.x`）；空 = 不限版本 */
-  trialVer: string;
+  /** 线上最新版（试用判定与更新提醒共用）；空 = 还没拿到 */
+  latestVer: string;
   /**
-   * 试用码不属于当前版本（2026-11-22）。
+   * 试用码的「必须最新版」判定（2026-11-22）。
    *
-   * 高级功能已锁，但**码保留**：升 / 降回匹配版本后下次启动自动恢复，
-   * 用户不用翻邮件重新找码。与 `expired` 同一档处理，区别只是原因不同。
+   *   none      不是试用码，或已确认当前就是最新版
+   *   outdated  线上有新版本 → 锁高级功能，提示先更新
+   *   unknown   还没拿到线上版本（离线 / 两个源都不通）→ 锁，提示联网
+   *
+   * 三种情况都**保留码**：更新完 / 网络恢复后下次启动自动恢复，
+   * 用户不用重新找码。
    */
-  trialVersionMismatch: boolean;
+  trialBlock: 'none' | 'outdated' | 'unknown';
   /** 赞助人码（payload.patron === true）：设置页「关于」条据此多画一枚徽章 */
   patron: boolean;
   license: string;
@@ -220,13 +225,23 @@ let proBuild = false;
 let cache: Ent | null = null;
 
 /**
- * 当前插件版本。由 plugin.onload 尽早注入，试用码的版本绑定靠它。
+ * 当前插件版本。由 plugin.onload 尽早注入，试用码的「必须最新版」判定靠它。
  *
  * 空串 = 拿不到版本（开发构建、纯函数测试）：**此时不判版本**，否则所有
- * 带版本限制的试用码都会变成「不适用」。真机上 onload 第一步就注入，
- * 不存在空窗。
+ * 试用码都会变成「不是最新版」。真机上 onload 第一步就注入，不存在空窗。
  */
 let pluginVersion = '';
+
+/**
+ * 线上最新版。由 `ensureLatestVersion()` 在启动 / 激活 / 更新检查时写入，
+ * 更新提醒与试用判定共用同一份缓存（见 data/plugin-update）。
+ */
+let latestVersion = '';
+
+/** 注入最新版（测试与启动流程用） */
+export function setLatestVersion(v: string): void {
+  latestVersion = String(v || '').trim();
+}
 
 /**
  * 验签状态。**每次进程启动从 pending 开始**——不给「沿用上次结论」留口子：
@@ -431,20 +446,23 @@ export function entitlement(now = Date.now()): EntitlementView {
   const days = e.activeDays;
   const used = days.length;
 
-  /* 计划类型、到期、署名全部从码里现解。parseLicense 只拆 payload 不验签，
-     真正的验签在激活那一刻与每次启动时做过（见 revalidateLicense），
-     `verify` 就是那个结论——没验过、验不过都不放行。 */
   const payload = payloadOf(e.license);
   const exp = payload?.exp ?? 0;
   const verified = verifyState === 'ok';
-  /* 试用码的版本限制：只有 plan === 'trial' 才有 range（见 license.trialRange）。
-     拿不到插件版本时不判——开发构建 / 纯函数测试没有 manifest。 */
-  const range = trialRange(payload);
-  const trial = payload?.plan === 'trial';
-  const trialVer = range ? versionRangeText(range) : '';
-  const trialVersionMismatch =
-    verified && !!range && !!pluginVersion && !inVersionRange(pluginVersion, range);
+  /* 试用码要求当前必须是最新版（2026-11-22）：最新版是联网拿的，
+     拿不到（离线 / 两个源都不通）也锁——否则拔网就能让落后版本继续用。
+     只有验过的码才判；插件版本未知（开发构建 / 纯函数测试）时不判。 */
+  const trial = isTrialCode(payload);
   const trialLeft = trial ? trialDaysLeft(exp, now) : 0;
+  const outdated =
+    verified && trial && !!pluginVersion && !!latestVersion && compareVersions(pluginVersion, latestVersion) < 0;
+  const trialBlock: EntitlementView['trialBlock'] = !trial
+    ? 'none'
+    : outdated
+      ? 'outdated'
+      : !latestVersion
+        ? 'unknown'
+        : 'none';
   /* 停用名单命中：签名仍然是真的，只是作者叫停了这枚码。与过期同一档处理——
      保留码、只降级，解封后下次启动自动恢复，用户不用翻邮件重新找码。 */
   const revoked = !!e.license && revokedCode() === e.license;
@@ -454,7 +472,7 @@ export function entitlement(now = Date.now()): EntitlementView {
     e.checkedTs > 0 &&
     (exp === 0 || exp > now) &&
     !revoked &&
-    !trialVersionMismatch;
+    trialBlock === 'none';
 
   // 第 1..TRIAL_DAYS 个活跃日都在试用内；第 TRIAL_DAYS+1 天开始结束
   // TRIAL_ACTIVE=false 时这一支永远不成立（试用不发放，但记录照旧）
@@ -477,8 +495,8 @@ export function entitlement(now = Date.now()): EntitlementView {
     name: payload?.name,
     trial,
     trialDaysLeft: trialLeft,
-    trialVer,
-    trialVersionMismatch,
+    latestVer: latestVersion,
+    trialBlock,
     patron: payload?.patron === true,
     license: e.license,
     revoked,
@@ -516,24 +534,20 @@ export function setLicense(code: string): void {
 }
 
 /**
- * 激活一个码：验签 → 联网核对停用名单 → 通过才落盘。
- *
- * 书架设置页与壳层解锁层都必须走这一个入口。以前两条路各写各的：
- * 壳层会 setLicense，另一条只把码写进 settings，于是「界面显示已激活、
- * can() 仍为 false」——用户装好先去的那个入口恰好是坏的。
+ * 激活一个码：验签 → 联网核对停用名单 → 试用码再核最新版 → 通过才落盘。
  *
  * 2026-11-22 起**第一次激活必须联网核对一次**：离线签名只能证明「这枚码
- * 是作者发的」，证明不了「它现在还有效」。核对拉不到就明确要求联网，
- * 不悄悄放行——否则断网激活一枚已停用的码，就绕过了整套封码。
+ * 是作者发的」，证明不了「它现在还有效」。试用码还多一道：必须是最新版
+ * 才能激活——拉不到最新版就明确要求联网，不悄悄放行。
  * 已经激活过的用户不受影响：启动时拉不到名单照常可用（见 plugin.onload）。
  *
- * 命中时**不清码**：只降级 + 记本地标记。误封 / 解封后下次启动自动恢复，
- * 用户不必翻邮件重新找码；而同一枚码再贴一次会在第一道判断那里被挡住。
+ * 命中停用 / 不是最新版时**都不清码**：只降级 + 记本地标记。更新完 /
+ * 解封后下次启动自动恢复，用户不必翻邮件重新找码。
  */
 export async function activateLicense(
   code: string,
 ): Promise<{ ok: boolean; message: string; revoked?: boolean }> {
-  const res = await verifyLicense(code, { version: pluginVersion });
+  const res = await verifyLicense(code);
   if (!res.ok) return { ok: false, message: res.message };
 
   const clean = code.trim();
@@ -548,6 +562,17 @@ export async function activateLicense(
   }
   if (verdict === 'unknown') {
     return { ok: false, message: t('license.needOnline') };
+  }
+
+  /* 试用码必须是最新版。跟停用名单分开报：一个是「这码被叫停」，
+     一个是「码没问题，你先把插件更新了」。 */
+  if (isTrialCode(res.payload)) {
+    const latest = await ensureLatestVersion();
+    if (latest) setLatestVersion(latest);
+    if (!latest) return { ok: false, message: t('license.needLatest') };
+    if (pluginVersion && compareVersions(pluginVersion, latest) < 0) {
+      return { ok: false, message: t('license.outdated', { now: pluginVersion, latest }) };
+    }
   }
 
   setLicense(clean);
@@ -584,14 +609,20 @@ export async function revalidateLicense(): Promise<{ changed: boolean; reason?: 
     verifyState = 'ok';
     return { changed: false };
   }
-  const res = await verifyLicense(e.license, { version: pluginVersion });
+  const res = await verifyLicense(e.license);
   if (res.ok) {
+    /* 试用码要联网确认最新版。等这一次：`can()` 首帧就要正确结论，
+       先放行再锁会闪一下；永久码不走这里，启动不受影响。 */
+    if (isTrialCode(res.payload)) {
+      const latest = await ensureLatestVersion();
+      if (latest) setLatestVersion(latest);
+    }
     verifyState = 'ok';
     return { changed: false };
   }
-  /* 过期与版本不符都是「码是真的、只是现在不可用」：保留码、只降级。
-     换回匹配版本 / 续费后下次启动自动恢复。 */
-  if (res.reason === 'expired' || res.reason === 'version') {
+  /* 过期是「码是真的、只是现在不可用」：保留码、只降级。
+     续费后下次启动自动恢复。 */
+  if (res.reason === 'expired') {
     verifyState = 'ok';
     return { changed: false, reason: res.reason };
   }
@@ -629,20 +660,22 @@ export function tierText(v: EntitlementView = entitlement()): string {
     const id = v.licenseId ? t('tier.revokedId', { id: v.licenseId }) : '';
     return t('tier.revoked', { id });
   }
-  /* 试用码要先于「基础版」判断：码还在、只是过期或不适用，说「基础版」
-     会让用户以为码丢了。过期排在版本前面——时间到了比版本更根本。 */
+  /* 试用码要先于「基础版」判断：码还在、只是过期或不是最新版，说「基础版」
+     会让用户以为码丢了。过期排在最前面——时间到了比版本更根本。 */
   if (v.trial && v.exp && v.exp <= Date.now()) {
     return t('tier.trialExpired', { date: new Date(v.exp).toLocaleDateString() });
   }
-  if (v.trialVersionMismatch) {
-    return t('tier.trialVersion', { ver: v.trialVer, now: pluginVersion });
+  if (v.trialBlock === 'outdated') {
+    return t('tier.trialOutdated', { now: pluginVersion, latest: v.latestVer });
+  }
+  if (v.trialBlock === 'unknown') {
+    return t('tier.trialNeedLatest');
   }
   if (v.tier === 'paid') {
     const who = v.name ? t('tier.who', { name: v.name }) : '';
     /* 试用码单独一段：说「高级版已激活」等于告诉用户已经买断了。 */
     if (v.trial) {
-      const ver = v.trialVer ? t('tier.limitVer', { ver: v.trialVer }) : '';
-      return t('tier.trial', { who, days: v.trialDaysLeft, ver });
+      return t('tier.trial', { who, days: v.trialDaysLeft });
     }
     const until = v.exp ? t('tier.until', { date: new Date(v.exp).toLocaleDateString() }) : t('tier.forever');
     /* 赞助人码多一段身份说明（商品页承诺的那句），模板单独一条，避免在

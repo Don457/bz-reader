@@ -44,9 +44,11 @@ export interface UpdateState {
   checkedAt: number;
   /** 已经弹过提醒的版本；空 = 没弹过 */
   notified: string;
+  /** 上次成功拿到的线上版本号；空 = 从没拿到过 */
+  latest: string;
 }
 
-export const EMPTY_UPDATE_STATE: UpdateState = { checkedAt: 0, notified: '' };
+export const EMPTY_UPDATE_STATE: UpdateState = { checkedAt: 0, notified: '', latest: '' };
 
 /** 可注入的 HTTP：返回文本，失败返回 null（测试用它，不打真网络） */
 export type UpdateHttp = (url: string, timeoutMs: number) => Promise<string | null>;
@@ -159,6 +161,7 @@ export function parseUpdateState(raw: unknown): UpdateState {
   return {
     checkedAt: typeof p.checkedAt === 'number' && p.checkedAt > 0 ? p.checkedAt : 0,
     notified: typeof p.notified === 'string' ? p.notified : '',
+    latest: typeof p.latest === 'string' ? p.latest.trim() : '',
   };
 }
 
@@ -178,9 +181,38 @@ export function writeUpdateState(state: UpdateState): void {
   try {
     window.localStorage.setItem(
       UPDATE_STATE_KEY,
-      JSON.stringify({ checkedAt: state.checkedAt, notified: state.notified }),
+      JSON.stringify({ checkedAt: state.checkedAt, notified: state.notified, latest: state.latest }),
     );
   } catch {
     /* 存不下：本次仍然可用 */
   }
+}
+
+/**
+ * 拿「线上最新版」，试用码判定与更新提醒共用这一个入口。
+ *
+ * 24 小时内成功查过就直接用缓存；否则重新拉。**拉不到时回退到上次拿到的
+ * 版本**——离线用户手里那枚试用码还有效，不该因为一次网络抖动被锁；
+ * 从没拿到过才返回 null，由调用方按「需要联网确认」处理。
+ *
+ * 并发调用共用同一个 Promise：启动时试用判定和更新检查几乎同时发生，
+ * 不该把两个 CDN 各刷两遍。
+ */
+let latestInflight: Promise<string | null> | null = null;
+
+export function ensureLatestVersion(now = Date.now()): Promise<string | null> {
+  if (latestInflight) return latestInflight;
+  const state = readUpdateState();
+  if (state.latest && now - state.checkedAt < UPDATE_CHECK_GAP_MS) {
+    return Promise.resolve(state.latest);
+  }
+  latestInflight = (async () => {
+    const latest = await fetchLatestVersion();
+    if (!latest) return state.latest || null;
+    writeUpdateState({ checkedAt: Date.now(), notified: state.notified, latest });
+    return latest;
+  })().finally(() => {
+    latestInflight = null;
+  });
+  return latestInflight;
 }

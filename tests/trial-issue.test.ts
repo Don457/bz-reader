@@ -19,67 +19,50 @@ function payloadOf(code: string) {
 }
 
 describe.runIf(hasKey)('签发脚本：试用码', () => {
-  it('--plan trial --days 7 --ver 1.4：写进版本区间，7 天后到期', () => {
-    const r = run(['--plan', 'trial', '--days', '7', '--ver', '1.4', '--id', 'BZR-TR-TEST-1']);
+  it('--plan trial --days 7：写 plan 与到期日，不写任何版本字段', () => {
+    const r = run(['--plan', 'trial', '--days', '7', '--id', 'BZR-TR-TEST-1']);
     expect(r.status).toBe(0);
     const p = payloadOf(r.stdout);
     expect(p?.plan).toBe('trial');
-    expect(p?.verMin).toBe('1.4.0');
-    expect(p?.verBefore).toBe('1.5.0');
+    expect(p?.verMin).toBeUndefined();
+    expect(p?.verBefore).toBeUndefined();
     const days = Math.round(((p?.exp ?? 0) - Date.now()) / 86_400_000);
     expect(days).toBe(7);
   });
 
   it('--preset 7d 是同一件事的快捷写法', () => {
-    const r = run(['--preset', '7d', '--ver', '1.4', '--id', 'BZR-TR-TEST-2']);
+    const r = run(['--preset', '7d', '--id', 'BZR-TR-TEST-2']);
     expect(r.status).toBe(0);
-    const p = payloadOf(r.stdout);
-    expect(p?.plan).toBe('trial');
-    expect(p?.verMin).toBe('1.4.0');
+    expect(payloadOf(r.stdout)?.plan).toBe('trial');
   });
 
   it('--preset expired：签出来就是过期码，用来演示 / 测试', async () => {
-    const r = run(['--preset', 'expired', '--ver', '1.4', '--id', 'BZR-TR-TEST-3']);
+    const r = run(['--preset', 'expired', '--id', 'BZR-TR-TEST-3']);
     expect(r.status).toBe(0);
     const p = payloadOf(r.stdout);
     expect(p?.exp).toBeLessThan(Date.now());
-    const res = await verifyLicense(r.stdout, { version: '1.4.2' });
+    const res = await verifyLicense(r.stdout);
     expect(res.reason).toBe('expired');
   });
 
-  it('--ver 1.4.2 锁到补丁号：1.4.2 能用，1.4.3 不行', async () => {
-    const r = run(['--plan', 'trial', '--days', '7', '--ver', '1.4.2', '--id', 'BZR-TR-TEST-4']);
-    expect(r.status).toBe(0);
-    const p = payloadOf(r.stdout);
-    expect(p?.verMin).toBe('1.4.2');
-    expect(p?.verBefore).toBe('1.4.3');
-    expect((await verifyLicense(r.stdout, { version: '1.4.2' })).ok).toBe(true);
-    expect((await verifyLicense(r.stdout, { version: '1.4.3' })).reason).toBe('version');
-  });
-
-  it('不带 --ver 也能签：不限版本的短期码（兼容老用法）', async () => {
-    const r = run(['--plan', 'trial', '--days', '3', '--id', 'BZR-TR-TEST-5']);
-    expect(r.status).toBe(0);
-    const p = payloadOf(r.stdout);
-    expect(p?.verMin).toBeUndefined();
-    expect((await verifyLicense(r.stdout, { version: '9.9.9' })).ok).toBe(true);
-  });
-
   it('试用码不给 id 时用独立号段 BZR-TR-，不占付费序号', () => {
-    const r = run(['--plan', 'trial', '--days', '7', '--ver', '1.4']);
+    const r = run(['--plan', 'trial', '--days', '7']);
     expect(r.status).toBe(0);
     expect(payloadOf(r.stdout)?.id).toMatch(/^BZR-TR-/);
   });
 
-  it('--plan lifetime 带 --ver：拒绝，避免误以为永久码受版本限制', () => {
-    const r = run(['--plan', 'lifetime', '--ver', '1.4', '--id', 'BZR-AF-TEST']);
-    expect(r.status).not.toBe(0);
-    expect(r.stderr).toContain('永久');
-  });
-
   it('--plan trial 没给截止日期：拒绝，试用码必须有到期时间', () => {
-    const r = run(['--plan', 'trial', '--ver', '1.4']);
+    const r = run(['--plan', 'trial']);
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/截止|到期|days|until/);
+  });
+
+  it('永久码照旧：带 --ver 也不会写进 payload（参数已删除）', () => {
+    const r = run(['--plan', 'lifetime', '--ver', '1.4', '--id', 'BZR-AF-TEST']);
+    expect(r.status).toBe(0);
+    const p = payloadOf(r.stdout);
+    expect(p?.plan).toBe('lifetime');
+    expect(p?.verMin).toBeUndefined();
+    expect(p?.exp).toBeUndefined();
   });
 });

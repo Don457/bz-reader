@@ -14,11 +14,13 @@ import {
   entitlement,
   revalidateLicense,
   setEntBackend,
+  setLatestVersion,
   setPluginVersion,
   setProBuild,
   tierText,
 } from '../src/data/entitlement';
 import { _resetRevokedForTests, _setRevokedHttpForTests } from '../src/data/revoked';
+import { _setUpdateHttpForTests, readUpdateState, writeUpdateState } from '../src/data/plugin-update';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const keyPath = join(here, '..', 'scripts', 'keys', 'private.pem');
@@ -67,6 +69,24 @@ function signedEmptyRevoked(updatedAt = 1_800_000_000_000): string {
 beforeEach(() => {
   _resetRevokedForTests();
   _setRevokedHttpForTests(async () => (hasKey ? signedEmptyRevoked() : null));
+  /* 最新版缓存存在 localStorage 里：node 环境没有它，这里给每个测试一份干净的。
+     试用判定与更新提醒共用这份状态，测试也就共用同一个桩。
+     有的 worker 里 setup 的 window 没落到 globalThis 上，先补一个再挂 storage。 */
+  const g = globalThis as unknown as { window?: unknown; localStorage?: Storage };
+  if (typeof g.window === 'undefined') g.window = g;
+  const store = new Map<string, string>();
+  g.localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+    key: () => null,
+    length: 0,
+  } as unknown as Storage;
+  /* 默认永不联网：需要预置缓存，避免测试去碰真实 CDN */
+  _setUpdateHttpForTests(async () => null);
+  /* 最新版是模块级状态，测试之间必须归零，否则上一个用例的缓存会串过来 */
+  setLatestVersion('');
 });
 
 /**
@@ -456,17 +476,17 @@ describe.runIf(hasKey)('赞助人标识', () => {
   });
 });
 
-/* 2026-11-22：试用码（有截止日期）与版本号绑定；永久码与赞助人码不受限。
-   口径由作者定：只有 plan === 'trial' 看版本字段，买断与赞助人一律不看。 */
-describe.runIf(hasKey)('试用码与版本绑定', () => {
+
+/* 2026-11-22 口径：试用码必须是最新版才能用；永久码与赞助人码不受限。
+   最新版走 plugin-update 的缓存，这里预置缓存、并注入「永不联网」的 HTTP，
+   让判定可重复。 */
+describe.runIf(hasKey)('试用码必须最新版', () => {
   const trial = (over: object = {}): string =>
     issue({
       v: 2,
       id: 'BZR-TR-2026-0001',
       plan: 'trial',
       exp: Date.now() + 3 * 86_400_000,
-      verMin: '1.4.0',
-      verBefore: '1.5.0',
       ...over,
     });
 
@@ -478,88 +498,128 @@ describe.runIf(hasKey)('试用码与版本绑定', () => {
     });
   }
 
-  afterEach(() => setPluginVersion(''));
+  /** 预置「上次成功拿到的线上版本」，24 小时内 ensureLatestVersion 不再请求 */
+  function seedLatest(latest: string): void {
+    writeUpdateState({ checkedAt: Date.now(), notified: '', latest });
+  }
 
-  it('版本在区间内：解锁，状态行写试用与版本', async () => {
-    setPluginVersion('1.4.2');
+  afterEach(() => {
+    setPluginVersion('');
+    _setUpdateHttpForTests(null);
+  });
+
+  it('当前就是最新版：解锁，状态行写试用与剩余天数', async () => {
+    setPluginVersion('1.6.0');
+    seedLatest('1.6.0');
+    expect(readUpdateState().latest).toBe('1.6.0');
     mount(trial());
     await revalidateLicense();
     const v = entitlement();
+    expect(v.verify).toBe('ok');
     expect(v.tier).toBe('paid');
     expect(v.trial).toBe(true);
+    expect(v.trialBlock).toBe('none');
     expect(v.trialDaysLeft).toBeGreaterThanOrEqual(2);
-    expect(v.trialVer).toBe('1.4.x');
     expect(can('stats')).toBe(true);
     expect(tierText(v)).toContain('试用');
-    expect(tierText(v)).toContain('1.4.x');
+    expect(tierText(v)).toContain('需保持最新版');
   });
 
-  it('版本不符：锁高级功能、保留码、状态行给换码下一步', async () => {
-    setPluginVersion('1.6.0');
-    mount(trial());
-    const r = await revalidateLicense();
-    expect(r.reason).toBe('version');
-    const v = entitlement();
-    expect(v.verify).toBe('ok'); // 签名是真的
-    expect(v.tier).toBe('free');
-    expect(v.license).not.toBe(''); // 码留着，换回匹配版本自动恢复
-    expect(v.trialVersionMismatch).toBe(true);
-    expect(can('stats')).toBe(false);
-    expect(tierText(v)).toContain('1.4.x');
-    expect(tierText(v)).toMatch(/更新|换码/);
-  });
-
-  it('升级到下一个小版本：同步判定立刻降级，不必重载', async () => {
-    setPluginVersion('1.4.2');
-    mount(trial());
-    await revalidateLicense();
-    expect(can('stats')).toBe(true);
+  it('线上有新版本：锁高级功能、保留码、状态行让用户先更新', async () => {
     setPluginVersion('1.5.0');
-    expect(entitlement().trialVersionMismatch).toBe(true);
-    expect(can('stats')).toBe(false);
-  });
-
-  it('拿不到插件版本时不判版本（开发构建 / 旧调用点）', async () => {
-    setPluginVersion('');
+    seedLatest('1.6.0');
     mount(trial());
     await revalidateLicense();
-    expect(entitlement().tier).toBe('paid');
+    const v = entitlement();
+    expect(v.verify).toBe('ok');
+    expect(v.tier).toBe('free');
+    expect(v.license).not.toBe('');
+    expect(v.trialBlock).toBe('outdated');
+    expect(can('stats')).toBe(false);
+    expect(tierText(v)).toContain('要求最新版');
+    expect(tierText(v)).toContain('1.6.0');
   });
 
-  it('永久码与赞助人码即使带版本字段也一概不限', async () => {
+  it('当前版本高于线上（自测构建）：算最新，照常解锁', async () => {
+    setPluginVersion('1.7.0');
+    seedLatest('1.6.0');
+    mount(trial());
+    await revalidateLicense();
+    expect(entitlement().trialBlock).toBe('none');
+    expect(can('stats')).toBe(true);
+  });
+
+  it('拿不到线上版本：锁，并提示联网确认', async () => {
+    setPluginVersion('1.6.0');
+    (globalThis as unknown as { localStorage: Storage }).localStorage.removeItem('bz-reader:update-check:v1');
+    mount(trial());
+    await revalidateLicense();
+    const v = entitlement();
+    expect(v.trialBlock).toBe('unknown');
+    expect(can('stats')).toBe(false);
+    expect(tierText(v)).toContain('联网');
+  });
+
+  it('更新到最新版后自动恢复，不用换码', async () => {
+    setPluginVersion('1.5.0');
+    seedLatest('1.6.0');
+    mount(trial());
+    await revalidateLicense();
+    expect(can('stats')).toBe(false);
+    setPluginVersion('1.6.0');
+    expect(entitlement().trialBlock).toBe('none');
+    expect(can('stats')).toBe(true);
+  });
+
+  it('永久码与赞助人码一概不看最新版', async () => {
     for (const extra of [{}, { patron: true }]) {
-      setPluginVersion('1.6.0');
-      mount(
-        issue({
-          v: 2,
-          id: 'BZR-O-9',
-          plan: 'lifetime',
-          verMin: '9.0.0',
-          verBefore: '9.1.0',
-          ...extra,
-        }),
-      );
+      setPluginVersion('1.5.0');
+      seedLatest('1.6.0');
+      mount(issue({ v: 2, id: 'BZR-O-9', plan: 'lifetime', ...extra }));
       await revalidateLicense();
       expect(entitlement().trial).toBe(false);
+      expect(entitlement().trialBlock).toBe('none');
       expect(entitlement().unlocked).toBe(true);
     }
   });
 
-  it('过期的试用码显示「试用已结束」，不是「基础版」', async () => {
-    setPluginVersion('1.4.2');
+  it('过期的试用码先说「试用已结束」，不抢版本原因', async () => {
+    setPluginVersion('1.5.0');
+    seedLatest('1.6.0');
     mount(trial({ exp: Date.now() - 86_400_000 }));
     await revalidateLicense();
     expect(tierText(entitlement())).toContain('试用已结束');
-    expect(tierText(entitlement())).not.toBe('基础版');
   });
 
-  it('激活入口：版本不符的试用码拒绝，且不写码', async () => {
-    setPluginVersion('1.6.0');
+  it('激活入口：版本落后拒绝，且不写码', async () => {
+    setPluginVersion('1.5.0');
+    seedLatest('1.6.0');
     setProBuild(true);
     setEntBackend({ read: () => snapshot(), write: () => undefined });
     const res = await activateLicense(trial());
     expect(res.ok).toBe(false);
-    expect(res.message).toContain('1.4.x');
+    expect(res.message).toContain('要求最新版');
     expect(entitlement().license).toBe('');
   });
+
+  it('激活入口：拿不到最新版也拒绝', async () => {
+    setPluginVersion('1.5.0');
+    (globalThis as unknown as { localStorage: Storage }).localStorage.removeItem('bz-reader:update-check:v1');
+    setProBuild(true);
+    setEntBackend({ read: () => snapshot(), write: () => undefined });
+    const res = await activateLicense(trial());
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain('联网');
+  });
+
+  it('激活入口：最新版通过', async () => {
+    setPluginVersion('1.6.0');
+    seedLatest('1.6.0');
+    setProBuild(true);
+    setEntBackend({ read: () => snapshot(), write: () => undefined });
+    const res = await activateLicense(trial());
+    expect(res.ok).toBe(true);
+    expect(entitlement().license).not.toBe('');
+  });
 });
+

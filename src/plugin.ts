@@ -49,7 +49,7 @@ import { isDeferredViewOf } from './view/leaf-reuse';
 import { setShelfSource, setShelfProActions, notifyShelf } from './view/shelf-state';
 import { mountImport } from './ui/import-panel';
 import { releaseCovers } from './data/cover';
-import { activateLicense as applyLicense, can, clearLicense, entitlement, recordActivity, revalidateLicense, setEntBackend, setPluginVersion, setProBuild, unlockModeFor } from './data/entitlement';
+import { activateLicense as applyLicense, can, clearLicense, entitlement, recordActivity, revalidateLicense, setEntBackend, setLatestVersion, setPluginVersion, setProBuild, unlockModeFor } from './data/entitlement';
 import { refreshRevoked } from './data/revoked';
 import { forceBaseTier, initDevTier } from './core/dev-tier';
 import { normalizePluginData, type PluginDataFile } from './data/plugin-data';
@@ -91,7 +91,7 @@ import { hrefCandidates, interceptableClick, wrapOpenLinkText } from './shell/li
 import { CHANGELOG_RELEASES, pickReleaseFor, planChangelog, releaseEntryCount } from './shell/changelog';
 import { openChangelogNote } from './shell/changelog-note';
 import { openUpdateNote } from './shell/update-note';
-import { fetchLatestVersion, hasUpdate, readUpdateState, shouldCheck, shouldNotify, writeUpdateState } from './data/plugin-update';
+import { ensureLatestVersion, hasUpdate, readUpdateState, shouldNotify, writeUpdateState } from './data/plugin-update';
 
 export interface PluginConfig {
   /** 高级版构建为 true。基础版为 false，且高级模块根本不在包里。 */
@@ -1473,21 +1473,31 @@ export function createPlugin(cfg: PluginConfig) {
      */
     private async checkUpdateInBackground(): Promise<void> {
       const state = readUpdateState();
-      if (!shouldCheck(state, Date.now())) return;
+      /* 不再看 24 小时节流：`ensureLatestVersion` 自己会决定要不要请求，
+         拿到版本后由 `notified` 保证「每个新版本只弹一次」。这里若再加一道
+         `shouldCheck`，试用码用户启动时那次 refresh 刚写热缓存，更新提醒会
+         被误判成「刚查过」而永远不弹。 */
       await new Promise<void>((done) => window.setTimeout(done, 4_000));
       if (this.closed) return;
-      const latest = await fetchLatestVersion();
+      /* 与试用码判定共用同一次请求（24 小时内复用缓存） */
+      const latest = await ensureLatestVersion();
       if (!latest) return;
+      /* 启动早期网络未必就绪，revalidateLicense 那次可能没拿到；这里拿到后
+         同步给授权判定，并重绘一次让「需要联网」的试用状态及时恢复。 */
+      setLatestVersion(latest);
+      /* 试用码的状态行可能从「需要联网」变成「已激活」：重绘一次，
+         用户不用关掉设置页再打开。 */
+      notifyShell();
       const current = String(this.manifest?.version || '');
       const checkedAt = Date.now();
       if (!hasUpdate(current, latest)) {
-        writeUpdateState({ checkedAt, notified: state.notified });
+        writeUpdateState({ checkedAt, notified: state.notified, latest });
         return;
       }
       if (!shouldNotify(state, latest)) return;
       if (document.querySelector('.bzs-chgn-mask')) return;
       /* 先记账再弹：弹窗期间崩溃也不会下次启动再骚扰一遍 */
-      writeUpdateState({ checkedAt, notified: latest });
+      writeUpdateState({ checkedAt, notified: latest, latest });
       openUpdateNote(current, latest);
     }
 
