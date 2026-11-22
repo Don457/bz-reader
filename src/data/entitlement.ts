@@ -896,10 +896,8 @@ export const PLAN_TABLE: PlanRow[] = [
   /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。 */
   row('parallel', 'no', 'yes', 'parallel'),
   row('bookmap', 'yes', 'yes'),
-  /* 漫画模式 2026-11-22 从路线图转正：分格、右到左、跨页三件事都有运行期
-     实现，挂在自己的能力位上，入口由 openBook 的 requireCap('manga') 拦。
-     放在「排版」段末尾：它和竖排、并排一样，都是「一屏里怎么摆内容」。 */
-  row('manga', 'no', 'yes', 'manga'),
+  /* 漫画模式 2026-11-22 从路线图转正后**独立成段**（见下面 pdfOcr 之后的
+     九行）。这里不再留一行「漫画模式」——九行才说得清它到底能做什么。 */
   /* ── 导入：书从哪儿来 ──
    * 2026-11-10：PDF 不再由 formats 代表——它有自己的段（见下面的 pdfView…）。
    * 剪藏成书 2026-11-13 从「探索中」转正，与 formats 同类：都是「书怎么进来」。 */
@@ -920,6 +918,21 @@ export const PLAN_TABLE: PlanRow[] = [
      OCR 都要钱），所以单独一行、单独一个能力位；拦点只放在「识别」上，
      读普通 PDF 不受影响。 */
   row('pdfOcr', 'no', 'yes', 'pdfOcr'),
+  /* ── 漫画（2026-11-22 从「排版」组里单独拆出来）──
+   * 原来只有一行「漫画模式：分格、右到左、跨页」，塞不进漫画实际能做的事，
+   * 也说不清「买了能多出哪几件事」。现在按 打开 → 方向 → 单双页 → 翻法 →
+   * 逐格 → 画面 → 缩略图 摊成九行。
+   * 只有段首挂 cap：基础版根本进不了漫画（openBook 里 requireCap('manga')），
+   * 后面八行各配一个能力位在运行期永远不会被抛出——与 PDF 段同一处理。 */
+  row('mangaOpen', 'no', 'yes', 'manga'),
+  row('mangaInfo', 'no', 'yes'),
+  row('mangaDir', 'no', 'yes'),
+  row('mangaSpread', 'no', 'yes'),
+  row('mangaFlow', 'no', 'yes'),
+  row('mangaPanels', 'no', 'yes'),
+  row('mangaFit', 'no', 'yes'),
+  row('mangaTone', 'no', 'yes'),
+  row('mangaThumbs', 'no', 'yes'),
   /* ── 笔记：读完怎么存回笔记库 ──
    * 双向链接整条是高级版能力（copylink 走 requireCap('bilink')）。
    * 引用页签 2026-11-12 有独立能力位，点它被拦时点亮的是它自己那一行。 */
@@ -1032,12 +1045,13 @@ export function unlockModeFor(format: BookFormat): 'pdf' | 'fullFormats' {
  *   · 排版：字怎么放（单双栏免费，竖排 / 并排 / 鸟瞰）；
  *   · 导入：书从哪儿来（更多格式 + 剪藏成书）；
  *   · PDF 阅读：PDF 怎么读、怎么拿出来；
+ *   · 漫画：CBZ 怎么打开、怎么翻、怎么逐格看（2026-11-22 独立成段，九行）；
  *   · 笔记：读完怎么存回笔记库；
  *   · 复习：挑内容、制卡、复习（2026-11-21 独立，五项全免费）；
  *   · 数据：回看读了多少、找回某句话；
  *   · AI：划词、全书问答、伴读、知识库；
  *   · 听书：朗读、三台引擎、音色、语速、预生成与离线书；
- *   · 路线图：还没实现的五项，两版都不打勾，只作为收尾。 */
+ *   · 路线图：还没实现的四项，两版都不打勾，只作为收尾。 */
 export interface PlanGroup {
   key: PlanGroupKey;
   /** 这一段包含哪些行，按表里的顺序 */
@@ -1051,7 +1065,7 @@ export const PLAN_GROUPS: PlanGroup[] = [
   },
   {
     key: 'layout',
-    rows: ['columns', 'vertical', 'parallel', 'bookmap', 'manga'],
+    rows: ['columns', 'vertical', 'parallel', 'bookmap'],
   },
   {
     key: 'import',
@@ -1060,6 +1074,22 @@ export const PLAN_GROUPS: PlanGroup[] = [
   {
     key: 'pdf',
     rows: ['pdfView', 'pdfThumbs', 'pdfLink', 'pdfBacklink', 'pdfAnnots', 'pdfExport', 'pdfOcr'],
+  },
+  /* 漫画（2026-11-22）：从「排版」里拆出来单独一段，排在 PDF 之后——
+     两者都是「按格式的阅读段」，紧挨着读下来顺。 */
+  {
+    key: 'manga',
+    rows: [
+      'mangaOpen',
+      'mangaInfo',
+      'mangaDir',
+      'mangaSpread',
+      'mangaFlow',
+      'mangaPanels',
+      'mangaFit',
+      'mangaTone',
+      'mangaThumbs',
+    ],
   },
   {
     key: 'notes',

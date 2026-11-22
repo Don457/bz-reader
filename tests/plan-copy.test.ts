@@ -50,7 +50,15 @@ const CHANGED: ReadonlyArray<readonly [string, string]> = [
   ['tts', '朗读：EPUB、TXT、PDF，念完自动翻页'],
   ['parallel', '并排对照：与另一本书同步段落'],
   ['bookmap', '全书鸟瞰：各章划线数与一句话摘要'],
-  ['manga', '漫画模式：分格、右到左、跨页'],
+  ['mangaOpen', 'CBZ / 文件夹打开即读'],
+  ['mangaInfo', 'ComicInfo 方向自动跟随'],
+  ['mangaDir', '右到左 / 左到右'],
+  ['mangaSpread', '单页 / 双页，跨页自动拆合'],
+  ['mangaFlow', '一屏一页 / 连续 / 条漫'],
+  ['mangaPanels', '逐格读：自动分格、防剧透'],
+  ['mangaFit', '六档适配 + 缩放拖动'],
+  ['mangaTone', '裁白边、一键调色'],
+  ['mangaThumbs', '页缩略图、读到哪记住'],
 ];
 
 describe('对照表 · 引用页签归入高级版', () => {
@@ -113,17 +121,18 @@ describe('对照表 · 稿子与勾叉', () => {
     expect(PLAN_TABLE[kbAt]?.name).toBe('AI 知识库：增量阅读、知识输入、整理与输出的闭环');
     expect(PLAN_TABLE[kbAt + 1]?.key).toBe('tts');
     const layout = PLAN_GROUPS.find((g) => g.key === 'layout');
-    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap', 'manga']);
+    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap']);
   });
 });
 
-describe('对照表 · 十段分组', () => {
-  it('十段顺序固定', () => {
+describe('对照表 · 十一段分组', () => {
+  it('十一段顺序固定', () => {
     expect(PLAN_GROUPS.map((g) => g.key)).toEqual([
       'read',
       'layout',
       'import',
       'pdf',
+      'manga',
       'notes',
       'review',
       'data',

@@ -36,6 +36,7 @@ describe('对照表 · 朗读与听书段', () => {
       'layout',
       'import',
       'pdf',
+      'manga',
       'notes',
       'review',
       'data',
@@ -70,14 +71,14 @@ describe('对照表 · 朗读与听书段', () => {
     }
   });
 
-  it('排版段收五行：单双栏、竖排、并排、鸟瞰与漫画，不再重复收朗读', () => {
+  it('排版段收四行：单双栏、竖排、并排、鸟瞰；漫画已单独成段', () => {
     const layout = PLAN_GROUPS.find((g) => g.key === 'layout');
-    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap', 'manga']);
+    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap']);
   });
 
-  it('合计 18 / 45，全表 49 行', () => {
-    expect(planTotals()).toEqual({ free: 18, pro: 45 });
-    expect(PLAN_TABLE).toHaveLength(49);
+  it('合计 18 / 53，全表 57 行', () => {
+    expect(planTotals()).toEqual({ free: 18, pro: 53 });
+    expect(PLAN_TABLE).toHaveLength(57);
   });
 
   it('导出本章音频不上表：功能照旧，只是不列在对比里', () => {

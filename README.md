@@ -116,7 +116,6 @@
 |  | 竖排排版：EPUB / TXT | — | ✓ |
 |  | 并排对照：与另一本书同步段落 | — | ✓ |
 |  | 全书鸟瞰：各章划线数与一句话摘要 | ✓ | ✓ |
-|  | 漫画模式：分格、右到左、跨页 | — | ✓ |
 | **导入** | Kindle 系（MOBI / AZW3）、FB2、CBZ 漫画、PDF | — | ✓ |
 |  | 剪藏成书：剪藏本合成一本 EPUB · [看教程](https://www.bilibili.com/video/BV1h3WB6XEL4) | — | ✓ |
 | **PDF 阅读** | PDF 阅读：缩放、旋转、单双页、滚动 | — | ✓ |
@@ -126,6 +125,15 @@
 |  | 文件自带批注：别人标的也能读 | — | ✓ |
 |  | 导出本页为图片 | — | ✓ |
 |  | 扫描页识别：像文字版一样选、搜、划 | — | ✓ |
+| **漫画** | CBZ / 文件夹打开即读 | — | ✓ |
+|  | ComicInfo 方向自动跟随 | — | ✓ |
+|  | 右到左 / 左到右 | — | ✓ |
+|  | 单页 / 双页，跨页自动拆合 | — | ✓ |
+|  | 一屏一页 / 连续 / 条漫 | — | ✓ |
+|  | 逐格读：自动分格、防剧透 | — | ✓ |
+|  | 六档适配 + 缩放拖动 | — | ✓ |
+|  | 裁白边、一键调色 | — | ✓ |
+|  | 页缩略图、读到哪记住 | — | ✓ |
 | **笔记与导出** | 划线存成双链：笔记里点回原文 | — | ✓ |
 |  | 引用页签：看哪些笔记引了这本书 | — | ✓ |
 |  | 导出整本摘录：每条带双链 | — | ✓ |
@@ -376,6 +384,15 @@ While the review is pending, or if search doesn't find it, install with [BRAT](h
 |  | Backlinks on this page and annotations in the file | — | ✓ |
 |  | Export a page as an image | — | ✓ |
 |  | Scanned page OCR: select, search and highlight like real text | — | ✓ |
+| **Manga** | CBZ and folders, open and read | — | ✓ |
+|  | Follows the reading direction in ComicInfo | — | ✓ |
+|  | Right-to-left / left-to-right | — | ✓ |
+|  | Single / double page, spreads split and rejoined | — | ✓ |
+|  | One page / continuous / long strip | — | ✓ |
+|  | Panel by panel: auto panels, spoiler-free | — | ✓ |
+|  | Six fit modes, zoom and pan | — | ✓ |
+|  | Trim margins, one-tap tone fix | — | ✓ |
+|  | Page thumbnails, resume where you left | — | ✓ |
 | **Stats & Search** | Stats recap: pace, rhythm heatmap, per-book ETA, badges | — | ✓ |
 |  | Reading poster: yearly recap and stats long image | — | ✓ |
 |  | Whole-library search, PDF text included | — | ✓ |
@@ -389,7 +406,6 @@ While the review is pending, or if search doesn't find it, install with [BRAT](h
 |  | Read aloud: EPUB, TXT and PDF, auto page-turn | — | ✓ |
 |  | Read two books side by side | — | ✓ |
 |  | Book overview | — | ✓ |
-|  | Manga mode: panels, right-to-left, spreads | — | ✓ |
 | **Explorations** | PDF reflow: fixed layouts read as flowing text | — | — |
 |  | Chapter translation: source and translation side by side | — | — |
 |  | Review: reread in full, with AI flashcards and quizzes | — | — |
