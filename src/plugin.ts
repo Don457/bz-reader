@@ -90,6 +90,8 @@ import { portraitBuilder } from './data/portrait-build';
 import { hrefCandidates, interceptableClick, wrapOpenLinkText } from './shell/link-postprocessor';
 import { CHANGELOG_RELEASES, pickReleaseFor, planChangelog, releaseEntryCount } from './shell/changelog';
 import { openChangelogNote } from './shell/changelog-note';
+import { openUpdateNote } from './shell/update-note';
+import { fetchLatestVersion, hasUpdate, readUpdateState, shouldCheck, shouldNotify, writeUpdateState } from './data/plugin-update';
 
 export interface PluginConfig {
   /** 高级版构建为 true。基础版为 false，且高级模块根本不在包里。 */
@@ -468,6 +470,9 @@ export function createPlugin(cfg: PluginConfig) {
          标记），不会出现「先给用几秒再收回」。
          拉不到 = 放行：离线用户不该被这道门卡住，见 data/revoked 文件头。 */
       this.watchRevoked();
+      /* 检查更新（2026-11-22）：默认自动查，24 小时最多一次，有新版弹一次。
+         不 await——网络慢时不能拖住首帧。 */
+      void this.checkUpdateInBackground();
       /* 试用到期提醒（2026-11-22）：剩 1 天时提一次，按到期时间记账，
          换一枚新试用码会重新提示。没解锁（过期 / 版本不符）不提示——
          那时设置页的状态行已经把话说清楚了。 */
@@ -1454,6 +1459,36 @@ export function createPlugin(cfg: PluginConfig) {
         notifyShell();
       }
       return res;
+    }
+
+    /**
+     * 检查线上有没有新版本（2026-11-22）。
+     *
+     * 三条口径：默认自动查（没有开关）、24 小时最多一次、每个新版本只弹一次。
+     * 失败静默：离线 / 被墙 / 清单坏了，一个字都不说，下次启动再试。
+     *
+     * 延迟 4 秒再查：不跟首帧、更新日志、停用名单抢网络和注意力。查到更新
+     * 日志弹窗正开着就**让路**——两层弹窗叠在一起，用户只会觉得关不掉；
+     * 此时不写 notified，下次启动再弹。
+     */
+    private async checkUpdateInBackground(): Promise<void> {
+      const state = readUpdateState();
+      if (!shouldCheck(state, Date.now())) return;
+      await new Promise<void>((done) => window.setTimeout(done, 4_000));
+      if (this.closed) return;
+      const latest = await fetchLatestVersion();
+      if (!latest) return;
+      const current = String(this.manifest?.version || '');
+      const checkedAt = Date.now();
+      if (!hasUpdate(current, latest)) {
+        writeUpdateState({ checkedAt, notified: state.notified });
+        return;
+      }
+      if (!shouldNotify(state, latest)) return;
+      if (document.querySelector('.bzs-chgn-mask')) return;
+      /* 先记账再弹：弹窗期间崩溃也不会下次启动再骚扰一遍 */
+      writeUpdateState({ checkedAt, notified: latest });
+      openUpdateNote(current, latest);
     }
 
     /**

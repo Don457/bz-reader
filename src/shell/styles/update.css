@@ -1,0 +1,93 @@
+/* ==========================================================
+   更新提醒弹窗（shell/update-note.ts）
+
+   弹窗挂在 body 上，**不在 .bzs-shell 里**，吃不到壳层那套 --t1 / --copper；
+   这里在 .bzs-upd-dialog 上立一组 --upd-* 局部令牌，直接读宿主主题变量，
+   换主题、切明暗都跟着走。
+   选择器一律 .bzs- 开头：壳层样式构建时会被加 .bzs-shell 前缀，只有
+   .bzs- 开头的选择器原样保留（见 esbuild.config.mjs 的 scopeShellStyles）。
+   ========================================================== */
+
+.bzs-upd-dialog {
+  --upd-accent: var(--bzs-accent, var(--interactive-accent, var(--text-accent, #7856d6)));
+  --upd-ink: var(--text-normal, #1f1f23);
+  --upd-ink-2: var(--text-muted, #5a5a63);
+  --upd-line: var(--background-modifier-border, rgba(0, 0, 0, 0.1));
+  --upd-hover: var(--background-modifier-hover, rgba(0, 0, 0, 0.05));
+}
+
+.bzs-upd-dialog .bzr-dialog-head {
+  padding: 18px 20px 0;
+}
+
+.bzs-upd-dialog .bzr-dialog-title {
+  color: var(--upd-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bzs-upd-dialog .bzr-dialog-body {
+  padding: 14px 20px 18px;
+}
+
+.bzs-upd {
+  color: var(--upd-ink);
+}
+
+.bzs-upd-ver {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+
+.bzs-upd-ver b {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.bzs-upd-ver span {
+  color: var(--upd-ink-2);
+  font-size: 12px;
+}
+
+.bzs-upd-note {
+  margin: 0 0 18px;
+  color: var(--upd-ink-2);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.bzs-upd-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.bzs-upd-btn {
+  appearance: none;
+  border: 1px solid var(--upd-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--upd-ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+
+.bzs-upd-btn:hover {
+  background: var(--upd-hover);
+}
+
+.bzs-upd-btn.pri {
+  border-color: var(--upd-accent);
+  background: var(--upd-accent);
+  color: var(--text-on-accent, #fff);
+}
+
+.bzs-upd-btn.pri:hover {
+  filter: brightness(1.05);
+}

@@ -1,0 +1,146 @@
+import { describe, expect, it } from 'vitest';
+import {
+  _setUpdateHttpForTests,
+  fetchLatestVersion,
+  giteeManifestUrl,
+  hasUpdate,
+  parseUpdateState,
+  shouldCheck,
+  shouldNotify,
+  versionFromManifest,
+} from '../src/data/plugin-update';
+
+describe('版本判定', () => {
+  it('线上比当前新才算有更新', () => {
+    expect(hasUpdate('1.6.0', '1.7.0')).toBe(true);
+    expect(hasUpdate('1.6.0', '1.6.1')).toBe(true);
+    expect(hasUpdate('1.6.0', '1.6.0')).toBe(false);
+  });
+
+  it('本机版本更高（自测构建）不提示', () => {
+    expect(hasUpdate('1.7.0', '1.6.0')).toBe(false);
+    expect(hasUpdate('1.10.0', '1.9.9')).toBe(false);
+  });
+
+  it('版本号缺失一律不提示', () => {
+    expect(hasUpdate('', '1.7.0')).toBe(false);
+    expect(hasUpdate('1.6.0', '')).toBe(false);
+  });
+});
+
+describe('线上清单解析', () => {
+  it('取 bz-reader 清单里的 version', () => {
+    expect(versionFromManifest(JSON.stringify({ id: 'bz-reader', version: '1.7.0' }))).toBe('1.7.0');
+    expect(versionFromManifest(JSON.stringify({ id: 'bz-reader', version: ' 1.7.1 ' }))).toBe('1.7.1');
+  });
+
+  it('别的插件 / 坏 JSON / 没版本都当没拿到', () => {
+    expect(versionFromManifest(JSON.stringify({ id: 'bz-review', version: '3.0.0' }))).toBeNull();
+    expect(versionFromManifest('not json')).toBeNull();
+    expect(versionFromManifest(JSON.stringify({ id: 'bz-reader' }))).toBeNull();
+    expect(versionFromManifest(null)).toBeNull();
+  });
+});
+
+describe('码云 release JSON', () => {
+  const doc = {
+    tag_name: '1.7.0',
+    assets: [
+      { name: 'main.js', browser_download_url: 'https://gitee.com/x/main.js' },
+      { name: 'manifest.json', browser_download_url: 'https://gitee.com/x/manifest.json' },
+    ],
+  };
+
+  it('挑出 manifest.json 的下载地址', () => {
+    expect(giteeManifestUrl(JSON.stringify(doc))).toBe('https://gitee.com/x/manifest.json');
+  });
+
+  it('没有 assets / 坏 JSON 返回 null', () => {
+    expect(giteeManifestUrl(JSON.stringify({ tag_name: '1.7.0' }))).toBeNull();
+    expect(giteeManifestUrl('oops')).toBeNull();
+    expect(giteeManifestUrl(null)).toBeNull();
+  });
+});
+
+describe('拉线上版本（注入 HTTP，不联网）', () => {
+  it('GitHub 直链成功就只请求一次', async () => {
+    const calls: string[] = [];
+    _setUpdateHttpForTests(async (url) => {
+      calls.push(url);
+      return JSON.stringify({ id: 'bz-reader', version: '1.7.0' });
+    });
+    await expect(fetchLatestVersion()).resolves.toBe('1.7.0');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('github.com/yeshimei/bz-reader/releases/latest');
+    _setUpdateHttpForTests(null);
+  });
+
+  it('GitHub 拿不到时切码云：先查 release 再拉清单', async () => {
+    const calls: string[] = [];
+    _setUpdateHttpForTests(async (url) => {
+      calls.push(url);
+      if (url.includes('github.com')) return null;
+      if (url.includes('/releases/latest')) {
+        return JSON.stringify({
+          assets: [{ name: 'manifest.json', browser_download_url: 'https://gitee.com/x/manifest.json' }],
+        });
+      }
+      return JSON.stringify({ id: 'bz-reader', version: '1.7.2' });
+    });
+    await expect(fetchLatestVersion()).resolves.toBe('1.7.2');
+    expect(calls).toHaveLength(3);
+    _setUpdateHttpForTests(null);
+  });
+
+  it('两个源都失败返回 null（失败要静默）', async () => {
+    _setUpdateHttpForTests(async () => null);
+    await expect(fetchLatestVersion()).resolves.toBeNull();
+    _setUpdateHttpForTests(null);
+  });
+
+  it('请求抛错也吞掉，不把启动带崩', async () => {
+    _setUpdateHttpForTests(async () => {
+      throw new Error('offline');
+    });
+    await expect(fetchLatestVersion()).resolves.toBeNull();
+    _setUpdateHttpForTests(null);
+  });
+});
+
+describe('24 小时节流', () => {
+  const now = 1_800_000_000_000;
+  const HOUR = 3_600_000;
+
+  it('从没查过要查；到 24 小时才再查', () => {
+    expect(shouldCheck({ checkedAt: 0, notified: '' }, now)).toBe(true);
+    expect(shouldCheck({ checkedAt: now - 23 * HOUR, notified: '' }, now)).toBe(false);
+    expect(shouldCheck({ checkedAt: now - 24 * HOUR, notified: '' }, now)).toBe(true);
+  });
+});
+
+describe('每个新版本只弹一次', () => {
+  it('没弹过就弹；弹过同一版不弹；换新版再弹', () => {
+    expect(shouldNotify({ checkedAt: 0, notified: '' }, '1.7.0')).toBe(true);
+    expect(shouldNotify({ checkedAt: 0, notified: '1.7.0' }, '1.7.0')).toBe(false);
+    expect(shouldNotify({ checkedAt: 0, notified: '1.7.0' }, '1.7.1')).toBe(true);
+  });
+
+  it('空版本不弹', () => {
+    expect(shouldNotify({ checkedAt: 0, notified: '' }, '')).toBe(false);
+  });
+});
+
+describe('本地状态解析', () => {
+  it('正常 JSON 读得回来，多余字段忽略', () => {
+    const s = parseUpdateState('{"checkedAt":123,"notified":"1.7.0","extra":1}');
+    expect(s.checkedAt).toBe(123);
+    expect(s.notified).toBe('1.7.0');
+  });
+
+  it('空值 / 坏 JSON / 类型不对都回退到空状态', () => {
+    expect(parseUpdateState(null)).toEqual({ checkedAt: 0, notified: '' });
+    expect(parseUpdateState('')).toEqual({ checkedAt: 0, notified: '' });
+    expect(parseUpdateState('{oops')).toEqual({ checkedAt: 0, notified: '' });
+    expect(parseUpdateState('{"checkedAt":"昨天","notified":5}')).toEqual({ checkedAt: 0, notified: '' });
+  });
+});
