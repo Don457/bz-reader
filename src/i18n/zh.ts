@@ -1114,7 +1114,7 @@ export const ZH = {
   'unlock.total': '合计',
   'unlock.unit': '项',
   'unlock.buy': '去购买',
-  'unlock.group': 'QQ交流群 {id}',
+  'unlock.group': 'QQ交流群 {id} 进群领试用',
 
   /* ── 设置页：数据 ────────────────────────────────────────── */
   'settings.importDir': '书籍导入位置',

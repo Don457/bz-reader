@@ -1470,8 +1470,21 @@
 
   /* 购买条就是页脚的全部：手机上收紧内边距，两颗出口挤一行。 */
   .bzs-unlock-buy {
-    padding: 8px 10px;
-    gap: 8px;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  /* 购买条里的两颗按钮不跟移动档 15px：群号后面挂了「进群领试用」，
+     15px 会把页脚撑到一百多像素，正文对照表只剩不到七成。这里用
+     桌面档 12px + 紧一点的横向内边距，360 宽也能并排。
+     Obsidian 移动端给 button 的 --input-height 是 44px，这两颗会被
+     撑得又高又空；压到 32，页脚再省一截，触摸宽度仍然够点。 */
+  .bzs-unlock-buy .bzs-btn {
+    font-size: 12px;
+    padding: 0 10px;
+    height: 32px;
+    min-height: 0;
+    letter-spacing: 0;
   }
 
   /* 窄屏再压一点行距：padding 现在在格子里（行上没有），所以写格子这一层 */
@@ -1479,6 +1492,26 @@
   .bzs-plan-row > .c {
     padding-top: 4px;
     padding-bottom: 4px;
+  }
+}
+
+/* 群入口加了「进群领试用」之后（2026-11-22）：字号压到 12px 后，
+   360 以上能并排；340 以下（320 这类老机型）放不下，就让群按钮独占
+   一行、铺满购买条并允许折行，不再被弹层右边缘裁掉。
+   用 grid 而不是 flex-basis:100%，后者加按钮自身 padding 会溢出。 */
+@media (max-width: 340px) {
+  .bzs-unlock-buy {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .bzs-unlock-buy .bzs-btn[data-act="copygroup"] {
+    justify-self: stretch;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.45;
   }
 }
 

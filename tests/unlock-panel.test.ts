@@ -51,10 +51,13 @@ describe('解锁弹层 · 交流群入口', () => {
     expect(html).toContain('QQ');
   });
 
-  it('不提试用：界面上的字不能指向一枚不再发出的码', () => {
+  it('群号后面写「进群领试用」，但试用仍不由插件发放', () => {
+    /* 2026-11-22：这五个字是进群理由——码由管理员在群里给，
+       不是插件自己会发的那套 7 天试用。TRIAL_ACTIVE 必须继续关着，
+       否则两套试用会同时存在。 */
     expect(TRIAL_ACTIVE).toBe(false);
-    expect(groupButtonHtml()).not.toContain('试用');
-    expect(overlayUnlock()).not.toContain('试用');
+    expect(groupButtonHtml()).toContain('进群领试用');
+    expect(overlayUnlock()).toContain('进群领试用');
   });
 
   it('按钮挂着设置页那条复制动作，不是单独的试用分支', () => {
@@ -88,7 +91,7 @@ describe('解锁弹层 · 交流群入口', () => {
 });
 
 describe('解锁弹层 · 点按钮', () => {
-  it('复制群号本身，提示去 QQ 搜索而不是领试用', async () => {
+  it('复制群号本身，提示去 QQ 搜索加群', async () => {
     const writes: string[] = [];
     vi.stubGlobal('navigator', {
       clipboard: { writeText: async (text: string) => void writes.push(text) },
