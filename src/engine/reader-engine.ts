@@ -18,6 +18,7 @@ import type { OcrPage } from './pdf/ocr';
 import { EngineHost } from './host';
 import type { Anchor } from '../core/tts-anchor';
 import { PdfEngineHost } from './pdf/host';
+import { MangaEngineHost } from './manga/host';
 
 /**
  * 跳转历史（「回到上一处」）。
@@ -112,6 +113,8 @@ export interface AiShotSource {
 export interface ReaderEngine {
   /** PDF 走另一套渲染；视图层据此隐藏排版面板、改页码文案 */
   readonly isPdf: boolean;
+  /** 漫画走第三套渲染（图片页，没有文字层） */
+  readonly isManga?: boolean;
   /**
    * PDF 是不是纯扫描件（首页没有文字层）。
    * 宿主拿它决定要不要先提醒一句「划词和搜索取不到文字」。
@@ -256,6 +259,8 @@ export interface ReaderEngine {
   contentLeftInset?(): number;
   /** PDF 专用：还原上次的旋转角与双页排法。别的引擎不实现 */
   restorePdfView?(state: { rotation?: number; spread?: boolean } | null | undefined): void;
+  /** 漫画专用：还原方向 / 单双页 / 缩放等按书记住的视角 */
+  restoreMangaView?(state: import('./manga/settings').MangaViewState | null | undefined): void;
   /** PDF 专用动作集；EPUB/TXT/CBZ 没有 */
   readonly pdfUi?: PdfUi;
   /** PDF 专用：扫描页识别。别的引擎没有 */
@@ -272,5 +277,7 @@ export interface ReaderEngine {
  * PDF 宿主的薄壳带进来，EPUB 用户不会付 800KB 的解析钱。
  */
 export function createEngine(format: BookFormat, app: App): ReaderEngine {
-  return format === 'pdf' ? new PdfEngineHost(app) : new EngineHost(app);
+  if (format === 'pdf') return new PdfEngineHost(app);
+  if (format === 'cbz') return new MangaEngineHost(app);
+  return new EngineHost(app);
 }

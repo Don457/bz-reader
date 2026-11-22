@@ -622,6 +622,69 @@ export function viewSettings(v: SettingsView): string {
     { tut: tutBtn('pdftut', 'settings.bz.tut'), cls: 'bzs-setgrp-pdf' },
   );
 
+  /* 漫画（2026-11-15 转正）：这里是全局默认，正在读的那本可以单独覆盖，
+     覆盖值存在 ReaderBook.mangaView。基础版整组灰掉、点一下弹对照表并高亮
+     漫画那一行，与 PDF / AI 同口径。 */
+  const mangaUnlocked = can('manga');
+  const mp = p.manga;
+  const mangaSwitch = (field: string, on: boolean, key: MsgKey): string =>
+    `<div class="bzs-setrow"><label>${t(key)}</label><button class="bzs-switch${
+      on ? ' on' : ''
+    }" data-act="setpref" data-k="manga.${field}" data-v="${on ? '0' : '1'}" aria-label="${t(
+      key,
+    )}"></button></div>`;
+  const manga = `<div class="bzs-setgrp${mangaUnlocked ? '' : ' is-locked'}"${
+    mangaUnlocked ? '' : ` data-act="unlock" data-mode="manga" title="${t('settings.locked')}"`
+  }>
+      <h3>${t('settings.grp.manga')}</h3>
+      <div class="bzs-setrow is-segrow"><label>${t('settings.manga.direction')}</label>${seg(
+        'manga.direction',
+        [
+          ['auto', t('settings.manga.direction.auto')],
+          ['rtl', t('settings.manga.direction.rtl')],
+          ['ltr', t('settings.manga.direction.ltr')],
+        ],
+        mp.direction,
+        'setpref',
+        'bzs-seg bzs-seg-wrap',
+      )}</div>
+      <div class="bzs-setrow is-segrow"><label>${t('settings.manga.flow')}</label>${seg(
+        'manga.flow',
+        [
+          ['paged', t('settings.manga.flow.paged')],
+          ['vertical', t('settings.manga.flow.vertical')],
+          ['horizontal', t('settings.manga.flow.horizontal')],
+          ['webtoon', t('settings.manga.flow.webtoon')],
+        ],
+        mp.flow,
+        'setpref',
+        'bzs-seg bzs-seg-wrap',
+      )}</div>
+      <div class="bzs-setrow is-segrow"><label>${t('settings.manga.fit')}</label>${seg(
+        'manga.fit',
+        [
+          ['smart', t('settings.manga.fit.smart')],
+          ['screen', t('settings.manga.fit.screen')],
+          ['width', t('settings.manga.fit.width')],
+          ['height', t('settings.manga.fit.height')],
+          ['fill', t('settings.manga.fit.fill')],
+          ['original', t('settings.manga.fit.original')],
+        ],
+        mp.fit,
+        'setpref',
+        'bzs-seg bzs-seg-wrap',
+      )}</div>
+      ${mangaSwitch('spread', mp.spread, 'settings.manga.spread')}
+      ${mangaSwitch('splitWide', mp.splitWide, 'settings.manga.splitWide')}
+      ${mangaSwitch('coverAlone', mp.coverAlone, 'settings.manga.coverAlone')}
+      ${mangaSwitch('panels', mp.panels, 'settings.manga.panels')}
+      ${mangaSwitch('crop', mp.crop, 'settings.manga.crop')}
+      ${mangaSwitch('thumbs', mp.thumbs, 'settings.manga.thumbs')}
+      ${mangaSwitch('tapReverse', mp.tapReverse, 'settings.manga.tapReverse')}
+      ${mangaSwitch('keepAwake', mp.keepAwake, 'settings.manga.keepAwake')}
+      <div class="bzs-mini" style="margin-top:2px">${t('settings.manga.hint')}</div>
+    </div>`;
+
   /* 阅读页右上角图标：可排序、可收起。收起的进 ⋮；移动端最多露 3 颗。
      手机上不提供的那几项（并排 / 对照书籍 / 朗读）不列出来——
      列出来的话，用户能把它们拖进前三颗，头栏就多一颗点不动的按钮。
@@ -1146,10 +1209,10 @@ export function viewSettings(v: SettingsView): string {
 
   /* 两列各自成流（布局说明见 study.css 的 .bzs-set-page）。
      2026-11-17 按「本机怎么显示 / 接什么服务」重排：
-       左列 = 界面 · 版式 · 外观 · 标注 · 数据 · PDF（含扫描页识别）
+       左列 = 界面 · 版式 · 外观 · 标注 · 数据 · PDF（含扫描页识别）· 漫画
        右列 = 朗读 · AI 助手 · bz · bz review · 授权
      2026-11-22 原型：下载与功能并组，原来的「插件」组拆进 bz / bz review。 */
-  const leftCol = `${languageGrp}${layoutGrp}${lookGrp}${marksGrp}${dataGrp}${pdfGrp}`;
+  const leftCol = `${languageGrp}${layoutGrp}${lookGrp}${marksGrp}${dataGrp}${pdfGrp}${manga}`;
   const rightCol = `${ttsGrp}${aiGrp}${bzGrp}${reviewGrp}${licGrp}`;
 
   return `<div class="bzs-set-page">${aboutBar(v.version || '', paid, ent.patron, ent.name)}${nav}<div class="bzs-set-grid"><div class="bzs-set-col">${leftCol}</div><div class="bzs-set-col">${rightCol}</div></div>${headerGrp}${keysGrp}</div>`;

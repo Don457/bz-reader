@@ -4394,9 +4394,41 @@ function toggleDone(id?: string): void {
  * 拖到一半手指还按着，拖动会话就断了，只能一格一格点。`change` / 松手时
  * 才补一次重绘。
  */
+/** 漫画全局默认的布尔项：白名单之外一律不认，免得手改 data-k 写坏 prefs */
+function withMangaBool(cur: ReaderPrefs['manga'], field: string, on: boolean): ReaderPrefs['manga'] | null {
+  switch (field) {
+    case 'spread': return { ...cur, spread: on };
+    case 'splitWide': return { ...cur, splitWide: on };
+    case 'coverAlone': return { ...cur, coverAlone: on };
+    case 'panels': return { ...cur, panels: on };
+    case 'crop': return { ...cur, crop: on };
+    case 'thumbs': return { ...cur, thumbs: on };
+    case 'tapReverse': return { ...cur, tapReverse: on };
+    case 'keepAwake': return { ...cur, keepAwake: on };
+    default: return null;
+  }
+}
+
 function setPref(k: string | undefined, v: string | undefined, opts: { silent?: boolean } = {}): void {
   const src = getShellSource();
   if (!src || !k || v === undefined) return;
+  /* 漫画全局默认（2026-11-15）：三个枚举档加一组开关统一收口到 prefs.manga。
+     窗口外的值一律回默认，与 normalizeMangaPrefs 同一口径。 */
+  if (k.startsWith('manga.')) {
+    const field = k.slice('manga.'.length);
+    const cur = shellPrefs().manga;
+    let next: ReaderPrefs['manga'] | null;
+    if (field === 'direction') next = { ...cur, direction: v === 'rtl' || v === 'ltr' ? v : 'auto' };
+    else if (field === 'flow') next = { ...cur, flow: v === 'vertical' || v === 'horizontal' || v === 'webtoon' ? v : 'paged' };
+    else if (field === 'fit') next = {
+      ...cur,
+      fit: v === 'screen' || v === 'width' || v === 'height' || v === 'fill' || v === 'original' ? v : 'smart',
+    };
+    else next = withMangaBool(cur, field, v !== '0');
+    if (next) src.setPrefs({ manga: next });
+    if (!opts.silent) repaint();
+    return;
+  }
   switch (k) {
     case 'fontSize':
       src.setPrefs({ fontSize: Number(v) });

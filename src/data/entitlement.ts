@@ -82,6 +82,8 @@ export type Cap =
   | 'semantic' // 语义搜索：本书与全库，按意思找
   /** 剪藏成书（2026-11-13）：把剪藏本里的订阅文章合成 EPUB，进书架读 */
   | 'clipBook'
+  /** 漫画模式（2026-11-15 从探索中转正）：分格、右到左、跨页 */
+  | 'manga'
   /**
    * PDF 整段（2026-11-10）。
    *
@@ -802,6 +804,18 @@ const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
     es: 'OCR de páginas escaneadas: seleccionarlas, buscarlas y resaltarlas como texto',
     pt: 'OCR de páginas digitalizadas: selecioná-las, pesquisá-las e destacá-las como texto',
   },
+  /* 漫画模式的卖点（2026-11-15 从路线图转正）。分格、右到左、跨页拆合
+     三件事都有运行期实现，被拦时弹层第一句就是它。 */
+  manga: {
+    zh: '漫画模式：分格逐格读、右到左翻页、跨页自动拆合',
+    'zh-TW': '漫畫模式：分格逐格讀、右到左翻頁、跨頁自動拆合',
+    en: 'Manga mode: panel-by-panel, right-to-left, auto split spreads',
+    ja: 'マンガモード：コマごとに読む、右から左へ、見開きを自動分割',
+    de: 'Manga-Modus: Panel für Panel, rechts nach links, Doppelseiten automatisch teilen',
+    fr: 'Mode manga : case par case, droite à gauche, doubles pages découpées automatiquement',
+    es: 'Modo manga: viñeta a viñeta, derecha a izquierda, dobles páginas divididas',
+    pt: 'Modo mangá: quadro a quadro, direita para esquerda, páginas duplas divididas',
+  },
   clipBook: {
     zh: '剪藏成书：把 bz 剪藏本里的订阅文章合成一本 EPUB，进书架读',
     'zh-TW': '剪藏成書：把 bz 剪藏本裡的訂閱文章合成一本 EPUB，進書架讀',
@@ -882,6 +896,10 @@ export const PLAN_TABLE: PlanRow[] = [
   /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。 */
   row('parallel', 'no', 'yes', 'parallel'),
   row('bookmap', 'yes', 'yes'),
+  /* 漫画模式 2026-11-22 从路线图转正：分格、右到左、跨页三件事都有运行期
+     实现，挂在自己的能力位上，入口由 openBook 的 requireCap('manga') 拦。
+     放在「排版」段末尾：它和竖排、并排一样，都是「一屏里怎么摆内容」。 */
+  row('manga', 'no', 'yes', 'manga'),
   /* ── 导入：书从哪儿来 ──
    * 2026-11-10：PDF 不再由 formats 代表——它有自己的段（见下面的 pdfView…）。
    * 剪藏成书 2026-11-13 从「探索中」转正，与 formats 同类：都是「书怎么进来」。 */
@@ -957,11 +975,11 @@ export const PLAN_TABLE: PlanRow[] = [
      再给它一个能力位只是摆样子。 */
   row('ttsOffline', 'no', 'yes'),
   /* ── 路线图（2026-11-11 起叫「探索中」，2026-11-21 改叫「路线图」） ──
-   * 五项都还没实现：两版都不打勾、不挂能力位，状态由段名说。
+   * 四项都还没实现：两版都不打勾、不挂能力位，状态由段名说。
    * 它们不进合计——图上的基础版与高级版项数只数打勾的行。
-   * 「复习」2026-11-21 已上线，搬去上面的「复习」段，不再留在这里。 */
+   * 「复习」2026-11-21 已上线、「漫画」2026-11-22 从路线图转正，
+   * 两条都搬去上面的正式段，不再留在这里。 */
   row('pdfReflow', 'no', 'no'),
-  row('manga', 'no', 'no'),
   row('transChapter', 'no', 'no'),
   row('eink', 'no', 'no'),
   row('motion', 'no', 'no'),
@@ -1033,7 +1051,7 @@ export const PLAN_GROUPS: PlanGroup[] = [
   },
   {
     key: 'layout',
-    rows: ['columns', 'vertical', 'parallel', 'bookmap'],
+    rows: ['columns', 'vertical', 'parallel', 'bookmap', 'manga'],
   },
   {
     key: 'import',
@@ -1069,6 +1087,6 @@ export const PLAN_GROUPS: PlanGroup[] = [
      「被拦时高亮」那一套。 */
   {
     key: 'roadmap',
-    rows: ['pdfReflow', 'manga', 'transChapter', 'eink', 'motion'],
+    rows: ['pdfReflow', 'transChapter', 'eink', 'motion'],
   },
 ];

@@ -1724,6 +1724,11 @@ export function createPlugin(cfg: PluginConfig) {
     }
 
     async openBook(book: ReaderBook, cfi?: string, query?: string): Promise<void> {
+      /* 漫画模式 2026-11-15 从「探索中」转正：CBZ 除了「更多格式」那道门，
+         还必须过自己的 manga 能力位。只靠 fullFormats 会把整套漫画阅读器
+         白送给基础版（2026-11-13 剪藏成书就是这么漏的）。放在格式门之前，
+         被拦时弹层高亮的是用户刚点开的「漫画模式」那一行。 */
+      if (book.fileRef.format === 'cbz' && !requireCap('manga')) return;
       // 多格式属于高级能力：升级前导入的 mobi / azw3 也要拦住，
       // 否则「书架里能点开」就等于绕过付费门。
       // PDF 2026-11-10 起在对照表里单独成段，所以点开 PDF 要把视线引到那一段，

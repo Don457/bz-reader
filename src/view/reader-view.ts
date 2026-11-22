@@ -5341,9 +5341,13 @@ export class ReaderView extends ItemView {
         return;
       }
     }
-    /* PDF 走另一套引擎：切书时连同实例一起换。EPUB/TXT/CBZ 复用同一个
-       EngineHost（它自己会在 mount 时 destroy 上一本）。 */
-    if ((book.fileRef.format === 'pdf') !== this.host.isPdf) {
+    /* 三套引擎：PDF 一套、漫画一套、其余复用 EngineHost。
+       判定按「引擎种类」而不是只看 isPdf——否则从 EPUB 切到 CBZ 会
+       复用上一个 foliate 实例，漫画视图根本挂不上来。 */
+    const wantKind = book.fileRef.format === 'pdf' ? 'pdf'
+      : book.fileRef.format === 'cbz' ? 'manga' : 'book';
+    const curKind = this.host.isPdf ? 'pdf' : this.host.isManga ? 'manga' : 'book';
+    if (wantKind !== curKind) {
       await this.host.destroy();
       this.host = createEngine(book.fileRef.format, this.api.app);
     }
@@ -5439,9 +5443,12 @@ export class ReaderView extends ItemView {
         onPdfFlow: (mode) => getShellSource()?.setPrefs({ pdfFlow: mode }),
         /* 排版面板里的「识别本页」（扫描件）：识别编排在壳层 */
         onPdfOcr: (page) => this.recognizePage(page),
-        /* 跳转历史条数变了：头栏那颗「回到上一处」跟着亮 / 灰。两个引擎都报 */
+        /* 跳转历史条数变了：头栏那颗「回到上一处」跟着亮 / 灰。三个引擎都报 */
         onHistoryChange: (count) =>
           this.headerEls.get('history')?.classList.toggle('is-off', count === 0),
+        /* 漫画：按书还原视角，视角变了按书落盘（不进全局 prefs） */
+        mangaView: book.mangaView,
+        onMangaViewState: (state) => this.saveMangaView(state),
         /* 脚注：默认在注释号上方开一小块浮窗，读完接着读。
            设置里选「跳到章末」就退回 foliate 的老行为——我们在同一条链路上
            自己调 goTo，保证两种模式只有一处判断。 */
@@ -5490,6 +5497,8 @@ export class ReaderView extends ItemView {
          只在同一章才出现——跨章继续要跳章，那是另一件事，不混在这里做。
          放在 mount 之后：章节名与章序都要等引擎挂好才准。 */
       this.maybeShowTtsResume();
+      /* 漫画同理：先按书还原方向 / 单双页 / 缩放，再套全局偏好 */
+      this.host.restoreMangaView?.(book.mangaView);
       if (this.host.isPdf) {
         this.host.applyPrefs(this.prefs);
         /* 识别结果随书一起进来。顺序要在 start() 之前：晚一步的话，先渲染
@@ -5501,6 +5510,8 @@ export class ReaderView extends ItemView {
           .load()
           .then(() => this.noticeScanned())
           .catch(() => undefined);
+      } else if (this.host.isManga) {
+        this.host.applyPrefs(this.prefs);
       }
       /* 点按分区要用「可见宽度」当分母：分页器的文档宽度比屏幕大一个量级 */
       this.host.setViewportWidth(
@@ -5921,6 +5932,14 @@ export class ReaderView extends ItemView {
     const cur = book.pdfView;
     if (cur && cur.rotation === rotation && cur.spread === spread) return;
     book.pdfView = { rotation, spread };
+    this.api.store.touch();
+  }
+
+  /** 漫画视角按书记住：只在真的变了时落盘，避免每翻一页都 touch 一次存储 */
+  private saveMangaView(state: import('../engine/manga/settings').MangaViewState): void {
+    const book = this.book;
+    if (!book) return;
+    book.mangaView = { ...(book.mangaView ?? {}), ...state };
     this.api.store.touch();
   }
 

@@ -13,6 +13,8 @@
    不进主语言包，`Record<Locale, string>` 保证八种语言都齐。 */
 import { locale, type Locale } from '../i18n';
 import type { PdfZoomMode } from '../engine/pdf/fit';
+import type { MangaPrefs } from '../engine/manga/settings';
+import { DEFAULT_MANGA_PREFS, normalizeMangaPrefs } from '../engine/manga/settings';
 import type { PdfLinkLabelMode } from './pdf-link';
 import type { DeepseekVoice } from '../core/tts-api';
 import type { TtsEngine } from '../core/tts-engine';
@@ -225,6 +227,8 @@ export interface ReaderPrefs {
   pdfBacklinks: boolean;
   /** 导出本页为图片时的倍率（1×/2×/3×）。默认 2× —— 1× 放大了糊 */
   pdfExportScale: number;
+  /** 漫画阅读偏好（整份归一化，见 engine/manga/settings.ts） */
+  manga: MangaPrefs;
 }
 
 export const DEFAULT_PREFS: ReaderPrefs = {
@@ -266,6 +270,7 @@ export const DEFAULT_PREFS: ReaderPrefs = {
   pdfAnnots: true,
   pdfBacklinks: false,
   pdfExportScale: 2,
+  manga: DEFAULT_MANGA_PREFS,
 };
 
 export const FONT_SIZE_RANGE = { min: 14, max: 30, step: 1 } as const;
@@ -523,6 +528,9 @@ export function normalizePrefs(raw: unknown): ReaderPrefs {
     pdfAnnots: p.pdfAnnots !== false,
     pdfBacklinks: p.pdfBacklinks === true,
     pdfExportScale: exportScaleOf(p.pdfExportScale),
+    /* 整份走自己的归一化：老数据没有这一项时拿到全套默认值，
+       手改坏的漫画配置不会把渲染层带成 NaN */
+    manga: normalizeMangaPrefs(p.manga),
   };
 }
 
