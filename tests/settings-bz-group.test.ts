@@ -73,6 +73,7 @@ const LINKED: SettingsView['bz'] = {
   model: 'bge-m3',
   entry: true,
   notes: true,
+  state: 'enabled',
 };
 
 describe('设置页 bz 组 · 剪藏本', () => {
@@ -90,11 +91,12 @@ describe('设置页 bz 组 · 剪藏本', () => {
     expect(off).not.toContain('class="bzs-switch on" data-act="toggle" data-k="clipBook"');
   });
 
-  it('没装 bz：开关整颗不出现，描述照旧在', () => {
-    const g = bzGroup(html());
-    expect(g).toContain('<b>剪藏本</b>');
-    expect(g).not.toContain('data-k="clipBook"');
-    expect(g).toContain(CLIP_HINT);
+  /* 2026-11-22：没装 bz 时整组不画——安装入口统一在「插件」组的 bz 卡里，
+     不会再出现一排灰着的空卡让人以为「选项在但点不动」。 */
+  it('没装 bz：整组不出现', () => {
+    const out = html();
+    expect(out).not.toContain('<h3>bz</h3>');
+    expect(out).not.toContain(CLIP_HINT);
   });
 
   it('剪藏本有自己的教程出口，不是组头共用一颗', () => {
@@ -111,13 +113,11 @@ describe('设置页 bz 组 · 剪藏本', () => {
 describe('设置页 bz 组 · AI 知识盒', () => {
   it('永远没有开关：连上与否是自动识别', () => {
     expect(bzGroup(html(LINKED))).not.toContain('data-k="aiKnowledge"');
-    expect(bzGroup(html())).not.toContain('data-k="aiKnowledge"');
     expect(bzGroup(html(LINKED))).toContain('<b>AI 知识库</b>');
   });
 
-  it('连上写「已连接」，没装写「未连接」', () => {
+  it('连上写「已连接」', () => {
     expect(bzGroup(html(LINKED))).toContain('已连接');
-    expect(bzGroup(html())).toContain('未连接');
   });
 
   it('bz 在但没配嵌入模型：也算没连上', () => {
@@ -128,7 +128,7 @@ describe('设置页 bz 组 · AI 知识盒', () => {
 
   it('两种状态共用原本那句说明，一个字都不随状态变', () => {
     expect(bzGroup(html(LINKED))).toContain(KB_HINT);
-    expect(bzGroup(html())).toContain(KB_HINT);
+    expect(bzGroup(html({ ...LINKED, model: '' }))).toContain(KB_HINT);
   });
 
   it('自己的教程是讲索引的那一期，和剪藏本那颗不是同一个动作', () => {
@@ -139,13 +139,11 @@ describe('设置页 bz 组 · AI 知识盒', () => {
 });
 
 describe('设置页 bz 组 · 没装 bz 时', () => {
-  it('给的是安装出口，不是功能教程', () => {
-    const g = bzGroup(html());
-    expect(g).toContain('data-act="bzinstall"');
-  });
-
-  it('说明里交代这两项要 bz 才能用', () => {
-    expect(bzGroup(html())).toContain('没检测到 bz');
+  it('整组不画，安装出口统一走「插件」组', () => {
+    const out = html();
+    expect(out).not.toContain('<h3>bz</h3>');
+    const plugins = out.slice(out.indexOf('<h3>插件</h3>'));
+    expect(plugins).toContain('data-act="bzinstall"');
   });
 
   it('装了之后不再摆安装引导', () => {

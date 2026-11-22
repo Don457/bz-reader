@@ -26,12 +26,17 @@ export const VIDEO_TUTORIAL_URL = 'https://www.bilibili.com/video/BV1tK4E6KE1B';
 export const AI_TUTORIAL_URL = 'https://www.bilibili.com/video/BV1bR4s6dEjH';
 
 /**
- * 设置页 bz 组「怎么装 bz」专用：同一支视频的第 **2P**（`?p=2`），
+ * 设置页 bz 卡「看教程」：同一支视频的第 **2P**（`?p=2`），
  * 第 1P 是推荐向总览。p 参数是这条链接唯一的作用，别删。
- *
- * 只有没检测到 bz 时才出现——装完这一节就不需要了。
  */
 export const BZ_INSTALL_TUTORIAL_URL = 'https://www.bilibili.com/video/BV1vNsZ6pE7i/?p=2';
+
+/**
+ * bz 的下载页（2026-11-22）：只在「一键安装」失败时兜底打开，平时用户
+ * 不用自己去找。GitHub 主线路、码云备份路线，两条都指 latest。
+ */
+export const BZ_DOWNLOAD_URL = 'https://github.com/yeshimei/bz/releases/latest';
+export const BZ_DOWNLOAD_MIRROR = 'https://gitee.com/ntbl/bz/releases/latest';
 
 /**
  * 剪藏本的教程（bz 组里那颗「看教程」）：讲剪藏成书怎么开、怎么同步。

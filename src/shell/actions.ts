@@ -47,6 +47,8 @@ import { addMarkToReview, addSelectionToReview, openBookReviewAdd } from './revi
 import { openReviewSettings } from './review-settings';
 import { findReviewApi, markCardKey, reviewEmbedReady } from '../data/review-bridge';
 import { enableInstalledReview, installReview, type ReviewInstallError } from '../data/review-install';
+import { enableInstalledBz, installBz } from '../data/bz-install';
+import type { PluginInstallError } from '../data/plugin-install';
 import { markReviewPlanned } from './review-marks';
 import { notify, notifyProgress } from '../core/notice';
 import { synthesizeFor, ttsEngineReady, ttsVoiceFor, type TtsRoute } from '../core/tts-engine';
@@ -141,7 +143,7 @@ import { currentSearchSurface, kickSemanticSearch, resetSemanticSearch } from '.
 import { bzClipbookUsed, bzEmbedder, bzNotesReady, openBzClipbook, openBzPreview, probeBz, openBzEntry, type BzEntryKind, type BzEmbedder } from '../data/bz-bridge';
 import { isMobileEnv, isMobileShell } from '../core/mobile';
 import { SHELF_TAP_ATTR, SHELF_TAP_BOOK_ATTR, bindShelfTap } from './shelf-tap';
-import { AI_CHAT_TUTORIAL_URL, AI_TUTORIAL_URL, BZ_INSTALL_TUTORIAL_URL, CLIP_TUTORIAL_URL, PDF_TUTORIAL_URL, REVIEW_DOWNLOAD_URL, REVIEW_DOWNLOAD_MIRROR, REVIEW_TUTORIAL_URL, TTS_TUTORIAL_URL, VIDEO_TUTORIAL_URL, openDownloadWithFallback } from '../core/links';
+import { AI_CHAT_TUTORIAL_URL, AI_TUTORIAL_URL, BZ_DOWNLOAD_MIRROR, BZ_DOWNLOAD_URL, BZ_INSTALL_TUTORIAL_URL, CLIP_TUTORIAL_URL, PDF_TUTORIAL_URL, REVIEW_DOWNLOAD_URL, REVIEW_DOWNLOAD_MIRROR, REVIEW_TUTORIAL_URL, TTS_TUTORIAL_URL, VIDEO_TUTORIAL_URL, openDownloadWithFallback } from '../core/links';
 import { portraitBlock, type PortraitBlockReason } from '../data/portrait-gate';
 import { portraitBuilder, type PortraitBuildDeps } from '../data/portrait-build';
 import { forgetPortrait, setPortrait } from './portrait-cache';
@@ -548,6 +550,29 @@ const REVIEW_INSTALL_ERROR_KEY: Record<ReviewInstallError, MsgKey> = {
   write: 'settings.plugin.review.fail.write',
   enable: 'settings.plugin.review.fail.enable',
 };
+
+/** bz 装不上时同一套人话（2026-11-22） */
+const BZ_INSTALL_ERROR_KEY: Record<PluginInstallError, MsgKey> = {
+  network: 'settings.plugin.fail.network',
+  write: 'settings.plugin.fail.write',
+  enable: 'settings.plugin.fail.enable',
+};
+
+/**
+ * 一键安装按钮的「按下即锁」（2026-11-22）。
+ *
+ * 下载有几 MB、国内可能十几秒，连点会发两轮下载。按钮本身没有状态，
+ * 就在原节点上禁用并把字换成「正在下载…」；完成或失败统一重绘恢复。
+ * 拿不到真节点（测试桩 / 节点已随重绘消失）就跳过，不影响安装本身。
+ */
+function lockInstallButton(el: HTMLElement, label: string): void {
+  try {
+    el.setAttribute('disabled', '');
+    el.textContent = label;
+  } catch {
+    /* 不是真的按钮：锁不住也不影响安装本身 */
+  }
+}
 
 /**
  * 菜单项标题：给「分类管理 / 新建分类…」挂一个触摸标记。
@@ -3688,10 +3713,43 @@ export function dispatchAction(
          的那期，不是关于条上的推荐向视频。 */
       window.open(AI_TUTORIAL_URL, '_blank', 'noopener,noreferrer');
       break;
-    case 'bzinstall':
-      /* bz 组的安装入口：同一支视频的第 2P（第 1P 是推荐向总览） */
+    case 'bztut':
+      /* bz 卡的教程：同一支视频的第 2P（第 1P 是推荐向总览） */
       window.open(BZ_INSTALL_TUTORIAL_URL, '_blank', 'noopener,noreferrer');
       break;
+    case 'bzinstall': {
+      /* 一键装 bz（2026-11-22）：与 bz Review 同一条路——后台下载三件套、
+         写插件目录、让宿主启用。下载几 MB，按钮先锁住防连点。
+         失败时打开下载页兜底（用户至少还有手动那条路）。 */
+      const src = getShellSource();
+      if (!src?.app) break;
+      lockInstallButton(el, t('settings.plugin.bz.installing'));
+      const progress = notifyProgress(t('settings.plugin.bz.installing'));
+      void installBz(src.app).then((res) => {
+        progress.hide();
+        if (res.ok) {
+          notify(t('settings.plugin.bz.installDone'));
+          rerender();
+          return;
+        }
+        notify(t('settings.plugin.bz.installFailed', { why: t(BZ_INSTALL_ERROR_KEY[res.error]) }), 'error');
+        rerender();
+        void openDownloadWithFallback(BZ_DOWNLOAD_URL, BZ_DOWNLOAD_MIRROR);
+      });
+      break;
+    }
+    case 'bzenable': {
+      /* 已经装好、只是没启用：不再下载，直接让宿主加载并写进启用名单 */
+      const src = getShellSource();
+      if (!src?.app) break;
+      void enableInstalledBz(src.app).then((ok) => {
+        if (ok) {
+          notify(t('settings.plugin.bz.enabledDone'));
+          rerender();
+        } else notify(t('settings.plugin.bz.enableFailed'), 'error');
+      });
+      break;
+    }
     case 'cliptut':
       /* 剪藏本的教程还没定（core/links 里是空串）。空着就说一句，
          不去打开一条不相干的视频——指错比没有更糟。 */
@@ -3745,6 +3803,7 @@ export function dispatchAction(
          失败时打开下载页兜底（用户至少还有手动那条路）。 */
       const src = getShellSource();
       if (!src?.app) break;
+      lockInstallButton(el, t('settings.plugin.review.installing'));
       const progress = notifyProgress(t('settings.plugin.review.installing'));
       void installReview(src.app).then((res) => {
         progress.hide();
@@ -3754,6 +3813,7 @@ export function dispatchAction(
           return;
         }
         notify(t('settings.plugin.review.installFailed', { why: t(REVIEW_INSTALL_ERROR_KEY[res.error]) }), 'error');
+        rerender();
         void openDownloadWithFallback(REVIEW_DOWNLOAD_URL, REVIEW_DOWNLOAD_MIRROR);
       });
       break;

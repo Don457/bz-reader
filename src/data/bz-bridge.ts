@@ -366,6 +366,11 @@ export interface BzSnapshot {
   entry: boolean;
   /** bz 的索引建好了，笔记能当依据 */
   notes: boolean;
+  /**
+   * 三态（2026-11-22）：设置页「插件」组据它画 bz 卡的安装 / 启用按钮。
+   * `ok` 留作旧调用方的兼容字段，新代码读 state。
+   */
+  state: 'enabled' | 'disabled' | 'missing';
 }
 
 export function bzSnapshot(app: App | null | undefined): BzSnapshot {
@@ -376,6 +381,7 @@ export function bzSnapshot(app: App | null | undefined): BzSnapshot {
     model: bzEmbedder(app).model,
     entry: !!probe.knowledge,
     notes: bzNotesReady(app),
+    state: probe.status === 'ok' ? 'enabled' : probe.status,
   };
 }
 

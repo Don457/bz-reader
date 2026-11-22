@@ -615,9 +615,12 @@ describe('设置页 · 两列各自成流', () => {
       expect(left, h).not.toContain(`<h3>${h}</h3>`);
   });
 
-  it('右列五组：朗读、AI 助手、bz、插件、授权', () => {
+  /* 2026-11-22：bz 组只在 bz 装好并启用后出现（和 bz Review 的选项一样，
+     没装就不摆一排灰着的空卡）。默认没人装，右列只剩四组。 */
+  it('右列四组（没装 bz）：朗读、AI 助手、插件、授权', () => {
     const [, right] = splitCols(html());
-    for (const h of ['朗读', 'AI 助手', 'bz', '插件', '授权']) expect(right, h).toContain(`<h3>${h}</h3>`);
+    for (const h of ['朗读', 'AI 助手', '插件', '授权']) expect(right, h).toContain(`<h3>${h}</h3>`);
+    expect(right, '没装 bz 时不该有 bz 组').not.toContain('<h3>bz</h3>');
     for (const h of ['界面', '版式', '外观', '标注', '数据', 'PDF', '阅读页图标'])
       expect(right, h).not.toContain(`<h3>${h}</h3>`);
   });
@@ -638,7 +641,8 @@ describe('设置页 · 两列各自成流', () => {
   /* 窄屏会把两列叠成一列：「左列全部 → 右列全部」就是线性阅读顺序。
      朗读 2026-11-11 从「PDF 之后」挪到「AI 之上」（用户要求放在右列），
      所以它在序号里往后走了一格，其余顺序不动。
-bz 组 2026-11-13 从 AI 组里抽出来，紧跟在 AI 之后、授权之前。
+bz 组 2026-11-13 从 AI 组里抽出来，紧跟在 AI 之后、授权之前；
+2026-11-22 起只在 bz 装好并启用后出现，默认顺序里没有它。
 扫描页识别 2026-11-11 紧跟 PDF：它是 PDF 的一个子话题（同一组控件口径）。 */
   it('摊平后的组分顺序：左边本机设置、右边接服务', () => {
     const out = html();
@@ -653,7 +657,6 @@ bz 组 2026-11-13 从 AI 组里抽出来，紧跟在 AI 之后、授权之前。
       'PDF',
       '朗读',
       'AI 助手',
-      'bz',
       '插件',
       '授权',
       '阅读页图标',
@@ -1013,11 +1016,25 @@ describe('设置页 · 2026-11-17 重排', () => {
     return src.slice(start, next < 0 ? undefined : next);
   }
 
-  it('顶部页内索引：13 个组各一颗，落点 id 都在', () => {
+  it('顶部页内索引：没装 bz 时 12 个组，落点 id 都在', () => {
     const src = out();
     const jumps = [...src.matchAll(/data-act="setjump" data-k="([a-z]+)"/g)].map((m) => m[1]);
-    expect(jumps).toEqual(['ui', 'layout', 'look', 'marks', 'data', 'pdf', 'tts', 'ai', 'bz', 'plugins', 'lic', 'header', 'keys']);
+    expect(jumps).toEqual(['ui', 'layout', 'look', 'marks', 'data', 'pdf', 'tts', 'ai', 'plugins', 'lic', 'header', 'keys']);
     for (const id of jumps) expect(src, id).toContain(`id="bz-set-${id}"`);
+  });
+
+  it('bz 启用后索引补回「bz」那一颗，且落点真在页面上', () => {
+    const src = viewSettings({
+      prefs: DEFAULT_PREFS,
+      settings: DEFAULT_SETTINGS,
+      pen: 'amber',
+      hotkeys: [],
+      version: '1.0.0',
+      bz: { state: 'enabled', ok: true, version: '1.44.6', model: '', entry: true, notes: true },
+    });
+    const jumps = [...src.matchAll(/data-act="setjump" data-k="([a-z]+)"/g)].map((m) => m[1]);
+    expect(jumps).toEqual(['ui', 'layout', 'look', 'marks', 'data', 'pdf', 'tts', 'ai', 'bz', 'plugins', 'lic', 'header', 'keys']);
+    expect(src).toContain('id="bz-set-bz"');
   });
 
   it('大组切成小分区，行数少的组保持平铺', () => {
@@ -1079,12 +1096,28 @@ describe('设置页 · 2026-11-17 重排', () => {
     expect(src).toContain('还没填服务地址');
   });
 
-  it('bz 与插件用能力卡：三项各一张', () => {
+  it('bz 没装时只剩插件组两张安装卡（bz 与 bz Review）', () => {
     const src = out();
-    expect((src.match(/class="bzs-cap[ "]/g) ?? []).length).toBe(3);
+    expect((src.match(/class="bzs-cap[ "]/g) ?? []).length).toBe(2);
     expect(src).toContain('bzs-capchip');
     /* 状态徽章是词，不是句子：长句单独一行（渲染成卡片里的 <p>） */
     expect(groupOf(src, '插件')).toMatch(/<p>[^<]+<\/p>/);
+  });
+
+  it('bz 启用后四张卡都在：bz、bz Review、剪藏本、AI 知识库', () => {
+    const src = viewSettings({
+      prefs: DEFAULT_PREFS,
+      settings: DEFAULT_SETTINGS,
+      pen: 'amber',
+      hotkeys: [],
+      version: '1.0.0',
+      bz: { state: 'enabled', ok: true, version: '1.44.6', model: '', entry: true, notes: true },
+      review: { state: 'enabled', embed: true },
+    });
+    expect((src.match(/class="bzs-cap[ "]/g) ?? []).length).toBe(4);
+    expect(src).toContain('<h3>bz</h3>');
+    expect(groupOf(src, 'bz')).toContain('剪藏本');
+    expect(groupOf(src, 'bz')).toContain('AI 知识库');
   });
 
   it('阅读页图标 16 行改双列容器', () => {
@@ -1100,44 +1133,108 @@ describe('设置页 · 2026-11-17 重排', () => {
 });
 
 /**
- * 「插件」组三态（2026-11-21）：未安装 / 已安装未启用 / 已启用。
+ * 「插件」组三态（2026-11-21 起 bz Review；2026-11-22 起 bz 也进来）。
  *
  * 以前只有「装了没装」两种：装了就没按钮，没装就给一个跳浏览器下载的按钮。
  * 现在安装与启用都在卡片里完成，三种状态各自给对应的动作。
+ *
+ * bz 与 bz Review 用同一套卡片：没装 →「安装」；装了没启用 →「启用」；
+ * 已启用 → 只留状态与教程。bz 的剪藏本 / AI 知识库两项在 bz 启用前整组不画。
  */
 describe('设置页 · 插件组三态', () => {
-  const reviewHtml = (state: 'enabled' | 'disabled' | 'missing', embed = false): string =>
+  type State = 'enabled' | 'disabled' | 'missing';
+  /** 截出某一组（从它的 h3 到下一个 h3） */
+  function groupOf(src: string, title: string): string {
+    const start = src.indexOf(`>${title}</h3>`);
+    expect(start, title).toBeGreaterThan(-1);
+    const next = src.indexOf('<h3>', start + 1);
+    return src.slice(start, next < 0 ? undefined : next);
+  }
+  const pluginHtml = (bz: State, review: State, embed = false): string =>
     viewSettings({
       prefs: DEFAULT_PREFS,
       settings: DEFAULT_SETTINGS,
       pen: 'amber',
       hotkeys: [],
       version: '1.0.0',
-      review: { state, embed },
+      bz: { state: bz, ok: bz === 'enabled', version: '1.44.6', model: '', entry: true, notes: true },
+      review: { state: review, embed },
     });
 
-  it('未安装：徽章「未安装」+「安装」按钮', () => {
-    const src = reviewHtml('missing');
+  it('bz 未安装：徽章「未安装」+「安装」按钮，不给启用', () => {
+    const src = pluginHtml('missing', 'missing');
+    expect(src).toContain('data-act="bzinstall"');
+    expect(src).not.toContain('data-act="bzenable"');
+  });
+
+  it('bz 已安装未启用：徽章写明未启用 +「启用」按钮，不再给安装', () => {
+    const src = pluginHtml('disabled', 'missing');
+    expect(src).toContain('已安装 · 未启用');
+    expect(src).toContain('data-act="bzenable"');
+    expect(src).not.toContain('data-act="bzinstall"');
+  });
+
+  it('bz 已启用：两颗按钮都不出现，版本号看得见', () => {
+    const src = pluginHtml('enabled', 'missing');
+    expect(src).toContain('已启用');
+    expect(src).toContain('v1.44.6');
+    expect(src).not.toContain('data-act="bzinstall"');
+    expect(src).not.toContain('data-act="bzenable"');
+  });
+
+  it('bz Review 未安装：徽章「未安装」+「安装」按钮', () => {
+    const src = pluginHtml('missing', 'missing');
     expect(src).toContain('未安装');
     expect(src).toContain('data-act="reviewinstall"');
     expect(src).not.toContain('data-act="reviewenable"');
   });
 
-  it('已安装未启用：徽章写明未启用 +「启用」按钮，不再给安装', () => {
-    const src = reviewHtml('disabled');
+  it('bz Review 已安装未启用：徽章写明未启用 +「启用」按钮，不再给安装', () => {
+    const src = pluginHtml('missing', 'disabled');
     expect(src).toContain('已安装 · 未启用');
     expect(src).toContain('data-act="reviewenable"');
     expect(src).not.toContain('data-act="reviewinstall"');
   });
 
-  it('已启用：徽章「已启用」，两颗按钮都不出现', () => {
-    const src = reviewHtml('enabled', true);
+  it('bz Review 已启用：两颗按钮都不出现', () => {
+    const src = pluginHtml('missing', 'enabled', true);
     expect(src).toContain('已启用');
     expect(src).not.toContain('data-act="reviewinstall"');
     expect(src).not.toContain('data-act="reviewenable"');
   });
 
-  it('缺省（没探测）按未安装画，不白屏', () => {
+  it('缺省（没探测）两张卡都按未安装画，不白屏', () => {
+    expect(html()).toContain('data-act="bzinstall"');
     expect(html()).toContain('data-act="reviewinstall"');
+  });
+
+  it('两根插件卡在「插件」组里，bz 在前、bz Review 在后', () => {
+    const g = groupOf(pluginHtml('missing', 'missing'), '插件');
+    const bzAt = g.indexOf('data-act="bzinstall"');
+    const reviewAt = g.indexOf('data-act="reviewinstall"');
+    expect(bzAt, 'bz 卡').toBeGreaterThan(-1);
+    expect(reviewAt, 'review 卡').toBeGreaterThan(bzAt);
+  });
+
+  /* 2026-11-22：内嵌复习开关从「界面」组搬进「插件」组，紧跟在 bz Review
+     卡下面——它管的是 Review 的界面放在哪，和 Review 的安装状态是同一件事。 */
+  it('内嵌复习开关在「插件」组、bz Review 卡下面，不在「界面」组', () => {
+    const src = pluginHtml('missing', 'enabled', true);
+    const plugins = groupOf(src, '插件');
+    const ui = groupOf(src, '界面');
+    expect(plugins).toContain('data-k="embedReview"');
+    expect(ui).not.toContain('data-k="embedReview"');
+    expect(plugins.indexOf('data-k="embedReview"')).toBeGreaterThan(plugins.indexOf('reviewtut'));
+  });
+
+  it('bz Review 没启用 / 不支持嵌入时不画那颗开关', () => {
+    for (const [state, embed] of [
+      ['missing', true],
+      ['disabled', true],
+      ['enabled', false],
+    ] as const) {
+      const src = pluginHtml('missing', state, embed);
+      expect(src, `${state}/${embed}`).not.toContain('data-k="embedReview"');
+    }
   });
 });

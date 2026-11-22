@@ -60,16 +60,22 @@ export interface SettingsView {
   /** 插件版本（manifest.json），「关于」条显示它 */
   version?: string;
   /**
-   * BZ AI 知识库现状：bz 组里「AI 知识盒」那张卡按它显示。
+   * bz 的现状（「插件」组画安装卡，「bz」组只在启用后出现）。
    *
-   * 只读展示、不给开关——2026-11-07 起是自动识别（data/bz-bridge）。缺省 =
-   * 还没探测到，按「未连接」画状态并给教程出口，不摆假开关。
+   * `ok` 是旧调用方的兼容字段；2026-11-22 起以 `state` 为准。
    */
-  bz?: { ok: boolean; version: string; model: string; entry: boolean; notes: boolean };
+  bz?: {
+    ok: boolean;
+    version: string;
+    model: string;
+    entry: boolean;
+    notes: boolean;
+    state?: 'enabled' | 'disabled' | 'missing';
+  };
   /**
    * bz Review 的安装状态（「插件」分组据此显示状态与安装引导）。
    * 三态：未安装 / 已安装未启用 / 已启用。`embed` = 装了且支持嵌入（v3+）：
-   * 「界面」组的复习开关只在此时显示。
+   * 「插件」组的「书架内显示复习」开关只在此时显示。
    * 现探一次、不缓存：装完重进设置页就能看到新状态。
    */
   review?: { state: 'enabled' | 'disabled' | 'missing'; embed: boolean };
@@ -311,17 +317,7 @@ export function viewSettings(v: SettingsView): string {
         (o) =>
           `<button class="${String(s.language) === o[0] ? 'on' : ''}" data-act="setlang" data-k="language" data-v="${o[0]}">${o[1]}</button>`,
       )
-      .join('')}</div></div>
-      ${
-        /* 嵌入复习开关：只在装了支持嵌入的 Review 时才画，没装就整行不出现。
-           按本仓惯例用三元拼串，不走别的条件机制；说明文字是普通 small 行，
-           不是悬停气泡。 */
-        v.review?.embed
-          ? toggle('embedReview', s.embedReview === true, t('settings.embedReview')) +
-            `<div class="bzs-setrow"><small class="bzs-mini">${t('settings.embedReview.hint')}</small></div>`
-          : ''
-      }
-      `,
+      .join('')}</div></div>`,
   );
 
   /* 版式分两块：文字（字号 / 行高 / 边距 / 对齐）与页面（方向 / 分栏 / 翻页）。
@@ -926,15 +922,21 @@ export function viewSettings(v: SettingsView): string {
     },
   );
 
-  /* 能力卡（2026-11-17）：bz 两项与插件一项。原来是一行标签 + 一段灰字，
+  /* 能力卡（2026-11-17）：bz 两项。原来是一行标签 + 一段灰字，
      状态和说明挤在同一行里（真机上「还没装 bz review…」会顶出卡片）。
      现在每项一张卡：图标 + 名称 + 状态徽章 + 一句话 + 动作，装没装、
      开没开、下一步点哪里都在同一块里。
-     · 剪藏本——要人主动打开，所以是开关；装了 bz 才画开关，没装就只留卡片。
+     · 剪藏本——要人主动打开，所以是开关。
      · AI 知识盒——检测到 bz 就自动连（data/bz-bridge 逐项降级），没有
        「关掉」这个动作，所以永远只报连没连上，不给开关。
-     两项各有自己的教程：剪藏本讲成书，知识盒讲索引怎么建，共一颗就会指错。 */
-  const bzOk = !!v.bz?.ok;
+     两项各有自己的教程：剪藏本讲成书，知识盒讲索引怎么建，共一颗就会指错。
+
+     2026-11-22：**bz 没装 / 没启用时整组不画**。安装与启用的入口统一收进
+     「插件」组的 bz 卡；这两项是装好之后才有的选项，没装就摆一排灰卡只会
+     让人以为「选项在但点不动」。 */
+  const bzGrpState: 'enabled' | 'disabled' | 'missing' =
+    v.bz?.state ?? (v.bz?.ok ? 'enabled' : 'missing');
+  const bzOk = bzGrpState === 'enabled';
   /* 剪藏成书是高级版能力（2026-11-14 补的门禁）。基础版用户在设置里看到的
      是一颗点了就弹解锁层的开关——不是灰着不动的死开关，那样人只会以为坏了。
      范围内三选只在解锁后画：没解锁时选了也不会生效，摆出来等于骗人。 */
@@ -954,20 +956,18 @@ export function viewSettings(v: SettingsView): string {
         'setscope',
       )}</div>`
     : '';
-  const clipSwitch = !bzOk
-    ? ''
-    : clipUnlocked
-      ? `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
-          'settings.bz.clip',
-        )}</span></button>`
-      : `<button class="bzs-switch" data-act="unlock" data-mode="clipBook"><span class="bzs-sr-only">${t(
-          'settings.locked',
-        )}</span><span class="bzs-sr-only">${t('settings.bz.clip')}</span></button>`;
+  const clipSwitch = clipUnlocked
+    ? `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
+        'settings.bz.clip',
+      )}</span></button>`
+    : `<button class="bzs-switch" data-act="unlock" data-mode="clipBook"><span class="bzs-sr-only">${t(
+        'settings.locked',
+      )}</span><span class="bzs-sr-only">${t('settings.bz.clip')}</span></button>`;
   const clipCard = `<div class="bzs-cap${clipOn ? ' is-on' : ''}">
-      <span class="bzs-capico${bzOk ? '' : ' is-muted'}">${ico('shelf')}</span>
+      <span class="bzs-capico">${ico('shelf')}</span>
       <div class="bzs-capmain">
         <div class="bzs-cap-t"><b>${t('settings.bz.clip')}</b>${
-          !bzOk ? '' : clipUnlocked ? (clipOn ? chip(t('settings.cap.on'), true) : '') : chip(t('settings.about.paid'))
+          clipUnlocked ? (clipOn ? chip(t('settings.cap.on'), true) : '') : chip(t('settings.about.paid'))
         }</div>
         <p>${t('settings.bz.clip.hint')}</p>
         ${clipScopeSeg}
@@ -986,25 +986,47 @@ export function viewSettings(v: SettingsView): string {
         <div class="bzs-capfoot">${tutBtn('aitutorial', 'settings.bz.tut')}</div>
       </div>
     </div>`;
-  /* 没装 bz 时补一句「为什么现在不能用」+ 安装教程（第 2P）。
-     装了就整块不渲染：装完这一节没有第二次用途。 */
-  const bzGrp = grp(
-    'bz',
-    t('settings.grp.bz'),
-    `${clipCard}${kbCard}${
-      bzOk
-        ? ''
-        : `<div class="bzs-capnote">${t('settings.bz.missing')}${tutBtn('bzinstall', 'settings.bz.install')}</div>`
-    }`,
-  );
+  const bzGrp = bzOk ? grp('bz', t('settings.grp.bz'), `${clipCard}${kbCard}`) : '';
 
-  /* 「插件」组（2026-11-17）：bz review 的状态与安装引导。
-     布局与 bz 组同一套能力卡：定位一句话 + 三条卖点 + 安装 / 教程。
-     2026-11-21 起三态：未安装 / 已安装未启用 / 已启用（shelf-page 现探）。
-     · 未安装 →「安装」一下在后台下载三件套并启用；
-     · 已安装未启用 →「启用」不再重复下载；
-     · 已启用 → 不给按钮，只留教程。
+  /* 「插件」组（2026-11-17；2026-11-22 起 bz 也进来）：
+     两张安装卡 + 一颗内嵌开关。
+     · bz：没装 / 装了没启用 / 已启用；「安装」在后台下载三件套并启用。
+     · bz review：同上（2026-11-21 起三态）。
+     · 「书架内显示复习」紧跟在 bz Review 卡下面——它管的是 Review 的界面
+       放在哪，和 Review 的安装状态是同一件事，不该散在「界面」组。
      状态只写词，安装指引单独一行（窄栏不会顶出卡片）。 */
+  const bzBadge = bzOk
+    ? chip(t('settings.plugin.bz.enabled'), true)
+    : bzGrpState === 'disabled'
+      ? chip(t('settings.plugin.bz.disabled'))
+      : chip(t('settings.cap.missing'));
+  const bzNote =
+    bzGrpState === 'missing'
+      ? `<div class="bzs-capnote">${t('settings.plugin.bz.missing')}</div>`
+      : bzGrpState === 'disabled'
+        ? `<div class="bzs-capnote">${t('settings.plugin.bz.disabledHint')}</div>`
+        : '';
+  const bzAction = bzOk
+    ? ''
+    : bzGrpState === 'disabled'
+      ? `<button class="bzs-btn sm pri" data-act="bzenable">${t('settings.plugin.bz.enable')}</button>`
+      : `<button class="bzs-btn sm pri" data-act="bzinstall">${t('settings.plugin.bz.install')}</button>`;
+  /* 装好之后把版本号摆出来：用户能一眼对上「我这是不是最新」。
+     只在已启用时画——没装时没有版本号可报，装完重绘就有了。 */
+  const bzVersionTag =
+    bzOk && v.bz?.version ? `<span class="bzs-tag">v${esc(v.bz.version)}</span>` : '';
+  const bzCard = `<div class="bzs-cap${bzOk ? ' is-on' : ''}">
+      <span class="bzs-capico${bzOk ? '' : ' is-muted'}">${ico('read')}</span>
+      <div class="bzs-capmain">
+        <div class="bzs-cap-t"><b>bz</b>${bzBadge}</div>
+        <p>${t('settings.plugin.bz.desc')}</p>
+        <div class="bzs-captags"><span class="bzs-tag">${t('settings.plugin.tag.diary')}</span><span class="bzs-tag">${t(
+          'settings.plugin.tag.kb',
+        )}</span>${bzVersionTag}</div>
+        <div class="bzs-capfoot">${bzAction}${tutBtn('bztut', 'settings.plugin.bz.tut')}</div>
+      </div>
+    </div>`;
+
   const reviewState: 'enabled' | 'disabled' | 'missing' = v.review?.state ?? 'missing';
   const reviewOk = reviewState === 'enabled';
   const reviewBadge = reviewOk
@@ -1023,10 +1045,7 @@ export function viewSettings(v: SettingsView): string {
     : reviewState === 'disabled'
       ? `<button class="bzs-btn sm pri" data-act="reviewenable">${t('settings.plugin.review.enable')}</button>`
       : `<button class="bzs-btn sm pri" data-act="reviewinstall">${t('settings.plugin.review.install')}</button>`;
-  const pluginsGrp = grp(
-    'plugins',
-    t('settings.grp.plugins'),
-    `<div class="bzs-cap${reviewOk ? ' is-on' : ''}">
+  const reviewCard = `<div class="bzs-cap${reviewOk ? ' is-on' : ''}">
       <span class="bzs-capico${reviewOk ? '' : ' is-muted'}">${ico('listchecks')}</span>
       <div class="bzs-capmain">
         <div class="bzs-cap-t"><b>bz review</b>${reviewBadge}</div>
@@ -1036,7 +1055,18 @@ export function viewSettings(v: SettingsView): string {
         )}</span><span class="bzs-tag">${t('settings.plugin.tag.less')}</span></div>
         <div class="bzs-capfoot">${reviewAction}${tutBtn('reviewtut', 'settings.plugin.review.tut')}</div>
       </div>
-    </div>${reviewNote}`,
+    </div>`;
+  /* 内嵌复习开关：只在 Review 已启用且支持嵌入（v3+）时才画。
+     说明文字是普通 small 行，不是悬停气泡。 */
+  const embedRow =
+    reviewOk && v.review?.embed
+      ? `${toggle('embedReview', s.embedReview === true, t('settings.embedReview'))}
+        <div class="bzs-setrow"><small class="bzs-mini">${t('settings.embedReview.hint')}</small></div>`
+      : '';
+  const pluginsGrp = grp(
+    'plugins',
+    t('settings.grp.plugins'),
+    `${bzCard}${bzNote}${reviewCard}${reviewNote}${embedRow}`,
   );
 
   /* 激活之后这组变成「凭证」：码只读，日常不让人误改。
@@ -1094,7 +1124,10 @@ export function viewSettings(v: SettingsView): string {
     ? ''
     : grp('keys', t('settings.grp.keys'), `<div class="bzs-keys">${keyRows}</div>`, { wide: true });
 
-  const nav = `<div class="bzs-setnav">${NAV.map(
+  /* 页内索引跟着组走：bz 组没渲染时，索引里也不能留一颗点了没反应的
+     「bz」——落点不存在，用户只会以为索引坏了。 */
+  const navItems = NAV.filter(([id]) => id !== 'bz' || bzOk);
+  const nav = `<div class="bzs-setnav">${navItems.map(
     ([id, key]) => `<button class="bzs-setnav-i" data-act="setjump" data-k="${id}">${t(key)}</button>`,
   ).join('')}</div>`;
 
@@ -1102,8 +1135,8 @@ export function viewSettings(v: SettingsView): string {
      2026-11-17 按「本机怎么显示 / 接什么服务」重排：
        左列 = 界面 · 版式 · 外观 · 标注 · 数据 · PDF（含扫描页识别）
        右列 = 朗读 · AI 助手 · bz · 插件 · 授权
-     这样两列高度接近（以前左三组、右七组，下半页左边整条空白），
-     窄屏叠成一列时顺序也仍然通顺。 */
+     2026-11-22 起「bz」是条件项：bz 没装 / 没启用时 bzGrp 是空串，
+     右列自动变成四组（窄屏叠一列时也不会留一个空标题）。 */
   const leftCol = `${languageGrp}${layoutGrp}${lookGrp}${marksGrp}${dataGrp}${pdfGrp}`;
   const rightCol = `${ttsGrp}${aiGrp}${bzGrp}${pluginsGrp}${licGrp}`;
 
