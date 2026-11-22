@@ -1095,11 +1095,16 @@ export function viewSettings(v: SettingsView): string {
   const recheckBtn = ent.license
     ? `<button class="bzs-btn sm" data-act="recheck">${t('settings.lic.recheck')}</button>`
     : '';
+  /* 试用码不适用于当前版本（2026-11-22）：状态行已经说明了原因，
+     这里给下一步。不再新做一个「检查更新」接口——直接打开 Releases 页。 */
+  const trialVerBtn = ent.trialVersionMismatch
+    ? `<button class="bzs-btn sm" data-act="trialupdate">${t('settings.lic.update')}</button>`
+    : '';
   const licStatus = `${
     paid && ent.patron
       ? `<span class="bzs-mini bzs-licstat" style="flex:1">${ico('seal', 'bzs-lic-seal')}${esc(tierText(ent))}</span>`
       : `<span class="bzs-mini" style="flex:1">${esc(tierText(ent))}</span>`
-  }${recheckBtn}`;
+  }${trialVerBtn}${recheckBtn}`;
   const licGrp = grp(
     'lic',
     t('settings.grp.lic'),

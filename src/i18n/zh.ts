@@ -103,6 +103,8 @@ export const ZH = {
   /* 手动核对（2026-11-22）：设置页那枚「核对」按钮的另外两种结果。 */
   'notice.license.rechecked': '核对完成，授权正常。',
   'notice.license.recheckFailed': '核对失败：网络没通，稍后再试。',
+  /* 试用到期提醒（2026-11-22）：只在剩余 1 天时提示一次，不弹窗、不打断阅读。 */
+  'notice.trial.warn': '试用还剩 {days} 天，到期后高级功能将关闭。',
 
   /* ── 通知：划线 / 标注 ───────────────────────────────────── */
   'notice.mark.created': '已用{color}色划线',
@@ -903,8 +905,26 @@ export const ZH = {
      理由留在作者台账里，公开界面不该替用户的事下结论。 */
   'tier.revoked': '这枚激活码已被停用{id}，高级功能已关闭。',
   'tier.revokedId': '（{id}）',
+  /* 试用码（2026-11-22）：群里发的短期码。状态行必须跟买断码分开写，
+     否则用户以为自己已经买过了。版本限制只在码里写了区间时才出现。 */
+  'tier.trial': '试用版已激活{who} · 剩余 {days} 天{ver}',
+  'tier.trialExpired': '试用已结束（{date}），高级功能已关闭。',
+  'tier.trialVersion': '这枚试用码适用于 {ver}，当前 {now} · 请更新或换码。',
+  'tier.limitVer': ' · 限 {ver}',
   'license.revoked': '这枚激活码已被停用，不能再激活。',
   'license.needOnline': '首次激活需要联网核对一次；网络没通，请检查网络后重试。',
+  'license.empty': '还没有填激活码。',
+  'license.noPubkey': '发行方还没配置公钥（开发阶段先用签发脚本自测）。',
+  'license.format': '激活码格式不对：应为 BZR1 / BZR2 开头的三段式。',
+  'license.invalid': '激活码验签失败：内容或签名被改过。',
+  'license.expired': '激活码已于 {date} 过期。',
+  'license.version': '这枚试用码适用于 {ver}，当前是 {now}。请更新到该版本，或找群主换一枚新码。',
+  'license.trialHead': '试用版{who}，剩余 {days} 天（{until} 到期）',
+  'license.trialOk': '{head}{ver}。',
+  'license.summaryTrial': '{head}{ver}。',
+  'license.summaryVersion': '这枚试用码适用于 {ver}，当前 {now}，需要换码。',
+  'license.summaryExpired': '当前激活码已过期（{date}），高级功能不可用。',
+  'license.summaryPaid': '当前已激活{who}：{until}。',
 
   /* ── 设置页：分组标题 ────────────────────────────────────── */
   'settings.grp.ui': '界面',
@@ -1096,6 +1116,7 @@ export const ZH = {
   'settings.lic.code': '激活码',
   'settings.lic.relicense': '重新激活',
   'settings.lic.recheck': '核对',
+  'settings.lic.update': '下载新版',
   'settings.lic.activate': '激活',
   'settings.lic.paid': '高级版',
   'settings.lic.benefits': '导出、统计、全库搜索、AI 与多格式等',

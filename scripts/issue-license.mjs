@@ -34,26 +34,97 @@ const arg = (name) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : undefined;
 };
+
+/** 用法错误：说一行人话就退出，不签半成品 */
+function fail(msg) {
+  console.error(msg);
+  process.exit(1);
+}
+
 const name = arg('name');
 const patron = args.includes('--patron');
-const days = Number(arg('days') || 0);
+const preset = arg('preset');
+
+/* 预设（2026-11-22）：群里发码最常用的两种，少手滑。
+   `7d` / `30d` → 从签发时刻算死；`expired` → 昨天，用于演示与测试。 */
+let presetDays = 0;
+let presetExpired = false;
+if (preset) {
+  const m = /^(\d+)d$/.exec(preset);
+  if (m) presetDays = Number(m[1]);
+  else if (preset === 'expired') presetExpired = true;
+  else fail(`--preset 只认 7d / 30d 这类天数，或 expired；收到 ${preset}`);
+}
+
+const days = Number(arg('days') || 0) || presetDays;
 const until = arg('until');
-const plan = arg('plan') || (days > 0 || until ? 'year' : 'lifetime');
+
+/* 版本限制只对试用码生效（作者口径 2026-11-22）：永久码 / 赞助人码不写、也不看。 */
+const verSpec = arg('ver');
+const verMinArg = arg('ver-min');
+const verBeforeArg = arg('ver-before');
+const hasVer = !!(verSpec || verMinArg || verBeforeArg);
+
+/* 不给 --plan 时按参数推断：有截止日期才算短期码；其中预设 / 带版本限制的
+   按试用码签（`--days 365` 这种老用法仍记 year，行为不变）。 */
+let plan = arg('plan');
+if (!plan) {
+  const dated = days > 0 || !!until || presetExpired;
+  plan = dated ? (presetDays > 0 || presetExpired || hasVer ? 'trial' : 'year') : 'lifetime';
+}
+if (presetExpired && plan !== 'trial') {
+  fail('--preset expired 是试用码预设，不能配 --plan lifetime。');
+}
+if (hasVer && plan !== 'trial') {
+  fail('只有试用码（--plan trial）能绑版本；永久码与赞助人码不做限制，去掉 --ver 再签。');
+}
+if (plan === 'trial' && !days && !until && !presetExpired) {
+  fail('试用码必须有截止日期：加 --days 7 或 --until YYYY-MM-DD（或 --preset 7d）。');
+}
+
+/**
+ * 版本区间：`1.4` → 1.4.0 ≤ v < 1.5.0；`1.4.2` → 1.4.2 ≤ v < 1.4.3。
+ * 写几位锁几位；补丁位为 0 时按整段主次版本算（1.4.0 等同 1.4）。
+ */
+function verRange(spec) {
+  const raw = String(spec).trim();
+  const parts = raw.split('.').map((x) => Number(x));
+  if (parts.length < 2 || parts.length > 3 || parts.some((n) => !Number.isInteger(n) || n < 0)) {
+    fail(`--ver 看不懂：${spec}，要 1.4 或 1.4.2`);
+  }
+  const [maj, min, patch = 0] = parts;
+  if (patch === 0) return { min: `${maj}.${min}.0`, before: `${maj}.${min + 1}.0` };
+  return { min: `${maj}.${min}.${patch}`, before: `${maj}.${min}.${patch + 1}` };
+}
+
+let range = null;
+if (verSpec) range = verRange(verSpec);
+else if (verMinArg || verBeforeArg) {
+  range = {};
+  if (verMinArg) range.min = verMinArg;
+  if (verBeforeArg) range.before = verBeforeArg;
+}
+
 /** 码号用本地日期（UTC 会在凌晨差一天，给客服对账添麻烦） */
 function stamp() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
 }
-const id = arg('id') || `BZR-${stamp()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+/* 试用码走独立号段 BZR-TR-，不占付费码的连续序号（见 docs/license-ledger.md） */
+const prefix = plan === 'trial' ? 'BZR-TR' : 'BZR';
+const id = arg('id') || `${prefix}-${stamp()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 let exp = 0;
-if (until) exp = new Date(`${until}T23:59:59`).getTime();
+if (presetExpired) {
+  /* 昨天 23:59:59：签出来就是「已过期」，用来演示过期提示与做测试 */
+  const d = new Date(Date.now() - 86_400_000);
+  d.setHours(23, 59, 59, 0);
+  exp = d.getTime();
+} else if (until) exp = new Date(`${until}T23:59:59`).getTime();
 else if (days > 0) exp = Date.now() + days * 86_400_000;
-if (Number.isNaN(exp)) {
-  console.error('--until 的日期看不懂，要 YYYY-MM-DD');
-  process.exit(1);
-}
+if (Number.isNaN(exp)) fail('--until 的日期看不懂，要 YYYY-MM-DD');
+
 
 /* v2：带 id 与 plan。id 是码号/订单号，将来上「吊销名单」和查「谁泄露了」都靠它。
    v1 老码仍能验，但新发的一律 v2。 */
@@ -64,6 +135,8 @@ const payload = {
   ...(patron ? { patron: true } : {}),
   plan,
   ...(exp ? { exp } : {}),
+  ...(range?.min ? { verMin: range.min } : {}),
+  ...(range?.before ? { verBefore: range.before } : {}),
 };
 const payloadBytes = Buffer.from(JSON.stringify(payload), 'utf8');
 
@@ -100,6 +173,18 @@ const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g
 const code = `BZR2.${b64url(payloadBytes)}.${b64url(sig)}`;
 
 console.log(code);
+/** 摘要里也写清版本限制，签发时一眼能核对（1.4 → 1.4.x） */
+function rangeText(r) {
+  if (!r) return '';
+  const a = (r.min || '').split('.').map(Number);
+  const b = (r.before || '').split('.').map(Number);
+  if (a[0] === b[0] && a[1] + 1 === b[1] && (a[2] ?? 0) === 0 && (b[2] ?? 0) === 0) {
+    return `${a[0]}.${a[1]}.x`;
+  }
+  return [r.min ? `≥${r.min}` : '', r.before ? `<${r.before}` : ''].filter(Boolean).join(' ');
+}
 console.error(
-  `--- ${name || '未署名'}${patron ? ' · 赞助人' : ''} · ${plan} · ${id} · ${exp ? new Date(exp).toLocaleDateString() : '永久'}`,
+  `--- ${name || '未署名'}${patron ? ' · 赞助人' : ''} · ${plan} · ${id} · ${exp ? new Date(exp).toLocaleDateString() : '永久'}${
+    range ? ` · 限 ${rangeText(range)}` : ''
+  }`,
 );

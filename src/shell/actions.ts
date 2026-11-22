@@ -2397,6 +2397,11 @@ export function dispatchAction(
       void src.recheck().then(() => rerender());
       break;
     }
+    case 'trialupdate':
+      /* 试用码不适用于当前版本（2026-11-22）：去发布页下新版。
+         换成匹配版本后码会自动恢复，不需要重新要。 */
+      window.open(`${REPO_URL}/releases/latest`, '_blank', 'noopener,noreferrer');
+      break;
     case 'activate': {
       /* 取当前弹层里的那个输入框：设置页也有一枚 data-role="license"，
          全局 querySelector 会先命中它，于是从解锁层粘贴的码永远读不到。 */

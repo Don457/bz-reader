@@ -19,6 +19,12 @@
  *     内部改动写成「包体更小 / 装得更快」，别把 commit message 抄进来。
  * ============================================================ */
 
+/* 版本比较 / 归一化在 core/version（2026-11-22 搬过去）：试用码的判定在
+   数据层也要用同一套口径。这里保留同名导出，现有调用点与测试不用改。 */
+import { compareVersions, normalizeVersion } from '../core/version';
+
+export { compareVersions, normalizeVersion };
+
 /**
  * 一条日志的双语文本。
  *
@@ -1268,40 +1274,6 @@ export const CHANGELOG_RELEASES: readonly ChangelogRelease[] = [
     ],
   },
 ];
-
-/** 去掉 v 前缀与首尾空白；空值给空串（调用方据此判「没有版本」） */
-export function normalizeVersion(v: string | null | undefined): string {
-  return String(v ?? '')
-    .trim()
-    .replace(/^v/i, '')
-    .trim();
-}
-
-function segments(v: string): number[] {
-  const out: number[] = [];
-  for (const part of v.split(/[.\-+]/)) {
-    const n = Number(part);
-    if (Number.isFinite(n) && part.trim() !== '') out.push(n);
-  }
-  return out;
-}
-
-/**
- * 比版本号：按段比数字，缺的段当 0。
- *
- * 不按字符串比——`0.1.10` 会被判成比 `0.1.9` 旧，于是升级永远等不到弹窗
- * （反而更难查：界面一切正常，只是「更新日志不见了」）。
- */
-export function compareVersions(a: string, b: string): number {
-  const pa = segments(normalizeVersion(a));
-  const pb = segments(normalizeVersion(b));
-  const len = Math.max(pa.length, pb.length);
-  for (let i = 0; i < len; i += 1) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (diff) return diff > 0 ? 1 : -1;
-  }
-  return 0;
-}
 
 /** 取与 version 完全相等的那个日志块；找不到 → null（调用方据此不弹、只记账） */
 export function pickReleaseFor(

@@ -49,7 +49,7 @@ import { isDeferredViewOf } from './view/leaf-reuse';
 import { setShelfSource, setShelfProActions, notifyShelf } from './view/shelf-state';
 import { mountImport } from './ui/import-panel';
 import { releaseCovers } from './data/cover';
-import { activateLicense as applyLicense, can, clearLicense, entitlement, recordActivity, revalidateLicense, setEntBackend, setProBuild, unlockModeFor } from './data/entitlement';
+import { activateLicense as applyLicense, can, clearLicense, entitlement, recordActivity, revalidateLicense, setEntBackend, setPluginVersion, setProBuild, unlockModeFor } from './data/entitlement';
 import { refreshRevoked } from './data/revoked';
 import { forceBaseTier, initDevTier } from './core/dev-tier';
 import { normalizePluginData, type PluginDataFile } from './data/plugin-data';
@@ -431,8 +431,9 @@ export function createPlugin(cfg: PluginConfig) {
       /* 移动端保命补丁：宿主 CSP 挡 blob 帧，章节必须以 srcdoc 落地。
          必须早于任何一次开书（拦 URL.createObjectURL 与 iframe.src）。 */
       installBlobSrcdocPatches();
-      // 构建期能力 + 记一次活跃日（试用按「真的打开过的日子」算）
+      // 构建期能力 + 插件版本（试用码按它判版本）+ 记一次活跃日
       setProBuild(cfg.pro);
+      setPluginVersion(String(this.manifest?.version || ''));
       recordActivity();
       /* 启动即真验一次码：同步判定只能拆 payload，验签得在这里做。
          必须 await：`can()` 在首帧就会被问，而 `verify: pending` 一律不放行——
@@ -467,6 +468,10 @@ export function createPlugin(cfg: PluginConfig) {
          标记），不会出现「先给用几秒再收回」。
          拉不到 = 放行：离线用户不该被这道门卡住，见 data/revoked 文件头。 */
       this.watchRevoked();
+      /* 试用到期提醒（2026-11-22）：剩 1 天时提一次，按到期时间记账，
+         换一枚新试用码会重新提示。没解锁（过期 / 版本不符）不提示——
+         那时设置页的状态行已经把话说清楚了。 */
+      this.warnTrialRemaining();
       loadShellState();
 
       this.store = new ReaderStore(this.app);
@@ -1449,6 +1454,28 @@ export function createPlugin(cfg: PluginConfig) {
         notifyShell();
       }
       return res;
+    }
+
+    /**
+     * 试用到期前一天的提醒（2026-11-22，作者点单的第 2 条增强）。
+     *
+     * 只在「还剩 1 天、真的解锁着」时提示一次；按到期时间记账，换一枚新
+     * 试用码会重新提示（新 exp ≠ 旧 exp）。不弹窗，只出几秒通知。
+     *
+     * 存不下（隐私模式 / quota）就每次启动都提示：宁可多提示一次，
+     * 也别让用户第二天突然被锁还不知道为什么。
+     */
+    private warnTrialRemaining(): void {
+      const v = entitlement();
+      if (!v.trial || !v.unlocked || v.trialDaysLeft > 1) return;
+      const key = 'bz-reader:trial-warned';
+      try {
+        if (window.localStorage.getItem(key) === String(v.exp)) return;
+        window.localStorage.setItem(key, String(v.exp));
+      } catch {
+        /* 存不下不算错：本次仍提示 */
+      }
+      notify(t('notice.trial.warn', { days: Math.max(1, v.trialDaysLeft) }), 'info');
     }
 
     /**

@@ -17,7 +17,15 @@
  * 不做设备上限：码可复制这件事无法靠离线签名解决，而真要做限制就得
  * 上服务端记账，那会把「换机 / 重装 / 多 vault」全部变成客服工单。
  * 防线放在别处：个性化署名、短期码续期、在线吊销名单。
+ *
+ * **试用码与版本号绑定（2026-11-22）**：群里分发的试用码多带一段
+ * `verMin` / `verBefore`（下界含、上界不含），插件启动时拿自己的版本比一次，
+ * 不在区间就不解锁。只有 `plan === 'trial'` 的码看这两个字段——永久码与
+ * 赞助人码是买断的，多写字段也一概不看，免得哪天手滑把老用户挡在外面。
  * ============================================================ */
+
+import { type VersionRange, inVersionRange, versionRangeText } from '../core/version';
+import { t } from '../i18n';
 
 /** ECDSA P-256 公钥（SPKI DER 的 base64）。由 scripts/gen-keys.mjs 生成。 */
 const PUBKEY_SPKI_B64 =
@@ -40,6 +48,19 @@ export interface LicensePayload {
   plan?: LicensePlan;
   /** 过期毫秒戳；缺省或 0 = 永久 */
   exp?: number;
+  /**
+   * 试用码适用的版本区间（下界含、上界不含）。
+   *
+   * 只有 `plan === 'trial'` 会读；永久码 / 赞助人码即使写了也不生效。
+   * 试用码不带这两个字段 = 不限版本（兼容 2026-11-22 之前发的短期码）。
+   */
+  verMin?: string;
+  verBefore?: string;
+}
+
+/** 验码时可选的「本机上下文」。version 缺省 = 不判版本（旧调用点与测试） */
+export interface LicenseCheckOptions {
+  version?: string;
 }
 
 /**
@@ -55,9 +76,10 @@ export interface LicensePayload {
  *   no-pubkey  发行方没配公钥（开发期）
  *   invalid    签名不对 / 内容被改 —— 只有这种才该清码
  *   expired    签名是对的，只是到期 —— 保留码、只降级
+ *   version    签名是对的，但这枚试用码不属于当前版本 —— 保留码、只降级
  *   env-error  WebCrypto 不可用 / 抛错 —— 完全不动，沿用上次结论
  */
-export type LicenseFail = 'empty' | 'format' | 'no-pubkey' | 'invalid' | 'expired' | 'env-error';
+export type LicenseFail = 'empty' | 'format' | 'no-pubkey' | 'invalid' | 'expired' | 'version' | 'env-error';
 
 export interface LicenseCheck {
   ok: boolean;
@@ -126,17 +148,53 @@ function dateText(ms: number): string {
 }
 
 /**
+ * 这枚码的版本限制。null = 不限制。
+ *
+ * 只认 `plan === 'trial'`：买断码与赞助人码是「什么都不限制」的，
+ * 这条判定放在唯一入口，调用方不必各自记得。
+ */
+export function trialRange(payload: LicensePayload | null | undefined): VersionRange | null {
+  if (!payload || payload.plan !== 'trial') return null;
+  const min = typeof payload.verMin === 'string' ? payload.verMin.trim() : '';
+  const before = typeof payload.verBefore === 'string' ? payload.verBefore.trim() : '';
+  if (!min && !before) return null;
+  return { ...(min ? { min } : {}), ...(before ? { before } : {}) };
+}
+
+/** 剩余天数，向上取整；没有到期时间或已过期 → 0 */
+export function trialDaysLeft(exp: number, now = Date.now()): number {
+  if (!exp || exp <= now) return 0;
+  return Math.ceil((exp - now) / 86_400_000);
+}
+
+/** 试用码的人话前缀：署名 + 剩余天数 + 到期日（两个调用点共用，免得多语言文案写两份） */
+function trialHead(payload: LicensePayload, exp: number, now: number): string {
+  const who = payload.name ? t('tier.who', { name: payload.name }) : '';
+  return t('license.trialHead', {
+    who,
+    days: trialDaysLeft(exp, now),
+    until: dateText(exp),
+  });
+}
+
+/**
  * 验一枚激活码。任何一步不过都给人话，不抛——设置页直接显示 message。
  * 成功后把 plan / exp / name 交给调用方写进 entitlement。
+ *
+ * 判定顺序：验签 → 过期 → 版本。过期排在版本前面：时间到了比「这版不适用」
+ * 更根本，用户先要知道该续期，而不是先去换版本。
  */
-export async function verifyLicense(code: string): Promise<LicenseCheck> {
-  if (!code.trim()) return { ok: false, reason: 'empty', message: '还没有填激活码。' };
+export async function verifyLicense(
+  code: string,
+  opts: LicenseCheckOptions = {},
+): Promise<LicenseCheck> {
+  if (!code.trim()) return { ok: false, reason: 'empty', message: t('license.empty') };
   if (!PUBKEY_SPKI_B64) {
-    return { ok: false, reason: 'no-pubkey', message: '发行方还没配置公钥（开发阶段先用签发脚本自测）。' };
+    return { ok: false, reason: 'no-pubkey', message: t('license.noPubkey') };
   }
   const parsed = parseLicense(code);
   if (!parsed) {
-    return { ok: false, reason: 'format', message: '激活码格式不对：应为 BZR1 / BZR2 开头的三段式。' };
+    return { ok: false, reason: 'format', message: t('license.format') };
   }
   try {
     const key = await spkiToCryptoKey(
@@ -150,10 +208,28 @@ export async function verifyLicense(code: string): Promise<LicenseCheck> {
       new Uint8Array(parsed.sig).buffer,
       new Uint8Array(parsed.payloadBytes).buffer,
     );
-    if (!ok) return { ok: false, reason: 'invalid', message: '激活码验签失败：内容或签名被改过。' };
+    if (!ok) return { ok: false, reason: 'invalid', message: t('license.invalid') };
+    const now = Date.now();
     const exp = parsed.payload.exp ?? 0;
-    if (exp && Date.now() > exp) {
-      return { ok: false, reason: 'expired', message: `激活码已于 ${dateText(exp)} 过期。` };
+    if (exp && now > exp) {
+      return { ok: false, reason: 'expired', message: t('license.expired', { date: dateText(exp) }) };
+    }
+    const range = trialRange(parsed.payload);
+    const version = (opts.version || '').trim();
+    if (range && version && !inVersionRange(version, range)) {
+      return {
+        ok: false,
+        reason: 'version',
+        message: t('license.version', { ver: versionRangeText(range), now: version }),
+      };
+    }
+    if (parsed.payload.plan === 'trial' && exp) {
+      const ver = range && version ? ` · ${t('tier.limitVer', { ver: versionRangeText(range) })}` : '';
+      return {
+        ok: true,
+        message: t('license.trialOk', { head: trialHead(parsed.payload, exp, now), ver }),
+        payload: parsed.payload,
+      };
     }
     const who = parsed.payload.name ? `，${parsed.payload.name}` : '';
     const until = exp ? `有效期到 ${dateText(exp)}` : '永久有效';
@@ -168,12 +244,23 @@ export async function verifyLicense(code: string): Promise<LicenseCheck> {
 }
 
 /** 设置页的授权状态行（不再单独判过期——状态由 entitlement 统一算） */
-export function licenseSummary(code: string): string {
+export function licenseSummary(code: string, opts: LicenseCheckOptions = {}): string {
   const parsed = parseLicense(code);
   if (!parsed) return '';
-  const exp = parsed.payload.exp ?? 0;
-  if (exp && Date.now() > exp) return `当前激活码已过期（${dateText(exp)}），高级功能不可用。`;
-  const who = parsed.payload.name ? `（${parsed.payload.name}）` : '';
-  const until = exp ? `有效期到 ${dateText(exp)}` : '永久有效';
-  return `当前已激活${who}：${until}。`;
+  const now = Date.now();
+  const payload = parsed.payload;
+  const exp = payload.exp ?? 0;
+  if (exp && now > exp) return t('license.summaryExpired', { date: dateText(exp) });
+  const range = trialRange(payload);
+  const version = (opts.version || '').trim();
+  if (payload.plan === 'trial' && exp) {
+    if (range && version && !inVersionRange(version, range)) {
+      return t('license.summaryVersion', { ver: versionRangeText(range), now: version });
+    }
+    const ver = range ? ` · ${t('tier.limitVer', { ver: versionRangeText(range) })}` : '';
+    return t('license.summaryTrial', { head: trialHead(payload, exp, now), ver });
+  }
+  const who = payload.name ? `（${payload.name}）` : '';
+  const until = exp ? t('tier.until', { date: dateText(exp) }) : t('tier.forever');
+  return t('license.summaryPaid', { who, until });
 }

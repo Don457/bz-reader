@@ -30,7 +30,15 @@
 
 import { locale, t, type Locale } from '../i18n';
 import { planNameZh, type PlanGroupKey, type PlanKey } from '../i18n/plan';
-import { parseLicense, verifyLicense, type LicenseFail, type LicensePayload } from './license';
+import { inVersionRange, versionRangeText } from '../core/version';
+import {
+  parseLicense,
+  trialDaysLeft,
+  trialRange,
+  verifyLicense,
+  type LicenseFail,
+  type LicensePayload,
+} from './license';
 import { checkRevoked, revokedCode } from './revoked';
 import type { BookFormat } from './schema';
 
@@ -170,6 +178,24 @@ export interface EntitlementView {
   plan?: Plan;
   exp: number;
   name?: string;
+  /**
+   * 这枚码是不是试用码（payload.plan === 'trial'）。
+   *
+   * 与 `tier` 分开存：试用码解锁后 tier 仍是 paid（码是真的、在有效期内），
+   * 但界面必须说「试用」而不是「高级版已激活」，否则用户以为已经买断。
+   */
+  trial: boolean;
+  /** 试用剩余天数（向上取整）；非试用 / 已过期 / 无到期时间为 0 */
+  trialDaysLeft: number;
+  /** 试用码写的版本区间（展示用，如 `1.4.x`）；空 = 不限版本 */
+  trialVer: string;
+  /**
+   * 试用码不属于当前版本（2026-11-22）。
+   *
+   * 高级功能已锁，但**码保留**：升 / 降回匹配版本后下次启动自动恢复，
+   * 用户不用翻邮件重新找码。与 `expired` 同一档处理，区别只是原因不同。
+   */
+  trialVersionMismatch: boolean;
   /** 赞助人码（payload.patron === true）：设置页「关于」条据此多画一枚徽章 */
   patron: boolean;
   license: string;
@@ -192,6 +218,15 @@ export interface EntitlementView {
 
 let proBuild = false;
 let cache: Ent | null = null;
+
+/**
+ * 当前插件版本。由 plugin.onload 尽早注入，试用码的版本绑定靠它。
+ *
+ * 空串 = 拿不到版本（开发构建、纯函数测试）：**此时不判版本**，否则所有
+ * 带版本限制的试用码都会变成「不适用」。真机上 onload 第一步就注入，
+ * 不存在空窗。
+ */
+let pluginVersion = '';
 
 /**
  * 验签状态。**每次进程启动从 pending 开始**——不给「沿用上次结论」留口子：
@@ -232,6 +267,17 @@ export function setEntBackend(b: EntBackend | null): void {
 /** 由 plugin.onload 注入：当前构建是不是 pro 包 */
 export function setProBuild(v: boolean): void {
   proBuild = v;
+}
+
+/**
+ * 由 plugin.onload 注入：当前插件版本（`manifest.version`）。
+ *
+ * 不用 `setProBuild` 那种「变了要清缓存」的处理：版本只影响试用码的判定，
+ * `entitlement()` 每次重算都会读它，改了下一帧就生效（测试里靠这条断言
+ * 「升级到下一个小版本立刻降级」）。
+ */
+export function setPluginVersion(v: string): void {
+  pluginVersion = String(v || '').trim();
 }
 
 function readLS(): string | null {
@@ -391,10 +437,24 @@ export function entitlement(now = Date.now()): EntitlementView {
   const payload = payloadOf(e.license);
   const exp = payload?.exp ?? 0;
   const verified = verifyState === 'ok';
+  /* 试用码的版本限制：只有 plan === 'trial' 才有 range（见 license.trialRange）。
+     拿不到插件版本时不判——开发构建 / 纯函数测试没有 manifest。 */
+  const range = trialRange(payload);
+  const trial = payload?.plan === 'trial';
+  const trialVer = range ? versionRangeText(range) : '';
+  const trialVersionMismatch =
+    verified && !!range && !!pluginVersion && !inVersionRange(pluginVersion, range);
+  const trialLeft = trial ? trialDaysLeft(exp, now) : 0;
   /* 停用名单命中：签名仍然是真的，只是作者叫停了这枚码。与过期同一档处理——
      保留码、只降级，解封后下次启动自动恢复，用户不用翻邮件重新找码。 */
   const revoked = !!e.license && revokedCode() === e.license;
-  const paid = verified && !!payload && e.checkedTs > 0 && (exp === 0 || exp > now) && !revoked;
+  const paid =
+    verified &&
+    !!payload &&
+    e.checkedTs > 0 &&
+    (exp === 0 || exp > now) &&
+    !revoked &&
+    !trialVersionMismatch;
 
   // 第 1..TRIAL_DAYS 个活跃日都在试用内；第 TRIAL_DAYS+1 天开始结束
   // TRIAL_ACTIVE=false 时这一支永远不成立（试用不发放，但记录照旧）
@@ -415,6 +475,10 @@ export function entitlement(now = Date.now()): EntitlementView {
     plan: payload?.plan,
     exp,
     name: payload?.name,
+    trial,
+    trialDaysLeft: trialLeft,
+    trialVer,
+    trialVersionMismatch,
     patron: payload?.patron === true,
     license: e.license,
     revoked,
@@ -469,7 +533,7 @@ export function setLicense(code: string): void {
 export async function activateLicense(
   code: string,
 ): Promise<{ ok: boolean; message: string; revoked?: boolean }> {
-  const res = await verifyLicense(code);
+  const res = await verifyLicense(code, { version: pluginVersion });
   if (!res.ok) return { ok: false, message: res.message };
 
   const clean = code.trim();
@@ -520,12 +584,14 @@ export async function revalidateLicense(): Promise<{ changed: boolean; reason?: 
     verifyState = 'ok';
     return { changed: false };
   }
-  const res = await verifyLicense(e.license);
+  const res = await verifyLicense(e.license, { version: pluginVersion });
   if (res.ok) {
     verifyState = 'ok';
     return { changed: false };
   }
-  if (res.reason === 'expired') {
+  /* 过期与版本不符都是「码是真的、只是现在不可用」：保留码、只降级。
+     换回匹配版本 / 续费后下次启动自动恢复。 */
+  if (res.reason === 'expired' || res.reason === 'version') {
     verifyState = 'ok';
     return { changed: false, reason: res.reason };
   }
@@ -563,8 +629,21 @@ export function tierText(v: EntitlementView = entitlement()): string {
     const id = v.licenseId ? t('tier.revokedId', { id: v.licenseId }) : '';
     return t('tier.revoked', { id });
   }
+  /* 试用码要先于「基础版」判断：码还在、只是过期或不适用，说「基础版」
+     会让用户以为码丢了。过期排在版本前面——时间到了比版本更根本。 */
+  if (v.trial && v.exp && v.exp <= Date.now()) {
+    return t('tier.trialExpired', { date: new Date(v.exp).toLocaleDateString() });
+  }
+  if (v.trialVersionMismatch) {
+    return t('tier.trialVersion', { ver: v.trialVer, now: pluginVersion });
+  }
   if (v.tier === 'paid') {
     const who = v.name ? t('tier.who', { name: v.name }) : '';
+    /* 试用码单独一段：说「高级版已激活」等于告诉用户已经买断了。 */
+    if (v.trial) {
+      const ver = v.trialVer ? t('tier.limitVer', { ver: v.trialVer }) : '';
+      return t('tier.trial', { who, days: v.trialDaysLeft, ver });
+    }
     const until = v.exp ? t('tier.until', { date: new Date(v.exp).toLocaleDateString() }) : t('tier.forever');
     /* 赞助人码多一段身份说明（商品页承诺的那句），模板单独一条，避免在
        句子中间插词——八种语言的语序不同。 */
