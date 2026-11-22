@@ -651,6 +651,8 @@ export const JA: Record<MsgKey, string> = {
   'unlock.total': '合計',
   'unlock.unit': '項目',
   'unlock.buy': '購入する',
+  'unlock.buy.cn': '[TODO] unlock.buy.cn',
+  'unlock.buy.intl': '[TODO] unlock.buy.intl',
   'unlock.group': 'QQ グループ {id}',
 
   /* ── 設定：データ ───────────────────────────────────────── */

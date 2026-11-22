@@ -15,7 +15,7 @@
  * 版式跟支持作者 / 更新日志同一族（uiModal + .bzr-btn），不另造一套皮。
  * ============================================================ */
 import { uiModal } from '../core/ui/modal';
-import { t } from '../i18n';
+import { t, isChineseUI } from '../i18n';
 
 export interface ClipEmptyActions {
   /** 去设置：打开剪藏本主界面。打开失败时的提示由调用方负责 */
@@ -41,7 +41,9 @@ export function clipEmptyHtml(): string {
     `<p class="bzs-clipempty-hint">${t('clip.empty.hint')}</p>` +
     '<div class="bzs-clipempty-acts">' +
     `<button class="bzr-btn is-primary" type="button" data-role="clipempty-settings">${t('clip.empty.settings')}</button>` +
-    `<button class="bzr-btn" type="button" data-role="clipempty-tutorial">${t('clip.empty.tutorial')}</button>` +
+    (isChineseUI()
+      ? `<button class="bzr-btn" type="button" data-role="clipempty-tutorial">${t('clip.empty.tutorial')}</button>`
+      : '') +
     '</div></div>'
   );
 }

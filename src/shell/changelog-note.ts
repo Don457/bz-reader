@@ -20,7 +20,7 @@ import { uiModal } from '../core/ui/modal';
 import { escManager } from '../core/esc-manager';
 import { allocZAbove } from '../core/z-order';
 import { VIDEO_TUTORIAL_URL, openExternalUrl } from '../core/links';
-import { changelogLang } from '../i18n';
+import { changelogLang, isChineseUI } from '../i18n';
 import { setHtml } from '../ui/dom';
 import { esc, githubIcon } from './render/html';
 import { GROUP_ID, REPO_URL } from '../data/entitlement';
@@ -637,7 +637,7 @@ function linksHtml(): string {
   const items = [
     { act: 'chgnrepo', label: c.github, icon: githubIcon(15) },
     { act: 'chgnqq', label: c.qqHint(GROUP_ID), icon: QQ_SVG },
-    { act: 'chgnvideo', label: c.video, icon: BILI_SVG },
+    ...(isChineseUI() ? [{ act: 'chgnvideo', label: c.video, icon: BILI_SVG }] : []),
   ];
   return items
     .map(

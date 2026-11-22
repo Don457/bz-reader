@@ -649,6 +649,8 @@ export const ZH_TW: Record<MsgKey, string> = {
   'unlock.total': '合計',
   'unlock.unit': '項',
   'unlock.buy': '前往購買',
+  'unlock.buy.cn': '[TODO] unlock.buy.cn',
+  'unlock.buy.intl': '[TODO] unlock.buy.intl',
   'unlock.group': 'QQ交流群 {id}',
 
   /* ── 設定頁：資料 ────────────────────────────────────────── */

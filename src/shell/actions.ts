@@ -84,7 +84,7 @@ import { flipSetting } from './settings-toggle';
 import { rangeFill } from './range-fill';
 import { openHotkeySettings } from '../core/hotkeys';
 import { pickFolder } from '../core/folder-pick';
-import { PURCHASE_URL, REPO_URL, can, capLabel, type Cap } from '../data/entitlement';
+import { PURCHASE_URL, PURCHASE_URL_INTL, REPO_URL, can, capLabel, type Cap } from '../data/entitlement';
 import { userFacingActionIds, isMobileHiddenAction, type HeaderActionId } from '../view/header-actions';
 import { moveHeaderAction } from './header-order';
 import type { ReaderPrefs } from '../data/prefs';
@@ -2389,6 +2389,10 @@ export function dispatchAction(
       break;
     case 'buy':
       window.open(PURCHASE_URL, '_blank');
+      break;
+    /* 海外店：与国内那颗并排，用户自己选，不按语言自动跳 */
+    case 'buy-intl':
+      window.open(PURCHASE_URL_INTL, '_blank');
       break;
     case 'openvid':
       /* 对照表行尾的「看视频」：地址是渲染时从 core/links 写进 data-url 的，

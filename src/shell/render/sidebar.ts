@@ -9,7 +9,7 @@
  * 目录来自 toc-state 的快照（阅读视图是唯一写入方），
  * 书关闭后快照为空——这时给空态，不假装有目录。
  * ============================================================ */
-import { t, type MsgKey } from '../../i18n';
+import { t, isChineseUI, type MsgKey } from '../../i18n';
 import type { ReaderBook } from '../../data/schema';
 import type { FoliateTOCItem } from '../../types/foliate';
 import type { BmkRow, MarkRow } from '../domain';
@@ -469,7 +469,9 @@ const PLAN_EST: Record<PortraitPlan, MsgKey> = {
 };
 
 function tutorialBtn(): string {
-  return `<button class="bzs-btn sm" data-act="aitutorial">${t('side.ai.index.tutorial')}</button>`;
+  return isChineseUI()
+    ? `<button class="bzs-btn sm" data-act="aitutorial">${t('side.ai.index.tutorial')}</button>`
+    : '';
 }
 
 function buildBtn(stale: boolean): string {
