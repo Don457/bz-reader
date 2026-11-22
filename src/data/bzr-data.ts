@@ -133,8 +133,12 @@ export interface BzrStats {
 export interface BzrLinks {
   /** 赞助跳转地址 */
   support: string;
-  /** 购买激活码跳转地址 */
+  /** 购买激活码跳转地址（老字段，保留兼容） */
   buy: string;
+  /** 简体中文购买链接 */
+  buyCn: string;
+  /** 非简体中文购买链接（海外 / 繁体） */
+  buyIntl: string;
 }
 
 export interface BzrData {
@@ -178,6 +182,25 @@ const FEEDBACK_HOSTS = new Set([
   'bilibili.com', 'www.bilibili.com',
   'qm.qq.com', 'pd.qq.com',
 ]);
+
+/**
+ * 购买 / 赞助链接的校验：只要协议是 http(s)、能解析成 URL 就收。
+ *
+ * 与 safeFeedbackUrl 分开——后者是反馈帖链接的防钓鱼白名单（只放行
+ * github / afdian / wzyp / bilibili / qq）。购买链接要能随时换支付渠道
+ * （换 MoR、换店铺域名），套白名单会导致远程换了新域名却被判无效、
+ * 整份数据作废；这条只挡 javascript: 这类危险协议和格式错误。
+ */
+export function safePurchaseUrl(raw: string): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
 
 export type BzrHttp = (url: string, timeoutMs: number) => Promise<string | null>;
 
@@ -430,11 +453,16 @@ export function parseBzrData(raw: unknown): BzrData | null {
     if (v) roadmap.push(v);
   }
   const li = o.links && typeof o.links === 'object' ? o.links as Record<string, unknown> : {};
+  const pick = (key: string): string =>
+    safePurchaseUrl(typeof li[key] === 'string' ? li[key] : '') ?? '';
   const links: BzrLinks = {
-    support: safeFeedbackUrl(typeof li.support === 'string' ? li.support : '') ?? '',
-    buy: safeFeedbackUrl(typeof li.buy === 'string' ? li.buy : '') ?? '',
+    support: pick('support'),
+    buy: pick('buy'),
+    buyCn: pick('buyCn'),
+    buyIntl: pick('buyIntl'),
   };
-  /* 路线图允许为空（作者会清掉演示数据）：只要日志与跳转地址还在，这份数据就可用 */
+  /* 路线图允许为空（作者会清掉演示数据）：只要日志与跳转地址还在，这份数据就可用。
+     buyCn / buyIntl 是后加的字段，老远程数据可能没有——缺了走内置兜底，不算无效。 */
   if (!changelog.length || !links.support || !links.buy) return null;
 
   const st = o.stats && typeof o.stats === 'object' ? o.stats as Record<string, unknown> : {};
@@ -469,6 +497,8 @@ const BUILTIN: BzrData = {
   links: {
     support: SPONSOR_URL,
     buy: SPONSOR_URL,
+    buyCn: SPONSOR_URL,
+    buyIntl: 'https://www.creem.io/stores/baizai',
   },
 };
 
@@ -549,6 +579,22 @@ function notify(): void {
 export function currentBzrData(): BzrData {
   ensureLoaded();
   return memory ?? fallback();
+}
+
+/**
+ * 按界面语言取购买链接（纯函数，三处购买入口共用）。
+ *
+ * 远程优先：links.buyCn / buyIntl 有值就用远程的——作者在 bz 主仓的
+ * bzr-data.json 换支付渠道后，用户联网拉到新数据就自动跳新店，本地缓存
+ * 同步覆盖（refreshBzrData → writeCache）。远程没有新字段（老数据）或
+ * 完全离线时用内置兜底：简中国内店、非简中 Creem。
+ *
+ * 参数传 boolean 而不是 locale：data 层不依赖 i18n，语言判断在调用方。
+ */
+export function purchaseUrlFor(isChinese: boolean, d: BzrData | null): string {
+  const remote = isChinese ? d?.links.buyCn : d?.links.buyIntl;
+  if (remote) return remote;
+  return isChinese ? SPONSOR_URL : 'https://www.creem.io/stores/baizai';
 }
 export function bzrDataStatus(): BzrStatus {
   ensureLoaded();

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * 双商店购买入口。
@@ -35,6 +35,14 @@ import { setLocale } from '../src/i18n';
 import { overlayUnlock } from '../src/shell/overlay';
 import { dispatchAction } from '../src/shell/actions';
 import { DEFAULT_SHELL_STATE, setState, getState } from '../src/shell/state';
+import { _resetBzrDataForTests, _setBzrHttpForTests, refreshBzrData } from '../src/data/bzr-data';
+
+/* 远程链接测试要动 bzr-data 的全局单例；其余用例不碰它，统一在段前 reset */
+beforeEach(() => _resetBzrDataForTests());
+afterAll(() => {
+  _setBzrHttpForTests(null);
+  _resetBzrDataForTests();
+});
 
 afterEach(() => {
   setLocale('zh');
@@ -113,5 +121,42 @@ describe('双商店购买入口 · 点击跳转', () => {
     dispatchAction('buy', { dataset: { act: 'buy' } } as unknown as HTMLElement);
     dispatchAction('buy-intl', { dataset: { act: 'buy-intl' } } as unknown as HTMLElement);
     expect(opened).toEqual([PURCHASE_URL, PURCHASE_URL_INTL]);
+  });
+});
+
+describe('双商店购买入口 · 远程换链接自动跟随', () => {
+  const remoteDoc = JSON.stringify({
+    version: 1, updatedAt: '2026-11-23',
+    changelog: [{ version: '1.6.0', date: '2026-11-23', added: [
+      { domain: { zh: '书架', en: 'Shelf' }, text: { zh: '改动', en: 'Change' } },
+    ] }],
+    roadmap: [], stats: { reward: 0, pro: 0, patrons: 0 },
+    links: {
+      support: 'https://afdian.net/a/x', buy: 'https://wzyp.cn/shop/IFCEI5I3',
+      buyCn: 'https://new-cn.example.com/pay', buyIntl: 'https://new-intl.example.com/pay',
+    },
+  });
+
+  it('远程给了新 buyCn / buyIntl，点按钮跳新地址而不是内置兜底', async () => {
+    _setBzrHttpForTests(() => remoteDoc);
+    await refreshBzrData({ force: true });
+    const opened: string[] = [];
+    vi.stubGlobal('window', { open: (u: string) => void opened.push(u) });
+    setState({ ...DEFAULT_SHELL_STATE, overlay: { kind: 'unlock', mode: '' } });
+    dispatchAction('buy', { dataset: { act: 'buy' } } as unknown as HTMLElement);
+    dispatchAction('buy-intl', { dataset: { act: 'buy-intl' } } as unknown as HTMLElement);
+    expect(opened).toEqual(['https://new-cn.example.com/pay', 'https://new-intl.example.com/pay']);
+  });
+
+  it('点击本身不联网：refresh 之后不再发请求', async () => {
+    let calls = 0;
+    _setBzrHttpForTests(() => { calls += 1; return remoteDoc; });
+    await refreshBzrData({ force: true });
+    const afterRefresh = calls;
+    vi.stubGlobal('window', { open: () => undefined });
+    setState({ ...DEFAULT_SHELL_STATE, overlay: { kind: 'unlock', mode: '' } });
+    dispatchAction('buy', { dataset: { act: 'buy' } } as unknown as HTMLElement);
+    dispatchAction('buy-intl', { dataset: { act: 'buy-intl' } } as unknown as HTMLElement);
+    expect(calls).toBe(afterRefresh);
   });
 });

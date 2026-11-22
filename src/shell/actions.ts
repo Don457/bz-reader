@@ -84,7 +84,8 @@ import { flipSetting } from './settings-toggle';
 import { rangeFill } from './range-fill';
 import { openHotkeySettings } from '../core/hotkeys';
 import { pickFolder } from '../core/folder-pick';
-import { PURCHASE_URL, PURCHASE_URL_INTL, REPO_URL, can, capLabel, type Cap } from '../data/entitlement';
+import { REPO_URL, can, capLabel, type Cap } from '../data/entitlement';
+import { currentBzrData, purchaseUrlFor } from '../data/bzr-data';
 import { userFacingActionIds, isMobileHiddenAction, type HeaderActionId } from '../view/header-actions';
 import { moveHeaderAction } from './header-order';
 import type { ReaderPrefs } from '../data/prefs';
@@ -2387,12 +2388,14 @@ export function dispatchAction(
     case 'unlock':
       overlay('unlock', { mode: d.mode || '' });
       break;
+    /* 两颗购买按钮都读远程名单：作者在 bzr-data.json 换支付渠道后，
+       用户联网拉到新数据就跳新店。按钮语义固定（国内 / 海外），不按界面
+       语言自动跳——语言不等于国籍，让用户自己选。 */
     case 'buy':
-      window.open(PURCHASE_URL, '_blank');
+      window.open(purchaseUrlFor(true, currentBzrData()), '_blank');
       break;
-    /* 海外店：与国内那颗并排，用户自己选，不按语言自动跳 */
     case 'buy-intl':
-      window.open(PURCHASE_URL_INTL, '_blank');
+      window.open(purchaseUrlFor(false, currentBzrData()), '_blank');
       break;
     case 'openvid':
       /* 对照表行尾的「看视频」：地址是渲染时从 core/links 写进 data-url 的，

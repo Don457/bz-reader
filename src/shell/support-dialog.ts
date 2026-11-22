@@ -25,7 +25,7 @@ import { uiModal } from '../core/ui/modal';
 import { openExternalUrl } from '../core/links';
 import { t, isChineseUI } from '../i18n';
 import { SPONSOR_URL, formatRewardDate, type RewardName } from '../data/reward';
-import { PURCHASE_URL_INTL } from '../data/entitlement';
+import { currentBzrData, purchaseUrlFor } from '../data/bzr-data';
 import {
   currentPatrons,
   onPatronsChange,
@@ -215,7 +215,9 @@ export function openSupportDialog(): SupportDialogHandle {
       return;
     }
     if (target.closest('[data-role="supsponsor"]')) {
-      openExternalUrl(isChineseUI() ? SPONSOR_URL : PURCHASE_URL_INTL);
+      /* 简中打赏走国内赞助店；非简中的「支持作者」走远程 buyIntl，
+         远程换渠道自动同步，和购买按钮一致。 */
+      openExternalUrl(isChineseUI() ? SPONSOR_URL : purchaseUrlFor(false, currentBzrData()));
       return;
     }
     if (target.closest('[data-role="supstar"]')) {

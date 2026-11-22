@@ -29,6 +29,7 @@ import {
   currentBzrData,
   feedbackCommitUrl,
   onBzrDataChange,
+  purchaseUrlFor,
   refreshBzrData,
   safeFeedbackUrl,
   type BzrData,
@@ -883,6 +884,18 @@ function unmountConfirmDialog(): void {
   confirmTarget = '';
 }
 
+/**
+ * 更新日志「统计卡 → 二次确认」的跳转目标（纯函数，便于测试）。
+ *
+ * 购买（pro 卡）按界面语言取 buyCn / buyIntl，远程优先、内置兜底——和解锁
+ * 弹层两颗购买按钮同一套机制，作者在远程换渠道这边自动跟着换。
+ * 打赏（patrons 卡）走 support 老字段（解析时已过独立校验），兜底国内赞助店。
+ */
+export function resolveConfirmTarget(kind: 'buy' | 'support', d: BzrData | null): string {
+  if (kind === 'buy') return purchaseUrlFor(isChineseUI(), d);
+  return d?.links.support || SPONSOR_URL;
+}
+
 function openConfirm(kind: 'buy' | 'support'): void {
   const el = confirmEl;
   if (!el) return;
@@ -891,7 +904,7 @@ function openConfirm(kind: 'buy' | 'support'): void {
   const isBuy = kind === 'buy';
   /* 兜底一定给得出地址：数据里 links 缺失 / 没白名单时退回店铺主页，
      绝不出现「点了没反应」——那一类最伤信任（2026-11-18 真机）。 */
-  confirmTarget = safeFeedbackUrl(isBuy ? (d?.links.buy ?? '') : (d?.links.support ?? '')) || SPONSOR_URL;
+  confirmTarget = resolveConfirmTarget(kind, d);
   setHtml(el.querySelector<HTMLElement>('[data-confirm-icon]')!, isBuy ? '★' : '♥');
   const title = el.querySelector<HTMLElement>('[data-confirm-title]');
   const desc = el.querySelector<HTMLElement>('[data-confirm-desc]');
@@ -1098,8 +1111,10 @@ export function openChangelogNote(
     if (target.closest('[data-role="chgnsupport"]')) { openSupportDialog(); return; }
     const act = target.closest<HTMLElement>('[data-act]')?.dataset.act;
     if (act === 'chgnrepo') window.open(REPO_URL, '_blank', 'noopener,noreferrer');
-    else if (act === 'chgnvideo') window.open(VIDEO_TUTORIAL_URL, '_blank', 'noopener,noreferrer');
-    else if (act === 'chgnqq') void copyGroupId();
+    /* 非简体中文：视频教程与 QQ 群都属于中文生态，按钮已不渲染；
+       这里再拦一层，避免缓存的旧 DOM 或被脚本塞进来的节点把人送走。 */
+    else if (act === 'chgnvideo' && isChineseUI()) window.open(VIDEO_TUTORIAL_URL, '_blank', 'noopener,noreferrer');
+    else if (act === 'chgnqq' && isChineseUI()) void copyGroupId();
   });
 
   body?.addEventListener('scroll', syncFade, { passive: true });
