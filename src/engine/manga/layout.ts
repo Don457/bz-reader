@@ -31,6 +31,16 @@ export interface MangaScreen {
   visual: number[];
   /** 与 pages 一一对应：这一屏里的每张图是整幅还是半幅 */
   halves: MangaHalf[];
+  /**
+   * 与 visual 一一对应的显示单元（2026-11-22）。
+   *
+   * 宽跨页图拆成两半之后，同一张原图会在**一屏里出现两次**（左右各一格）。
+   * 视图层原来靠 `pages.indexOf(page)` 反查 half，重复时永远拿到第一个，
+   * 两个格子都按「右半」画；`cells` 又按 page 索引，后一格把前一格覆盖掉，
+   * 落单的那格按原图 1200px 撑爆视口（真机双页截图）。带着这个数组走，
+   * 一半一格，谁也不覆盖谁。
+   */
+  units: Array<{ page: number; half: MangaHalf }>;
 }
 
 export interface SpreadOptions {
@@ -129,8 +139,13 @@ function screenOf(units: readonly Unit[], direction: MangaDirection): MangaScree
   const pages = units.map((u) => u.page);
   const halves = units.map((u) => u.half);
   /* 只有双页合页才需要对调显示顺序；单页与拆出来的半页不涉及左右关系 */
-  const visual = direction === 'rtl' && units.length > 1 ? [...pages].reverse() : [...pages];
-  return { pages, visual, halves };
+  const shown = direction === 'rtl' && units.length > 1 ? [...units].reverse() : [...units];
+  return {
+    pages,
+    visual: shown.map((u) => u.page),
+    halves,
+    units: shown.map((u) => ({ page: u.page, half: u.half })),
+  };
 }
 
 /**

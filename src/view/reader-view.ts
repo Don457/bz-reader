@@ -1644,15 +1644,20 @@ export class ReaderView extends ItemView {
     const prefs = pickPrefs(this.api.store.get(), mobile);
 
     /* PDF 的「排版」不是字号行距，而是旋转 / 单双页 / 翻页——点同一颗图标，
-       换成贴按钮下沿的那张小卡（外观与 EPUB 的排版浮层一致）。
-       `pdfActionRun` 收的是「现取」函数：按钮比 PDF 引擎早建好，且复用时
-       不重挂监听，闭包里存当时的 pdfUi 会让这五颗永远点不动。
+       换成贴按钮下沿的那张小卡（外观与 EPUB 的排版浮层一致）。漫画同理，
+       换成它自己的缩放 / 适配 / 方向 / 翻页面板。
+       `pdfActionRun` 收的是「现取」函数：按钮比引擎早建好，且复用时
+       不重挂监听，闭包里存当时的 pdfUi 会让这几颗永远点不动。
        浮层贴按钮：点了哪颗就把它的矩形带过去，命令面板 / ⋮ 菜单没有坐标。 */
     const typography = (anchor?: PanelAnchor): void => {
       if (anchor) openOverlay({ kind: 'typography', anchor });
       else dispatchAction('typography', this.rootEl ?? document.body);
     };
-    const pdfRun = pdfActionRun(() => this.host.pdfUi, typography);
+    const pdfRun = pdfActionRun(
+      () => this.host.pdfUi,
+      typography,
+      () => this.host.mangaUi,
+    );
     /* 触发按钮的视口矩形；菜单 / 命令面板没有 currentTarget 时返回 null */
     const anchorOf = (ev?: MouseEvent): PanelAnchor => {
       const target = ev?.currentTarget ?? ev?.target;
@@ -1696,6 +1701,8 @@ export class ReaderView extends ItemView {
       isMobileShell(),
       /* 剪藏本：四颗只在剪藏书里出现（手机不占那 3 个名额，走 ⋮） */
       !!this.clipSnap,
+      /* 漫画：前三颗换成 排版 / 缩略图 / 书签；搜索、朗读这些不出现 */
+      !!this.host.isManga,
     ).map((id) => ({
       ...headerActionSpec(id),
       run: run[id],
@@ -2129,9 +2136,14 @@ export class ReaderView extends ItemView {
         break;
       case 'typography': {
         /* PDF 的「排版」是旋转 / 单双页 / 翻页，不是字号行距（那些来自原文件）。
-           内置键 t 与头栏那颗图标走同一个面板，别再弹「PDF 不可调」的提示。 */
+           内置键 t 与头栏那颗图标走同一个面板，别再弹「PDF 不可调」的提示。
+           漫画同理：它有自己的缩放 / 适配 / 方向 / 翻页面板。 */
         if (this.host.isPdf) {
           this.host.pdfUi?.toggleLayout();
+          break;
+        }
+        if (this.host.isManga) {
+          this.host.mangaUi?.toggleLayout();
           break;
         }
         const host = this.rootEl;
@@ -2190,6 +2202,7 @@ export class ReaderView extends ItemView {
       () => this.host.pdfUi,
       /* ⋮ 菜单没有能对齐的按钮：选完排版项浮层回到默认位置 */
       (anchor) => (anchor ? openOverlay({ kind: 'typography', anchor }) : dispatchAction('typography', root)),
+      () => this.host.mangaUi,
     );
     /* 头栏与 ⋮ 共用同一张动作表。以前这里手写十项，加一颗图标要记得改两处，
        漏了就是「头栏有、⋮ 里没有」——手机端尤其致命，⋮ 是唯一入口。
@@ -2232,7 +2245,12 @@ export class ReaderView extends ItemView {
        桌面 force-mobile 验收时，菜单也要和真机一致。 */
     const clipCh = this.clipSnap ? this.currentClipChapter() : null;
     let clipSepDone = false;
-    for (const id of availableActions(isMobileShell(), this.host.isPdf, !!this.clipSnap)) {
+    for (const id of availableActions(
+      isMobileShell(),
+      this.host.isPdf,
+      !!this.clipSnap,
+      !!this.host.isManga,
+    )) {
       /* 剪藏三颗按「这一章能不能用」再筛一遍：底条时代它们按需显隐，
          搬进菜单后不筛的话「剪藏笔记」会在没有笔记的章节里常驻、
          「存为剪藏」在已剪藏的章节里还能点到（点了只会 alreadySaved）。 */

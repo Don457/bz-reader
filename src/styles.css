@@ -2141,106 +2141,43 @@ body.is-mobile .bzr-pdf-toolbar {
   border: 2px solid var(--interactive-accent, var(--copper));
 }
 
-/* 悬浮工具条：右上角，不占阅读区 */
-.bzr-manga-hud {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 6;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  max-width: min(660px, calc(100% - 20px));
-  padding: 6px;
-  border-radius: 10px;
-  border: 1px solid var(--background-modifier-border);
-  background: color-mix(in srgb, var(--background-primary) 80%, transparent);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.16);
-  /* 工具条压着图：平时半透明，鼠标移上去才实心，别挡着看画 */
-  opacity: 0.72;
-  transition: opacity 0.12s ease;
+/* 排版面板：贴着头栏「排版」按钮弹出的小卡，外观沿用壳层的 .bzs-float。
+   2026-11-22 二轮真机反馈：画面里不再有工具条，缩放 / 适配 / 方向 /
+   单双页 / 翻页全在这张卡里。桌面宽 300px；手机上不写宽度——容器查询
+   （@container bzs（max-width:640px））会把它变成贴底的一整条。 */
+.bzr-manga-layout {
+  width: 320px;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
-.bzr-manga-hud:hover,
-.bzr-manga-hud:focus-within {
-  opacity: 1;
+/* 分段控件按列数固化：手机端 .bzs-seg 给按钮 54px 下限，六档适配会被
+   折成三行、缩放三颗会把「＋」挤到下一行。grid 之后行高稳定，卡片更矮。 */
+.bzr-manga-layout .bzr-manga-seg3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.bzr-manga-hud-grp {
-  display: flex;
-  flex: none;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 4px;
+/* 四档（翻页方式）用两列：桌面上四颗并排时每颗只剩 40px，「连续横向」
+   会溢出按钮边框（2026-11-22 桌面截图）。 */
+.bzr-manga-layout .bzr-manga-seg2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* 页码组靠右；阅读方式组独占第二行，手机上组内还能再折 */
-.bzr-manga-hud-grp.is-nav {
-  margin-left: auto;
-  padding-left: 6px;
-  border-left: 1px solid var(--background-modifier-border);
+/* 卡片比设置页矮一档：八行设置行按设置页的间距堆起来要 640px（手机上
+   62vh 只有 520，最后两行必须滚才看得见）。这里把行距与按钮内边距各收
+   2px，整张卡回到 340 上下，一屏能看全，不用滚。 */
+.bzr-manga-layout .bzs-setrow {
+  padding: 4px 0;
+  gap: 8px;
 }
 
-.bzr-manga-hud-grp.is-modes {
-  flex-basis: 100%;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.bzr-manga-layout .bzs-seg button {
+  padding: 5px 4px;
 }
-
-.bzr-manga-hud-grp + .bzr-manga-hud-grp {
-  padding-left: 6px;
-  border-left: 1px solid var(--background-modifier-border);
-}
-
-.bzr-manga-btn {
-  height: 26px;
-  padding: 0 9px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-secondary);
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.bzr-manga-btn:hover {
-  background: var(--interactive-hover);
-  color: var(--text-normal);
-}
-
-.bzr-manga-btn.is-on {
-  background: var(--interactive-accent, var(--copper));
-  border-color: transparent;
-  color: var(--text-on-accent, #fff);
-}
-
-.bzr-manga-pct {
-  min-width: 46px;
-  font-variant-numeric: tabular-nums;
-}
-
-.bzr-manga-count {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.bzr-manga-goto {
-  width: 52px;
-  height: 26px;
-  padding: 0 4px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-primary);
-  color: var(--text-normal);
-  font-size: 12px;
-}
-
 /* 缩略图带：底部，只在开了缩略图时占位 */
 .bzr-manga-thumbs {
   display: none;
@@ -2280,15 +2217,3 @@ body.is-mobile .bzr-pdf-toolbar {
   object-fit: cover;
 }
 
-/* 手机：工具条贴安全区右上，按钮大一点好点；底部不给导航栏留白 */
-body.is-mobile .bzr-manga-hud {
-  top: calc(8px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
-  left: 8px;
-  right: 8px;
-  max-width: none;
-}
-
-body.is-mobile .bzr-manga-btn {
-  height: 28px;
-  padding: 0 8px;
-}

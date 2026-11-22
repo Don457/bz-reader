@@ -95,6 +95,42 @@ describe('组屏：单页 / 双页 / 封面单独 / 方向 / 错页校正', () =
   it('空书不炸', () => {
     expect(buildScreens([], OPT)).toEqual([]);
   });
+
+  /**
+   * 2026-11-22 手机双页真机：左边一页按原图 1200px 撑爆视口，右边那页才是
+   * 适配后的 390px。根因有两个，都出在「同一张宽图拆成两半、同屏显示」：
+   *   · 视图按 `pages.indexOf(page)` 反查 half，重复页永远拿到第一个 →
+   *     两格都按右半画；
+   *   · cells 按 page 索引，后一格覆盖前一格 → 落单的格子没人写 style.width。
+   * 所以屏里必须带一份「与视觉顺序一一对应的显示单元」，每格自己的 half
+   * 自己带着走；同一屏出现两格同页时，必须是一左一右。
+   */
+  it('拆半同屏：每格自带 half，两格一左一右，视觉顺序与显示单元对齐', () => {
+    const wide: MangaPage[] = [
+      { name: 'a.jpg', width: 800, height: 1200 },
+      { name: 'b.jpg', width: 2000, height: 1200 },
+      { name: 'c.jpg', width: 800, height: 1200 },
+      { name: 'd.jpg', width: 2000, height: 1200 },
+    ];
+    for (const direction of ['rtl', 'ltr'] as const) {
+      for (const spread of [true, false]) {
+        const screens = buildScreens(wide, { ...OPT, splitWide: true, spread, direction });
+        for (const s of screens) {
+          expect(s.units.length).toBe(s.visual.length);
+          expect(s.units.map((u) => u.page)).toEqual(s.visual);
+          const byPage = new Map<number, string[]>();
+          for (const u of s.units) {
+            const list = byPage.get(u.page) ?? [];
+            list.push(u.half);
+            byPage.set(u.page, list);
+          }
+          for (const halves of byPage.values()) {
+            if (halves.length > 1) expect(new Set(halves).size).toBe(2);
+          }
+        }
+      }
+    }
+  });
 });
 
 describe('屏与页互查、翻屏', () => {

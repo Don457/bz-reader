@@ -257,6 +257,46 @@ describe('headerActionsFor：排序、隐藏与移动端上限', () => {
  * 「回到上一处」不在这三颗里：2026-11-10 起 EPUB 也有同一条跳转历史，
  * 两边共用一颗按钮。
  */
+/**
+ * 漫画（2026-11-22 二轮）：排版进面板、缩略图复用头栏，其余收进 ⋮。
+ *
+ * 第一版把缩放 / 翻页 / 阅读方式做成画面里的悬浮工具条，被作者否掉。
+ * 现在的分工和 PDF 一致：排版只在头栏那颗「排版」图标里，缩略图一颗，
+ * 手机上前三颗就是 排版 / 缩略图 / 书签，放不下的照旧进 ⋮。
+ */
+describe('漫画头栏', () => {
+  it('缩略图对漫画也开放，导出 / 复制 / 识别仍只属于 PDF', () => {
+    expect(availableActions(false, false, false, true)).toContain('thumb');
+    const manga = availableActions(false, false, false, true);
+    expect(manga).not.toContain('export');
+    expect(manga).not.toContain('copy');
+    expect(manga).not.toContain('ocr');
+  });
+
+  it('CBZ 没有文字层：搜索 / 朗读 / 导读 / 全书鸟瞰不进头栏也不进 ⋮', () => {
+    const manga = availableActions(false, false, false, true);
+    for (const id of ['search', 'tts', 'guide', 'bookmap'] as const) {
+      expect(manga).not.toContain(id);
+    }
+  });
+
+  it('手机上漫画的前三颗是 排版 / 缩略图 / 书签（排版不能被挤进 ⋮）', () => {
+    expect(headerActionsFor(true, null, false, true, false, true)).toEqual(['type', 'thumb', 'mark']);
+  });
+
+  it('桌面上这三颗也排在最前，其余按用户顺序跟后面', () => {
+    const ids = headerActionsFor(false, null, false, false, false, true);
+    expect(ids.slice(0, 3)).toEqual(['type', 'thumb', 'mark']);
+    expect(ids).not.toContain('search');
+  });
+
+  it('EPUB / PDF 完全不受影响', () => {
+    expect(availableActions(false, false, false, false)).not.toContain('thumb');
+    expect(headerActionsFor(true, null, false, true)).toEqual(['toc', 'search', 'mark']);
+    expect(headerActionsFor(false, null, true).slice(0, 4)).toEqual(['toc', 'search', 'mark', 'type']);
+  });
+});
+
 describe('PDF 专属动作', () => {
   it('EPUB 里只出现「回到上一处」，其余三颗一颗都不出现', () => {
     const ids = headerActionsFor(false, null);

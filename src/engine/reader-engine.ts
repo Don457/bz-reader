@@ -72,6 +72,28 @@ export interface PdfUi {
 }
 
 /**
+ * 漫画独有的那套动作（2026-11-22 二轮）。
+ *
+ * 和 `PdfUi` 同一个理由单独成接口：EPUB 上没有「页图」「适配档」这些东西。
+ * 约定也一样：**现取，不缓存**——换书后旧对象作废。
+ *
+ * 第一版把这些控件做成画面里的悬浮工具条，作者否掉了：排版要像 PDF / EPUB
+ * 那样收进头栏「排版」图标弹出的面板，缩略图收进头栏那颗图标。所以这里
+ * 只剩两个入口，不再有 `zoomIn` / `goToPage` 之类给工具条用的方法。
+ */
+export interface MangaUi {
+  /**
+   * 排版面板：缩放 / 适配 / 逐格 / 裁边 / 调色 / 方向 / 单双页 / 翻页。
+   *
+   * `anchor` 是那颗头栏图标的视口矩形，给了就贴着它弹；命令面板 / 快捷键
+   * / ⋮ 菜单没有坐标，传 null 回 CSS 兜底位。
+   */
+  toggleLayout(anchor?: { left: number; top: number; width: number; height: number } | null): void;
+  /** 页缩略图带开关（默认关，开了才占底部一条） */
+  toggleThumbs(): void;
+}
+
+/**
  * PDF 扫描页识别（OCR）的能力面。EPUB/TXT/CBZ 没有——它们天生有文字层。
  *
  * 和 `PdfUi` 同一条约定：**现取，不缓存**。壳层的识别编排只认这个形状，
@@ -263,6 +285,8 @@ export interface ReaderEngine {
   restoreMangaView?(state: import('./manga/settings').MangaViewState | null | undefined): void;
   /** PDF 专用动作集；EPUB/TXT/CBZ 没有 */
   readonly pdfUi?: PdfUi;
+  /** 漫画专用动作集（排版面板 + 缩略图）；别的引擎没有 */
+  readonly mangaUi?: MangaUi;
   /** PDF 专用：扫描页识别。别的引擎没有 */
   readonly ocrUi?: PdfOcrUi;
   /** 跳转历史。两个引擎都实现（EPUB 2026-11-10 补上） */

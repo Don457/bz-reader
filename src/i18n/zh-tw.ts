@@ -1760,4 +1760,5 @@ export const ZH_TW: Record<MsgKey, string> = {
   'manga.zoomReset': '[TODO] manga.zoomReset',
   'manga.err.notZip': '[TODO] manga.err.notZip',
   'manga.err.noImages': '[TODO] manga.err.noImages',
+  'manga.panel.assist': '[TODO] manga.panel.assist',
 };

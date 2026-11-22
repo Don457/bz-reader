@@ -948,6 +948,7 @@ export const ZH = {
   'manga.zoomIn': '放大',
   'manga.zoomOut': '缩小',
   'manga.zoomReset': '回到适配大小',
+  'manga.panel.assist': '辅助',
   'manga.err.notZip': '这不是 zip 压缩包。CBZ 才是 zip；CBR / RAR 请先转成 CBZ 再打开。',
   'manga.err.noImages': '压缩包里没有找到图片页。',
   'settings.manga.direction': '阅读方向',

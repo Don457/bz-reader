@@ -31,14 +31,23 @@ import {
   screenOfPage,
   turnScreen,
   type MangaDirection,
+  type MangaFit,
   type MangaPage,
   type MangaScreen,
   type PanelRect,
   type SpreadOptions,
 } from './layout';
+import {
+  MANGA_ASSIST_ITEMS,
+  MANGA_FIT_OPTIONS,
+  MANGA_FLOW_OPTIONS,
+  mangaPanelRows,
+  mangaZoomLabel,
+} from './panel';
 import { imageMime, type MangaSource } from './archive';
-import { autoTone, type MangaPrefs, type MangaViewState } from './settings';
-import { t } from '../../i18n';
+import { autoTone, type MangaFlow, type MangaPrefs, type MangaViewState } from './settings';
+import { anchoredBelowRightIn } from '../../shell/anchored-style';
+import { t, type MsgKey } from '../../i18n';
 
 export interface MangaViewHooks {
   /** 位置变了：cfi 是 `manga/<原图序号>/<分格序号>` */
@@ -74,6 +83,28 @@ const GUESS_H = 1500;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 8;
 const ZOOM_STEP = 1.25;
+
+/**
+ * 面板里的档位文案：直接指向语言包的 key。
+ *
+ * 写成 `Record<MangaFit, MsgKey>` 而不是模板串 + 断言：少一个档位 tsc 就会
+ * 报缺 key，不会等到真机上某颗按钮显示成空白。
+ */
+const FIT_LABEL: Record<MangaFit, MsgKey> = {
+  smart: 'settings.manga.fit.smart',
+  screen: 'settings.manga.fit.screen',
+  width: 'settings.manga.fit.width',
+  height: 'settings.manga.fit.height',
+  fill: 'settings.manga.fit.fill',
+  original: 'settings.manga.fit.original',
+};
+
+const FLOW_LABEL: Record<MangaFlow, MsgKey> = {
+  paged: 'settings.manga.flow.paged',
+  vertical: 'settings.manga.flow.vertical',
+  horizontal: 'settings.manga.flow.horizontal',
+  webtoon: 'settings.manga.flow.webtoon',
+};
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = ''): HTMLElementTagNameMap[K] {
   const node = createEl(tag);
@@ -120,7 +151,6 @@ export class MangaView {
   readonly root: HTMLElement;
   private readonly stage: HTMLElement;
   private readonly film: HTMLElement;
-  private readonly hud: HTMLElement;
   private readonly thumbs: HTMLElement;
   private readonly panelLayer: HTMLElement;
   private readonly archive: MangaSource;
@@ -135,6 +165,8 @@ export class MangaView {
   private panelRects: PanelRect[] = [];
   private panelSeq: number[] = [];
   private cells = new Map<number, Cell>();
+  /** 本屏全部 cell，按视觉顺序；拆半时同一页会占两格，布局必须按它遍历 */
+  private screenCells: Cell[] = [];
   private urls = new Map<number, string>();
   private pan = { x: 0, y: 0 };
   private dragStart: { x: number; y: number; px: number; py: number } | null = null;
@@ -145,6 +177,10 @@ export class MangaView {
   private gammaSvg: SVGSVGElement | null = null;
   /** 当前屏按 fit 算出的基准缩放（zoom=1 即此值） */
   private base = 1;
+  /** render 是否在途：图片 load 回来时靠它判断能不能立刻重排 */
+  private rendering = false;
+  /** 渲染期间收到重排请求：这一轮走完再排，别开出两轮并发 render */
+  private rebuildQueued = false;
 
   constructor(container: HTMLElement, archive: MangaSource, prefs: MangaPrefs, hooks: MangaViewHooks) {
     this.archive = archive;
@@ -157,10 +193,9 @@ export class MangaView {
     this.stage = el('div', 'bzr-manga-stage');
     this.film = el('div', 'bzr-manga-film');
     this.panelLayer = el('div', 'bzr-manga-panels');
-    this.hud = el('div', 'bzr-manga-hud');
     this.thumbs = el('div', 'bzr-manga-thumbs');
     this.stage.append(this.film, this.panelLayer);
-    this.root.append(this.stage, this.hud, this.thumbs);
+    this.root.append(this.stage, this.thumbs);
     container.append(this.root);
     this.installGammaFilter();
     this.bind();
@@ -209,8 +244,14 @@ export class MangaView {
     p.width = width;
     p.height = height;
     if (this.prefs.flow === 'paged' && this.prefs.splitWide) {
-      /* 宽图要不要拆半会改变屏数，必须重新组屏 */
-      this.rebuild();
+      /* 宽图要不要拆半会改变屏数，必须重新组屏。
+         但图片的 load 事件可能正好落在 render 的 await 中间（双页时两张图
+         先后到）——那时直接 rebuild 会开出第二轮 render，把第一轮刚 append
+         的 cell 从 DOM 里换掉、`cells` 表也重置，落单的那个 cell 永远拿不到
+         `style.width`，真机上的表现就是「左边一页按原图 1200px 撑爆视口」
+         （2026-11-22 手机双页截图）。所以渲染中只记一笔，等这一轮走完再排。 */
+      if (this.rendering) this.rebuildQueued = true;
+      else this.rebuild();
     } else {
       this.layout();
     }
@@ -220,18 +261,32 @@ export class MangaView {
 
   private async render(): Promise<void> {
     if (this.destroyed) return;
-    const flow = this.prefs.flow;
-    this.film.replaceChildren();
-    this.panelLayer.replaceChildren();
-    this.cells.clear();
-
-    if (flow === 'paged') {
-      await this.renderPaged();
-    } else {
-      await this.renderContinuous(flow);
+    /* 渲染中再进来只排队：见 setPageSize 的注释 */
+    if (this.rendering) {
+      this.rebuildQueued = true;
+      return;
     }
-    this.updateHud();
-    this.emitRelocate();
+    this.rendering = true;
+    try {
+      const flow = this.prefs.flow;
+      this.film.replaceChildren();
+      this.panelLayer.replaceChildren();
+      this.cells.clear();
+      this.screenCells = [];
+
+      if (flow === 'paged') {
+        await this.renderPaged();
+      } else {
+        await this.renderContinuous(flow);
+      }
+      this.emitRelocate();
+    } finally {
+      this.rendering = false;
+      if (this.rebuildQueued && !this.destroyed) {
+        this.rebuildQueued = false;
+        this.rebuild();
+      }
+    }
   }
 
   private async renderPaged(): Promise<void> {
@@ -239,9 +294,8 @@ export class MangaView {
     if (!s) return;
     this.film.classList.add('is-paged');
     this.film.classList.remove('is-row', 'is-column');
-    for (const page of s.visual) {
-      const half = s.halves[s.pages.indexOf(page)] ?? 'full';
-      const cell = await this.makeCell(page, half, s.pages.length > 1);
+    for (const unit of s.units) {
+      const cell = await this.makeCell(unit.page, unit.half, s.units.length > 1);
       if (cell) this.film.append(cell.wrap);
     }
     this.layout();
@@ -256,13 +310,15 @@ export class MangaView {
     /* 连续模式不缩放：把上一页留下的 transform 清掉，否则整块被缩到看不见 */
     this.film.style.transform = '';
     const list = flow === 'webtoon'
-      ? [{ pages: this.pages.map((_, i) => i), visual: this.pages.map((_, i) => i), halves: this.pages.map(() => 'full' as const) }]
+      ? [{
+          units: this.pages.map((_, i) => ({ page: i, half: 'full' as const })),
+          pages: this.pages.map((_, i) => i),
+        }]
       : this.screens;
     for (const s of list) {
       const box = el('div', 'bzr-manga-screen');
-      for (const page of s.visual) {
-        const half = s.halves[s.pages.indexOf(page)] ?? 'full';
-        const cell = await this.makeCell(page, half, s.pages.length > 1);
+      for (const unit of s.units) {
+        const cell = await this.makeCell(unit.page, unit.half, s.units.length > 1);
         if (cell) box.append(cell.wrap);
       }
       this.film.append(box);
@@ -281,7 +337,11 @@ export class MangaView {
     img.draggable = false;
     wrap.append(img);
     const cell: Cell = { page, half, img, wrap, url: '' };
+    /* cells 按 page 索引，服务「分格 / 裁边 / 一键调色」这类单页动作；
+       screenCells 按视觉顺序存，布局遍历它——拆半时同一页有两个 cell，
+       只按 page 索引会让其中一个永远拿不到尺寸。 */
     this.cells.set(page, cell);
+    this.screenCells.push(cell);
     img.addEventListener('load', () => {
       if (!img.naturalWidth) return;
       this.setPageSize(page, img.naturalWidth, img.naturalHeight);
@@ -376,15 +436,15 @@ export class MangaView {
   private layoutPaged(vw: number, vh: number): void {
     const s = this.screens[this.screen];
     if (!s) return;
-    const count = Math.max(1, s.visual.length);
+    const count = Math.max(1, s.units.length);
     const slotW = vw / count;
     /* 每张图各算各的：双页时两页比例可能不同 */
     let maxH = 0;
-    for (const page of s.visual) {
-      const cell = this.cells.get(page);
-      if (!cell) continue;
-      const half = cell.wrap.dataset.half as Cell['half'];
-      const d = this.dimsOf(page);
+    /* 按 screenCells 走而不是 s.visual：拆半时同一页有两个 cell，只按 page
+       索引会让前面那格拿不到尺寸、按原图宽撑爆视口（2026-11-22 真机） */
+    for (const cell of this.screenCells) {
+      const half = cell.half;
+      const d = this.dimsOf(cell.page);
       const imgW = half === 'full' ? d.w : d.w / 2;
       /* 长条图（高度是宽度 6 倍以上）在 smart 下按宽度铺，否则会被压成一条线 */
       const fit = effectiveFit(this.prefs.fit, d.w, d.h);
@@ -407,7 +467,7 @@ export class MangaView {
   }
 
   private layoutContinuous(flow: string, vw: number, vh: number): void {
-    for (const cell of this.cells.values()) {
+    for (const cell of this.screenCells) {
       const d = this.dimsOf(cell.page);
       if (flow === 'horizontal') {
         const h = vh;
@@ -518,13 +578,9 @@ export class MangaView {
     if (this.prefs.flow !== 'paged') return;
     const vw = Math.max(1, this.stage.clientWidth);
     const vh = Math.max(1, this.stage.clientHeight);
-    const s = this.screens[this.screen];
-    if (!s) return;
     let contentW = 0;
     let contentH = 0;
-    for (const page of s.visual) {
-      const cell = this.cells.get(page);
-      if (!cell) continue;
+    for (const cell of this.screenCells) {
       contentW += cell.wrap.offsetWidth;
       contentH = Math.max(contentH, cell.wrap.offsetHeight);
     }
@@ -538,7 +594,7 @@ export class MangaView {
     this.prefs.zoom = next;
     this.pan = { x: 0, y: 0 };
     this.applyZoom();
-    this.updateHud();
+    this.renderLayoutPanel();
     this.emitViewState();
   }
 
@@ -546,7 +602,7 @@ export class MangaView {
     this.prefs.zoom = 1;
     this.pan = { x: 0, y: 0 };
     this.applyZoom();
-    this.updateHud();
+    this.renderLayoutPanel();
     this.emitViewState();
   }
 
@@ -595,90 +651,214 @@ export class MangaView {
     if (box) box.scrollIntoView({ block: 'start' });
   }
 
-  /* ─────────────── HUD / 缩略图 ─────────────── */
+  /* ─────────────── 排版面板 / 缩略图 ─────────────── */
+
+  private layoutEl: HTMLDivElement | null = null;
+  private layoutAnchor: { left: number; top: number; width: number; height: number } | null = null;
+  private layoutOff: ((ev: PointerEvent) => void) | null = null;
 
   /**
-   * 悬浮工具条在右上角（2026-11-22 按作者要求从底部横条改过来）：
-   * 桌面端把阅读区整块让给图片，手机上折行也不压底部的导航栏。
+   * 头栏「排版」：缩放 / 适配 / 逐格 / 裁边 / 调色 / 方向 / 单双页 / 翻页。
+   *
+   * 2026-11-22 二轮真机反馈：第一版把这些做成画面里的悬浮工具条，作者
+   * 要求「像 PDF 和 EPUB 一样单独做一个排版的界面，其他功能放右上角图标」。
+   * 现在是一张贴着头栏按钮下沿的小卡（和 PDF 排版面板同一套 `.bzs-float`
+   * 外观），点外面或再点一次头栏图标收起。
+   *
+   * @param anchor 触发按钮的视口矩形。命令面板 / 快捷键 / ⋮ 菜单没有坐标，
+   *   传 null 就落在右上角兜底位——硬算一个旧坐标比不贴更糟。
    */
-  private updateHud(): void {
-    const total = this.pages.length;
-    const s = this.screens[this.screen];
-    const from = (s?.pages[0] ?? 0) + 1;
-    const to = (s?.pages[s.pages.length - 1] ?? from - 1) + 1;
-    this.hud.replaceChildren();
-
-    const group = (cls: string): HTMLElement => {
-      const g = el('div', `bzr-manga-hud-grp${cls ? ` ${cls}` : ''}`);
-      this.hud.append(g);
-      return g;
+  toggleLayoutPanel(anchor?: { left: number; top: number; width: number; height: number } | null): void {
+    if (this.destroyed) return;
+    if (this.layoutEl) {
+      this.closeLayoutPanel();
+      return;
+    }
+    const panel = createDiv();
+    panel.className = 'bzr-manga-layout bzs-float is-corner no-head';
+    /* 卡片里的点击不能漏到 stage：stage 的 click 是「点左/右翻页」 */
+    panel.addEventListener('click', (ev) => ev.stopPropagation());
+    this.root.appendChild(panel);
+    this.layoutEl = panel;
+    this.layoutAnchor = anchor ?? null;
+    this.renderLayoutPanel();
+    this.placeLayoutPanel();
+    const off = (ev: PointerEvent): void => {
+      if (panel.contains(ev.target as Node)) return;
+      this.closeLayoutPanel();
     };
-    const push = (box: HTMLElement, text: string, fn: () => void, on = false, sr?: string): HTMLElement => {
-      const b = el('button', `bzr-manga-btn${on ? ' is-on' : ''}`);
-      b.type = 'button';
-      b.textContent = text;
-      if (sr) {
-        const srn = el('span', 'bzs-sr-only');
-        srn.textContent = sr;
-        b.append(srn);
-      }
-      b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
-      box.append(b);
-      return b;
-    };
-
-    /* 缩放组：和 PDF 一样「− 100% +」，百分比点一下回到适配 */
-    const zoomBox = group('is-zoom');
-    push(zoomBox, '−', () => this.zoomBy(1 / ZOOM_STEP), false, t('manga.zoomOut'));
-    const pct = push(
-      zoomBox,
-      `${Math.round(this.prefs.zoom * 100)}%`,
-      () => this.resetZoom(),
-      this.prefs.zoom !== 1,
-      t('manga.zoomReset'),
-    );
-    pct.classList.add('bzr-manga-pct');
-    push(zoomBox, '+', () => this.zoomBy(ZOOM_STEP), false, t('manga.zoomIn'));
-
-    /* 页码 / 跳页：和缩放同在第一行，靠右 */
-    const navBox = group('is-nav');
-    const label = el('span', 'bzr-manga-count');
-    label.textContent = from === to ? `${from} / ${total}` : `${from}–${to} / ${total}`;
-    const input = el('input', 'bzr-manga-goto');
-    input.type = 'number';
-    input.min = '1';
-    input.max = String(total);
-    input.placeholder = t('manga.goto');
-    input.addEventListener('change', () => {
-      const n = Number(input.value);
-      if (Number.isFinite(n) && n >= 1) this.goToPage(n - 1);
-    });
-    input.addEventListener('click', (ev) => ev.stopPropagation());
-    navBox.append(label, input);
-
-    /* 阅读方式组：独占第二行（手机上按钮多，允许组内再折行） */
-    const modeBox = group('is-modes');
-    push(modeBox, t('manga.fit'), () => this.cycleFit(), false, t('manga.fitName', { fit: this.fitName() }));
-    push(modeBox, t('manga.dir'), () => this.toggleDirection(), this.direction === 'rtl');
-    push(modeBox, t('manga.spread'), () => this.setPref('spread', !this.prefs.spread), this.prefs.spread);
-    push(modeBox, t('manga.webtoon'), () => this.setPref('flow', this.prefs.flow === 'webtoon' ? 'paged' : 'webtoon'), this.prefs.flow === 'webtoon');
-    push(modeBox, t('manga.panels'), () => this.setPref('panels', !this.prefs.panels), this.prefs.panels);
-    push(modeBox, t('manga.crop'), () => this.setPref('crop', !this.prefs.crop), this.prefs.crop);
-    push(modeBox, t('manga.tone'), () => this.fixTone());
-    push(modeBox, t('manga.thumbs'), () => this.setPref('thumbs', !this.prefs.thumbs), this.prefs.thumbs);
-    push(modeBox, t('manga.whole'), () => this.showWholePage());
+    this.layoutOff = off;
+    /* 捕获阶段：免得被 stage 的 pointerdown（拖动开始）先吃掉 */
+    window.setTimeout(() => document.addEventListener('pointerdown', off, true), 0);
   }
 
-  private fitName(): string {
-    const key = {
-      smart: 'settings.manga.fit.smart',
-      screen: 'settings.manga.fit.screen',
-      width: 'settings.manga.fit.width',
-      height: 'settings.manga.fit.height',
-      fill: 'settings.manga.fit.fill',
-      original: 'settings.manga.fit.original',
-    } as const;
-    return t(key[this.prefs.fit] ?? 'settings.manga.fit.smart');
+  closeLayoutPanel(): void {
+    if (this.layoutOff) document.removeEventListener('pointerdown', this.layoutOff, true);
+    this.layoutOff = null;
+    this.layoutEl?.remove();
+    this.layoutEl = null;
+    this.layoutAnchor = null;
+  }
+
+  get layoutOpen(): boolean {
+    return this.layoutEl !== null;
+  }
+
+  /**
+   * 贴着按钮弹：右缘对齐按钮右缘、顶边在按钮下方 8px。
+   *
+   * 按钮矩形是视口坐标，卡片挂在 `.bzr-manga`（absolute + inset:0）里，
+   * 所以要减掉阅读区左上角，换算规则与 PDF 面板同一份（anchoredBelowRightIn）。
+   */
+  private placeLayoutPanel(): void {
+    const el = this.layoutEl;
+    if (!el) return;
+    const anchor = this.layoutAnchor;
+    /* 窄屏交给 CSS 的容器查询：`@container bzs (max-width:640px)` 会把
+       `.bzs-float.is-corner` 改成贴着底部的一整条（让开安全区与宿主底栏、
+       max-height 62vh 可滚动）。这里再写内联 left/top 会把它顶回右上角，
+       高度还被 62vh 卡住——真机上正是「面板只露出一半，剩下要靠滚」。
+       桌面才贴按钮：右缘对齐、下沿 8px。 */
+    if (!anchor || this.root.clientWidth < 640) {
+      el.setCssProps({ left: '', top: '', right: '', bottom: '' });
+      return;
+    }
+    const pos = anchoredBelowRightIn(
+      anchor,
+      { width: el.offsetWidth || 320, height: el.offsetHeight || 0 },
+      this.root.getBoundingClientRect(),
+    );
+    el.setCssProps({ left: `${pos.left}px`, top: `${pos.top}px`, right: 'auto', bottom: 'auto' });
+  }
+
+  /** 画卡片。行序与选项顺序见 manga/panel.ts（测试按那份清单断言） */
+  private renderLayoutPanel(): void {
+    const el = this.layoutEl;
+    if (!el) return;
+    el.textContent = '';
+    const body = el.createDiv({ cls: 'bzs-mbody' });
+    const grp = body.createDiv({ cls: 'bzs-setgrp flat' });
+
+    /* 一行分段控件：label 在左、按钮组在右，和设置页 / PDF 面板同一套类名。
+       `cls` 用来固化列数（见 styles.css 的 .bzr-manga-seg3）：手机上
+       `.bzs-seg` 允许折行，六档适配按自然宽度会排成三行，太高。 */
+    const seg = (
+      label: string,
+      opts: Array<{ v: string; text: string; on: boolean }>,
+      run: (v: string) => void,
+      cls = '',
+    ): void => {
+      const row = grp.createDiv({ cls: 'bzs-setrow' });
+      row.createEl('label', { text: label });
+      const box = row.createDiv({ cls: cls ? `bzs-seg ${cls}` : 'bzs-seg' });
+      for (const opt of opts) {
+        const btn = createEl('button');
+        btn.type = 'button';
+        btn.textContent = opt.text;
+        btn.className = opt.on ? 'on' : '';
+        btn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          run(opt.v);
+        });
+        box.appendChild(btn);
+      }
+    };
+
+    for (const key of mangaPanelRows(this.prefs.flow)) {
+      switch (key) {
+        case 'zoom': {
+          /* 和 PDF 那条浮条同一个口径：− / 百分比（点一下复位）/ + */
+          const row = grp.createDiv({ cls: 'bzs-setrow' });
+          row.createEl('label', { text: t('pdf.layout.zoom') });
+          const box = row.createDiv({ cls: 'bzs-seg bzr-manga-seg3' });
+          const zb = (text: string, sr: string, fn: () => void, on = false): void => {
+            const btn = createEl('button');
+            btn.type = 'button';
+            btn.textContent = text;
+            btn.className = on ? 'on' : '';
+            btn.appendChild(Object.assign(createSpan(), { className: 'bzs-sr-only', textContent: sr }));
+            btn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              fn();
+            });
+            box.appendChild(btn);
+          };
+          zb('−', t('manga.zoomOut'), () => this.zoomBy(1 / ZOOM_STEP));
+          zb(mangaZoomLabel(this.prefs.zoom), t('manga.zoomReset'), () => this.resetZoom(), this.prefs.zoom !== 1);
+          zb('＋', t('manga.zoomIn'), () => this.zoomBy(ZOOM_STEP));
+          break;
+        }
+        case 'fit':
+          seg(
+            t('manga.fit'),
+            MANGA_FIT_OPTIONS.map((v) => ({ v, text: t(FIT_LABEL[v]), on: this.prefs.fit === v })),
+            (v) => this.setPref('fit', v as MangaFit),
+            'bzr-manga-seg3',
+          );
+          break;
+        case 'assist': {
+          /* 三颗并一行：逐格 / 裁边是开关（亮 = 开），调色是一次性动作。
+             各占一行时整张卡在手机上要滚动才能看完最后两行。 */
+          const row = grp.createDiv({ cls: 'bzs-setrow' });
+          row.createEl('label', { text: t('manga.panel.assist') });
+          const box = row.createDiv({ cls: 'bzs-seg bzr-manga-seg3' });
+          for (const item of MANGA_ASSIST_ITEMS) {
+            const btn = createEl('button');
+            btn.type = 'button';
+            btn.textContent =
+              item === 'panels' ? t('manga.panels') : item === 'crop' ? t('manga.crop') : t('manga.tone');
+            /* 逐格 / 裁边是开关：亮着表示开着。调色是一次性动作，没有开合态 */
+            const on = item === 'panels' ? this.prefs.panels : item === 'crop' ? this.prefs.crop : false;
+            btn.className = on ? 'on' : '';
+            btn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              if (item === 'tone') this.fixTone();
+              else if (item === 'panels') this.setPref('panels', !this.prefs.panels);
+              else this.setPref('crop', !this.prefs.crop);
+            });
+            box.appendChild(btn);
+          }
+          break;
+        }
+        case 'direction':
+          seg(
+            t('settings.manga.direction'),
+            [
+              { v: 'rtl', text: t('settings.manga.direction.rtl'), on: this.direction === 'rtl' },
+              { v: 'ltr', text: t('settings.manga.direction.ltr'), on: this.direction === 'ltr' },
+            ],
+            (v) => this.setDirectionFromUser(v as MangaDirection),
+          );
+          break;
+        case 'pages':
+          seg(
+            t('pdf.layout.pages'),
+            [
+              { v: 'single', text: t('pdf.layout.single'), on: !this.prefs.spread },
+              { v: 'spread', text: t('pdf.layout.spread'), on: this.prefs.spread },
+            ],
+            (v) => this.setPref('spread', v === 'spread'),
+          );
+          break;
+        case 'flow':
+          seg(
+            t('settings.manga.flow'),
+            MANGA_FLOW_OPTIONS.map((v) => ({ v, text: t(FLOW_LABEL[v]), on: this.prefs.flow === v })),
+            (v) => this.setPref('flow', v as MangaFlow),
+            /* 四档的字都不短（连续横向 / 条漫长图）：两列两行，别挤成一条 */
+            'bzr-manga-seg2',
+          );
+          break;
+      }
+    }
+  }
+
+  /** 头栏那颗缩略图图标：默认关，开了才在底部占一条 */
+  toggleThumbs(): void {
+    this.setPref('thumbs', !this.prefs.thumbs);
   }
 
   private async renderThumbs(): Promise<void> {
@@ -712,20 +892,24 @@ export class MangaView {
     (this.prefs as Mutable<MangaPrefs>)[key] = value;
     if (key === 'flow') this.pan = { x: 0, y: 0 };
     this.rebuild();
+    /* 面板开着时同步选中态；关着时这里是空操作 */
+    this.renderLayoutPanel();
     this.emitViewState();
   }
 
-  private toggleDirection(): void {
-    this.direction = this.direction === 'rtl' ? 'ltr' : 'rtl';
-    this.prefs.direction = this.direction;
+  /**
+   * 用户在面板里改方向。
+   *
+   * 和 `setDirection` 分开：那个是宿主「按文件 / 按书记忆」灌进来的，
+   * 不该把 `prefs.direction` 从 auto 改成写死的 rtl 再存进 mangaView；
+   * 这个才是「用户自己选的」，必须落盘。
+   */
+  private setDirectionFromUser(direction: MangaDirection): void {
+    this.direction = direction;
+    this.prefs.direction = direction;
     this.rebuild();
+    this.renderLayoutPanel();
     this.emitViewState();
-  }
-
-  private cycleFit(): void {
-    const order: MangaPrefs['fit'][] = ['smart', 'screen', 'width', 'height', 'fill', 'original'];
-    const at = order.indexOf(this.prefs.fit);
-    this.setPref('fit', order[(at + 1) % order.length]);
   }
 
   private fixTone(): void {
@@ -755,6 +939,7 @@ export class MangaView {
     this.prefs = next;
     this.direction = next.direction === 'ltr' ? 'ltr' : 'rtl';
     this.rebuild();
+    this.renderLayoutPanel();
   }
 
   setDirection(direction: MangaDirection): void {
@@ -877,7 +1062,7 @@ export class MangaView {
             const d = Math.abs(box.getBoundingClientRect().top - r.top);
             if (d < min) { min = d; best = i; }
           });
-          if (best !== this.screen) { this.screen = best; this.updateHud(); this.emitRelocate(); }
+          if (best !== this.screen) { this.screen = best; this.emitRelocate(); }
         }
       }
     }, { passive: true });
@@ -890,7 +1075,11 @@ export class MangaView {
     this.stage.addEventListener('pointerleave', () => { if (hold !== null) window.clearTimeout(hold); });
 
     if ('ResizeObserver' in window) {
-      this.resizeObserver = new ResizeObserver(() => this.layout());
+      this.resizeObserver = new ResizeObserver(() => {
+        this.layout();
+        /* 窗口一变，按钮的位置也变了：面板跟着重新贴一次 */
+        if (this.layoutEl) this.placeLayoutPanel();
+      });
       this.resizeObserver.observe(this.stage);
     }
     void this.setAwake(this.prefs.keepAwake);
@@ -911,6 +1100,7 @@ export class MangaView {
 
   async destroy(): Promise<void> {
     this.destroyed = true;
+    this.closeLayoutPanel();
     this.resizeObserver?.disconnect();
     try { await this.awakeLock?.release(); } catch { /* ignore */ }
     for (const url of this.urls.values()) URL.revokeObjectURL(url);

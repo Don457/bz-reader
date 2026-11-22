@@ -18,7 +18,7 @@ import type { EngineMeta } from '../../data/book-meta';
 import type { ReaderPrefs } from '../../data/prefs';
 import type { FoliateBook, FoliateTOCItem } from '../../types/foliate';
 import type { HostAnnotation, MountOptions, SearchHit } from '../host';
-import type { HistoryUi, ReaderEngine } from '../reader-engine';
+import type { HistoryUi, MangaUi, ReaderEngine } from '../reader-engine';
 import { ComicArchive, comicInfoName, imageMime, isImageName, type MangaSource } from './archive';
 import {
   DEFAULT_MANGA_PREFS,
@@ -91,6 +91,21 @@ export class MangaEngineHost implements ReaderEngine {
   get contentRtl(): boolean { return this.direction === 'rtl'; }
   get loadPhase(): string { return this.phase; }
   get pageKey(): string { return `manga:${this.page + 1}`; }
+
+  /**
+   * 漫画的动作面（排版面板 + 缩略图）。
+   *
+   * 与 `pdfUi` 同一条约定：**现取，不缓存**。视图在 `destroy()` 里被置空，
+   * 闭包里抓着旧视图就会往一块已经摘掉的 DOM 上挂面板。
+   */
+  get mangaUi(): MangaUi | undefined {
+    const view = this.view;
+    if (!view) return undefined;
+    return {
+      toggleLayout: (anchor) => view.toggleLayoutPanel(anchor),
+      toggleThumbs: () => view.toggleThumbs(),
+    };
+  }
 
   async mount(container: HTMLElement, vaultPath: string, opts: MountOptions): Promise<void> {
     await this.destroy();
