@@ -6,12 +6,14 @@
  * 没有 jsdom 的 node 测试里钉住真机上最容易错的那些边界。
  * ============================================================ */
 import { describe, expect, it } from 'vitest';
+import { resolveDirection } from '../src/engine/manga/settings';
 import {
   buildScreens,
   clampPan,
   cropInsets,
   detectBands,
   detectPanels,
+  effectiveFit,
   filterCss,
   fitScale,
   mangaLocator,
@@ -202,5 +204,29 @@ describe('ComicInfo.xml 的 Manga 字段决定方向', () => {
     expect(readingDirectionFromComicInfo('<ComicInfo><Manga>No</Manga></ComicInfo>')).toBe('ltr');
     expect(readingDirectionFromComicInfo('<ComicInfo/>')).toBeNull();
     expect(readingDirectionFromComicInfo('')).toBeNull();
+  });
+});
+
+describe('长条图与方向优先级（2026-11-22 真机回归）', () => {
+  it('整话一张的竖长图在 smart 下改按宽度，不再压成一条线', () => {
+    /* 700×50000 的条漫：按高度装进视口只剩 9px 宽，肉眼就是一条线 */
+    expect(effectiveFit('smart', 700, 50000)).toBe('width');
+    expect(fitScale('width', 700, 50000, 680, 681)).toBeCloseTo(680 / 700, 4);
+  });
+
+  it('普通单页与宽图保持 smart，不误伤', () => {
+    expect(effectiveFit('smart', 1200, 1660)).toBe('smart');
+    expect(effectiveFit('smart', 2400, 1660)).toBe('smart');
+    /* 用户明确指定的档位一律不改 */
+    expect(effectiveFit('screen', 700, 50000)).toBe('screen');
+    expect(effectiveFit('original', 700, 50000)).toBe('original');
+  });
+
+  it('ComicInfo 的方向只在「跟随文件」时生效，用户手选优先', () => {
+    expect(resolveDirection('auto', 'ltr')).toBe('ltr');
+    expect(resolveDirection('auto', null)).toBe('rtl');
+    /* 用户把方向定成右到左：文件写左到左也不改 */
+    expect(resolveDirection('rtl', 'ltr')).toBe('rtl');
+    expect(resolveDirection('ltr', 'rtl')).toBe('ltr');
   });
 });

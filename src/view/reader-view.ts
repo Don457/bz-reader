@@ -110,6 +110,7 @@ import {
 import { planHeaderVisibility, roleOf } from './header-layout';
 import { pdfActionRun, type PanelAnchor } from './pdf-actions';
 import { faultHtml, loadingHtml, type FaultDiagLine } from './reader-fault';
+import { formatOf } from '../data/book-repo';
 import { REGION_ACTS, SELECTION_ACTS, planToolbarHit, toggleMoreMenu, toolbarHtml } from '../shell/text-toolbar';
 import { markReviewNextDate, markReviewPlanned, refreshBookReviewMarks, reviewDueState } from '../shell/review-marks';
 import { hydrateToolbarIcons } from '../shell/toolbar-icons';
@@ -1133,8 +1134,11 @@ export class ReaderView extends ItemView {
     const s = (state ?? {}) as { bookId?: string; cfi?: string; file?: string; subpath?: string; query?: string };
     if (typeof s.bookId === 'string') this.bookId = s.bookId;
     else if (typeof s.file === 'string' && s.file) {
-      /* 从 `[[书.epub]]` 点进来：Obsidian 给的是文件路径，不是 bookId */
-      const book = this.api.repo.byPath(s.file);
+      /* 从 `[[书.epub]]` 点进来、或在文件浏览器里双击一本书：Obsidian 给的是
+         文件路径，不是 bookId。不在书架上就当场登记——以前这里静默跳过，
+         表现为「双击一本漫画，阅读页全白、连一句提示都没有」。
+         登记只写书架记录、不动文件，和导入面板走同一个 ensure。 */
+      const book = this.api.repo.byPath(s.file) ?? this.adoptFile(s.file);
       if (book) this.bookId = book.id;
     }
     /* 带子路径进来（Live Preview 里点双链）：能解出 CFI 就顺手定位一次，
@@ -1147,6 +1151,15 @@ export class ReaderView extends ItemView {
     if (typeof s.query === 'string' && s.query.trim()) this.pendingQuery = s.query.trim();
     await super.setState(state, result);
     await this.maybeMount();
+  }
+
+  /** 打开一个还没进书架的文件：按扩展名登记一条记录，文件留在原地 */
+  private adoptFile(path: string): ReaderBook | undefined {
+    const format = formatOf(path);
+    if (!format) return undefined;
+    const res = this.api.repo.ensure(path, format, 0);
+    if (res.created) this.api.store.touch();
+    return res.book;
   }
 
   /** 已经开着这本书时从外面（跨书搜索）再点一条结果：只补标词 */
@@ -5586,12 +5599,22 @@ export class ReaderView extends ItemView {
          「开书已取消」让人以为出故障（P2-14）。取消与真失败现在是两种
          错误类型：OpenCancelledError 静默，其余照常报。 */
       if (this.closed || e instanceof OpenCancelledError) return;
-      const why = (e as Error)?.message || t('notice.open.unsupported');
+      const why = this.openFailureText((e as Error)?.message || '');
       this.renderFault(t('fault.openFailed'), why);
       notify(why, 'error');
       return;
     }
     this.mounting = false;
+  }
+
+  /**
+   * 引擎抛上来的错误原文是英文（有些是 zip 解析器给的），直接摆给用户
+   * 等于没提示。常见的两类转成人话，别的原样保留。
+   */
+  private openFailureText(raw: string): string {
+    if (/not a zip archive/i.test(raw)) return t('manga.err.notZip');
+    if (/no images in comic (archive|folder)/i.test(raw)) return t('manga.err.noImages');
+    return raw || t('notice.open.unsupported');
   }
 
   /**

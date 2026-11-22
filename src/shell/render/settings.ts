@@ -627,15 +627,16 @@ export function viewSettings(v: SettingsView): string {
      漫画那一行，与 PDF / AI 同口径。 */
   const mangaUnlocked = can('manga');
   const mp = p.manga;
+  const mangaLock = mangaUnlocked ? '' : 'is-locked';
+  const mangaLockAttr = mangaUnlocked ? '' : ' data-act="unlock" data-mode="manga"';
+  const mangaLockSr = mangaUnlocked ? '' : `<span class="bzs-sr-only">${t('settings.locked')}</span>`;
   const mangaSwitch = (field: string, on: boolean, key: MsgKey): string =>
     `<div class="bzs-setrow"><label>${t(key)}</label><button class="bzs-switch${
       on ? ' on' : ''
-    }" data-act="setpref" data-k="manga.${field}" data-v="${on ? '0' : '1'}" aria-label="${t(
+    }" data-act="setpref" data-k="manga.${field}" data-v="${on ? '0' : '1'}"><span class="bzs-sr-only">${t(
       key,
-    )}"></button></div>`;
-  const manga = `<div class="bzs-setgrp${mangaUnlocked ? '' : ' is-locked'}"${
-    mangaUnlocked ? '' : ` data-act="unlock" data-mode="manga" title="${t('settings.locked')}"`
-  }>
+    )}</span></button></div>`;
+  const manga = `<div class="bzs-setgrp${mangaLock ? ` ${mangaLock}` : ''}"${mangaLockAttr}>${mangaLockSr}
       <h3>${t('settings.grp.manga')}</h3>
       <div class="bzs-setrow is-segrow"><label>${t('settings.manga.direction')}</label>${seg(
         'manga.direction',

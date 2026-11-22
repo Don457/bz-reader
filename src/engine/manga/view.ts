@@ -6,17 +6,24 @@
  * 一屏 = 一张或两张原图，翻页按屏走；进度/书签锚在原图序号上，
  * 拆页、合页、裁边、分格都不改存档。
  *
+ * 尺寸模型（2026-11-22 重做，旧版把整块 film 按 fit 缩放，图片却仍按
+ * 容器宽铺满，结果整页只剩四成大小）：
+ *  · `base` 由 fitScale 算出「整页刚好装进视口」的比例；
+ *  · **cell 的布局尺寸就是图片乘 base 后的像素尺寸**，img 填满 cell；
+ *  · film 的 transform 只承担用户缩放（zoom）和平移（pan），不再承担 fit。
+ * 这样 fit=smart 时整页正好贴边，zoom=1 是「适配后的 100%」。
+ *
  * 三条内存纪律：
  *  1. 只解压眼前这一屏 ±1 屏，滚走就 revokeObjectURL；
  *  2. 分格检测把图画到 100×100 的小画布上取像素，绝不用原尺寸画布
  *     （手机上大画布静默白屏，pdf/document.ts 踩过）；
- *  3. 图片尺寸先按 0 占位，加载完再回填宽高并重新组屏，不预扫整本。
+ *  3. 图片尺寸先按猜测占位，加载完再回填宽高并重新组屏，不预扫整本。
  * ============================================================ */
 import {
   buildScreens,
-  clampPan,
   cropInsets,
   detectPanels,
+  effectiveFit,
   filterCss,
   fitScale,
   mangaLocator,
@@ -61,6 +68,12 @@ interface Cell {
 }
 
 const SAMPLE = 100;
+/** 尺寸未知时的占位：常见单页漫画 2:3，够算出一个像样的初值 */
+const GUESS_W = 1000;
+const GUESS_H = 1500;
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 8;
+const ZOOM_STEP = 1.25;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = ''): HTMLElementTagNameMap[K] {
   const node = createEl(tag);
@@ -122,7 +135,6 @@ export class MangaView {
   private panelRects: PanelRect[] = [];
   private panelSeq: number[] = [];
   private cells = new Map<number, Cell>();
-  private loaded = new Set<number>();
   private urls = new Map<number, string>();
   private pan = { x: 0, y: 0 };
   private dragStart: { x: number; y: number; px: number; py: number } | null = null;
@@ -131,6 +143,8 @@ export class MangaView {
   private awakeLock: WakeLockSentinel | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private gammaSvg: SVGSVGElement | null = null;
+  /** 当前屏按 fit 算出的基准缩放（zoom=1 即此值） */
+  private base = 1;
 
   constructor(container: HTMLElement, archive: MangaSource, prefs: MangaPrefs, hooks: MangaViewHooks) {
     this.archive = archive;
@@ -175,6 +189,7 @@ export class MangaView {
     this.root.dataset.flow = this.prefs.flow;
     this.root.dataset.dir = this.direction;
     this.root.dataset.fit = this.prefs.fit;
+    this.root.dataset.zoom = String(this.prefs.zoom);
     this.stage.style.background = this.prefs.background || '';
     this.film.style.filter = filterCss(this.prefs.brightness, this.prefs.contrast, this.prefs.gamma);
     this.thumbs.classList.toggle('is-on', this.prefs.thumbs);
@@ -187,13 +202,18 @@ export class MangaView {
     return s?.pages[0] ?? 0;
   }
 
-  /** 图片尺寸是加载完才知道的：回填后重新组屏，但锚在原图序号上不错位 */
+  /** 图片尺寸是加载完才知道的：回填后重算布局，锚在原图序号上不错位 */
   private setPageSize(page: number, width: number, height: number): void {
     const p = this.pages[page];
     if (!p || (p.width === width && p.height === height)) return;
     p.width = width;
     p.height = height;
-    if (this.prefs.splitWide) this.rebuild();
+    if (this.prefs.flow === 'paged' && this.prefs.splitWide) {
+      /* 宽图要不要拆半会改变屏数，必须重新组屏 */
+      this.rebuild();
+    } else {
+      this.layout();
+    }
   }
 
   /* ─────────────── 渲染 ─────────────── */
@@ -205,10 +225,10 @@ export class MangaView {
     this.panelLayer.replaceChildren();
     this.cells.clear();
 
-    if (flow === 'vertical' || flow === 'horizontal' || flow === 'webtoon') {
-      await this.renderContinuous(flow);
-    } else {
+    if (flow === 'paged') {
       await this.renderPaged();
+    } else {
+      await this.renderContinuous(flow);
     }
     this.updateHud();
     this.emitRelocate();
@@ -218,12 +238,13 @@ export class MangaView {
     const s = this.screens[this.screen];
     if (!s) return;
     this.film.classList.add('is-paged');
+    this.film.classList.remove('is-row', 'is-column');
     for (const page of s.visual) {
       const half = s.halves[s.pages.indexOf(page)] ?? 'full';
       const cell = await this.makeCell(page, half, s.pages.length > 1);
       if (cell) this.film.append(cell.wrap);
     }
-    this.applyZoom();
+    this.layout();
     if (this.prefs.panels) await this.detectCurrentPanels(s);
     this.prefetch();
   }
@@ -231,6 +252,9 @@ export class MangaView {
   private async renderContinuous(flow: 'vertical' | 'horizontal' | 'webtoon'): Promise<void> {
     this.film.classList.remove('is-paged');
     this.film.classList.toggle('is-row', flow === 'horizontal');
+    this.film.classList.toggle('is-column', flow !== 'horizontal');
+    /* 连续模式不缩放：把上一页留下的 transform 清掉，否则整块被缩到看不见 */
+    this.film.style.transform = '';
     const list = flow === 'webtoon'
       ? [{ pages: this.pages.map((_, i) => i), visual: this.pages.map((_, i) => i), halves: this.pages.map(() => 'full' as const) }]
       : this.screens;
@@ -243,7 +267,8 @@ export class MangaView {
       }
       this.film.append(box);
     }
-    /* 连续模式只加载视口附近的图： IntersectionObserver 到不了再滚就补 */
+    this.layout();
+    /* 连续模式只加载视口附近的图：滚到哪补到哪 */
     this.loadVisible();
   }
 
@@ -298,7 +323,6 @@ export class MangaView {
       if (near.has(p) || this.prefs.thumbs) continue;
       URL.revokeObjectURL(url);
       this.urls.delete(p);
-      this.loaded.delete(p);
     }
   }
 
@@ -322,6 +346,104 @@ export class MangaView {
     }
   }
 
+  /* ─────────────── 尺寸 ─────────────── */
+
+  /**
+   * 核心：把「适配后的像素尺寸」写到 cell 上。
+   *
+   * 旧版把 fit 乘进 film 的 transform，而 img 仍按容器宽铺满——fit 与
+   * 实际渲染尺寸各算各的，整页永远只有该有的大小的四成。现在 cell 的
+   * 宽高就是最终尺寸，film 只负责 zoom / pan。
+   */
+  private layout(): void {
+    if (this.destroyed) return;
+    const flow = this.prefs.flow;
+    const vw = Math.max(1, this.stage.clientWidth);
+    const vh = Math.max(1, this.stage.clientHeight);
+    if (flow === 'paged') {
+      this.layoutPaged(vw, vh);
+    } else {
+      this.layoutContinuous(flow, vw, vh);
+    }
+  }
+
+  private dimsOf(page: number): { w: number; h: number } {
+    const p = this.pages[page];
+    if (!p || !p.width || !p.height) return { w: GUESS_W, h: GUESS_H };
+    return { w: p.width, h: p.height };
+  }
+
+  private layoutPaged(vw: number, vh: number): void {
+    const s = this.screens[this.screen];
+    if (!s) return;
+    const count = Math.max(1, s.visual.length);
+    const slotW = vw / count;
+    /* 每张图各算各的：双页时两页比例可能不同 */
+    let maxH = 0;
+    for (const page of s.visual) {
+      const cell = this.cells.get(page);
+      if (!cell) continue;
+      const half = cell.wrap.dataset.half as Cell['half'];
+      const d = this.dimsOf(page);
+      const imgW = half === 'full' ? d.w : d.w / 2;
+      /* 长条图（高度是宽度 6 倍以上）在 smart 下按宽度铺，否则会被压成一条线 */
+      const fit = effectiveFit(this.prefs.fit, d.w, d.h);
+      const base = fitScale(fit, imgW, d.h, slotW, vh);
+      const cellW = half === 'full' ? d.w * base : (d.w * base) / 2;
+      const cellH = d.h * base;
+      cell.wrap.style.width = `${cellW}px`;
+      cell.wrap.style.height = `${cellH}px`;
+      /* 拆半：图片按整页宽画，cell 裁掉另一半（宽度 200% 用 CSS） */
+      cell.img.style.width = half === 'full' ? '100%' : '200%';
+      cell.img.style.height = '100%';
+      cell.img.style.maxWidth = 'none';
+      cell.img.style.maxHeight = 'none';
+      this.base = base;
+      maxH = Math.max(maxH, cellH);
+    }
+    /* 长条图比视口高：从顶部开始显示、靠拖动往下看；普通单页居中 */
+    this.film.style.alignItems = maxH > vh ? 'flex-start' : 'center';
+    this.applyTransform(vw, vh, vw, maxH);
+  }
+
+  private layoutContinuous(flow: string, vw: number, vh: number): void {
+    for (const cell of this.cells.values()) {
+      const d = this.dimsOf(cell.page);
+      if (flow === 'horizontal') {
+        const h = vh;
+        const w = d.h > 0 ? (d.w / d.h) * h : vw;
+        cell.wrap.style.width = `${w}px`;
+        cell.wrap.style.height = `${h}px`;
+      } else {
+        /* 连续向下 / 条漫长图：按视口宽度铺，高度按图片比例 */
+        const w = vw;
+        const h = d.w > 0 ? (d.h / d.w) * w : vh;
+        cell.wrap.style.width = `${w}px`;
+        cell.wrap.style.height = `${h}px`;
+      }
+      cell.img.style.width = '100%';
+      cell.img.style.height = '100%';
+      cell.img.style.maxWidth = 'none';
+      cell.img.style.maxHeight = 'none';
+    }
+    this.film.style.transform = '';
+    this.pan = { x: 0, y: 0 };
+  }
+
+  /** film 只管 zoom / pan：内容是 fit 后的尺寸，zoom=1 即「适配」 */
+  private applyTransform(vw: number, vh: number, contentW: number, contentH: number): void {
+    const zoom = this.prefs.zoom;
+    const w = contentW * zoom;
+    const h = contentH * zoom;
+    const mx = Math.max(0, (w - vw) / 2);
+    const my = Math.max(0, (h - vh) / 2);
+    this.pan = {
+      x: Math.min(mx, Math.max(-mx, this.pan.x)),
+      y: Math.min(my, Math.max(-my, this.pan.y)),
+    };
+    this.film.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${zoom})`;
+  }
+
   /* ─────────────── 自动裁白边 ─────────────── */
 
   private applyCrop(cell: Cell): void {
@@ -334,7 +456,6 @@ export class MangaView {
     const left = (inset.left / SAMPLE) * 100;
     const right = (inset.right / SAMPLE) * 100;
     cell.img.style.clipPath = `inset(${top}% ${right}% ${bottom}% ${left}%)`;
-    cell.img.style.margin = `-${top}% -${right}% -${bottom}% -${left}%`;
   }
 
   /* ─────────────── 分格导览 ─────────────── */
@@ -380,34 +501,52 @@ export class MangaView {
     frame.style.cssText = `left:${x}%;top:${y}%;width:${w}%;height:${h}%`;
     this.panelLayer.append(frame);
     /* 当前格放大到眼前：用整屏 transform，不搬坐标 */
-    const scale = Math.min(4, Math.max(1, 1 / Math.max(0.12, Math.max(r.w, r.h))));
-    this.film.style.transform = `scale(${scale}) translate(${50 - (r.x + r.w / 2) * 100}%, ${50 - (r.y + r.h / 2) * 100}%)`;
+    const vw = Math.max(1, this.stage.clientWidth);
+    const vh = Math.max(1, this.stage.clientHeight);
+    const cell = this.cells.get(this.currentPage());
+    const boxW = cell ? cell.wrap.offsetWidth : vw;
+    const boxH = cell ? cell.wrap.offsetHeight : vh;
+    const zoom = Math.min(6, Math.max(1, Math.min(vw / (boxW * r.w), vh / (boxH * r.h))));
+    const cx = (r.x + r.w / 2 - 0.5) * boxW;
+    const cy = (r.y + r.h / 2 - 0.5) * boxH;
+    this.film.style.transform = `scale(${zoom}) translate(${-cx}px, ${-cy}px)`;
   }
 
   /* ─────────────── 缩放与平移 ─────────────── */
 
   private applyZoom(): void {
-    if (this.prefs.panels && this.panelRects.length) { this.paintPanel(); return; }
-    const cell = this.cells.get(this.currentPage());
-    const p = this.pages[this.currentPage()];
-    const vw = this.stage.clientWidth || 1;
-    const vh = this.stage.clientHeight || 1;
-    const base = p.width && p.height ? fitScale(this.prefs.fit, p.width, p.height, vw, vh) : 1;
-    const scale = base * this.prefs.zoom;
-    this.film.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${scale})`;
-    if (cell) {
-      const mx = Math.max(0, (p.width * scale - vw) / 2);
-      const my = Math.max(0, (p.height * scale - vh) / 2);
-      this.pan = clampPan(this.pan.x, this.pan.y, scale, p.width, p.height, vw, vh);
-      this.film.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${scale})`;
-      void mx; void my;
+    if (this.prefs.flow !== 'paged') return;
+    const vw = Math.max(1, this.stage.clientWidth);
+    const vh = Math.max(1, this.stage.clientHeight);
+    const s = this.screens[this.screen];
+    if (!s) return;
+    let contentW = 0;
+    let contentH = 0;
+    for (const page of s.visual) {
+      const cell = this.cells.get(page);
+      if (!cell) continue;
+      contentW += cell.wrap.offsetWidth;
+      contentH = Math.max(contentH, cell.wrap.offsetHeight);
     }
+    this.applyTransform(vw, vh, contentW || vw, contentH || vh);
   }
 
+  /** 相对当前缩放再放大 / 缩小；点百分比复位到「适配」 */
   zoomBy(factor: number): void {
-    this.prefs.zoom = Math.min(8, Math.max(0.25, this.prefs.zoom * factor));
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, this.prefs.zoom * factor));
+    if (Math.abs(next - this.prefs.zoom) < 0.001) return;
+    this.prefs.zoom = next;
     this.pan = { x: 0, y: 0 };
-    void this.render();
+    this.applyZoom();
+    this.updateHud();
+    this.emitViewState();
+  }
+
+  private resetZoom(): void {
+    this.prefs.zoom = 1;
+    this.pan = { x: 0, y: 0 };
+    this.applyZoom();
+    this.updateHud();
     this.emitViewState();
   }
 
@@ -458,12 +597,53 @@ export class MangaView {
 
   /* ─────────────── HUD / 缩略图 ─────────────── */
 
+  /**
+   * 悬浮工具条在右上角（2026-11-22 按作者要求从底部横条改过来）：
+   * 桌面端把阅读区整块让给图片，手机上折行也不压底部的导航栏。
+   */
   private updateHud(): void {
     const total = this.pages.length;
-    const page = this.currentPage() + 1;
+    const s = this.screens[this.screen];
+    const from = (s?.pages[0] ?? 0) + 1;
+    const to = (s?.pages[s.pages.length - 1] ?? from - 1) + 1;
     this.hud.replaceChildren();
+
+    const group = (cls: string): HTMLElement => {
+      const g = el('div', `bzr-manga-hud-grp${cls ? ` ${cls}` : ''}`);
+      this.hud.append(g);
+      return g;
+    };
+    const push = (box: HTMLElement, text: string, fn: () => void, on = false, sr?: string): HTMLElement => {
+      const b = el('button', `bzr-manga-btn${on ? ' is-on' : ''}`);
+      b.type = 'button';
+      b.textContent = text;
+      if (sr) {
+        const srn = el('span', 'bzs-sr-only');
+        srn.textContent = sr;
+        b.append(srn);
+      }
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
+      box.append(b);
+      return b;
+    };
+
+    /* 缩放组：和 PDF 一样「− 100% +」，百分比点一下回到适配 */
+    const zoomBox = group('is-zoom');
+    push(zoomBox, '−', () => this.zoomBy(1 / ZOOM_STEP), false, t('manga.zoomOut'));
+    const pct = push(
+      zoomBox,
+      `${Math.round(this.prefs.zoom * 100)}%`,
+      () => this.resetZoom(),
+      this.prefs.zoom !== 1,
+      t('manga.zoomReset'),
+    );
+    pct.classList.add('bzr-manga-pct');
+    push(zoomBox, '+', () => this.zoomBy(ZOOM_STEP), false, t('manga.zoomIn'));
+
+    /* 页码 / 跳页：和缩放同在第一行，靠右 */
+    const navBox = group('is-nav');
     const label = el('span', 'bzr-manga-count');
-    label.textContent = `${page} / ${total}`;
+    label.textContent = from === to ? `${from} / ${total}` : `${from}–${to} / ${total}`;
     const input = el('input', 'bzr-manga-goto');
     input.type = 'number';
     input.min = '1';
@@ -473,25 +653,32 @@ export class MangaView {
       const n = Number(input.value);
       if (Number.isFinite(n) && n >= 1) this.goToPage(n - 1);
     });
-    const buttons: Array<[string, () => void, boolean]> = [
-      [t('manga.dir'), () => this.toggleDirection(), this.direction === 'rtl'],
-      [t('manga.spread'), () => this.setPref('spread', !this.prefs.spread), this.prefs.spread],
-      [t('manga.webtoon'), () => this.setPref('flow', this.prefs.flow === 'webtoon' ? 'paged' : 'webtoon'), this.prefs.flow === 'webtoon'],
-      [t('manga.panels'), () => this.setPref('panels', !this.prefs.panels), this.prefs.panels],
-      [t('manga.crop'), () => this.setPref('crop', !this.prefs.crop), this.prefs.crop],
-      [t('manga.fit'), () => this.cycleFit(), false],
-      [t('manga.tone'), () => this.fixTone(), false],
-      [t('manga.thumbs'), () => this.setPref('thumbs', !this.prefs.thumbs), this.prefs.thumbs],
-      [t('manga.whole'), () => this.showWholePage(), false],
-    ];
-    for (const [text, fn, on] of buttons) {
-      const b = el('button', `bzr-manga-btn${on ? ' is-on' : ''}`);
-      b.textContent = text;
-      b.title = text;
-      b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
-      this.hud.append(b);
-    }
-    this.hud.append(label, input);
+    input.addEventListener('click', (ev) => ev.stopPropagation());
+    navBox.append(label, input);
+
+    /* 阅读方式组：独占第二行（手机上按钮多，允许组内再折行） */
+    const modeBox = group('is-modes');
+    push(modeBox, t('manga.fit'), () => this.cycleFit(), false, t('manga.fitName', { fit: this.fitName() }));
+    push(modeBox, t('manga.dir'), () => this.toggleDirection(), this.direction === 'rtl');
+    push(modeBox, t('manga.spread'), () => this.setPref('spread', !this.prefs.spread), this.prefs.spread);
+    push(modeBox, t('manga.webtoon'), () => this.setPref('flow', this.prefs.flow === 'webtoon' ? 'paged' : 'webtoon'), this.prefs.flow === 'webtoon');
+    push(modeBox, t('manga.panels'), () => this.setPref('panels', !this.prefs.panels), this.prefs.panels);
+    push(modeBox, t('manga.crop'), () => this.setPref('crop', !this.prefs.crop), this.prefs.crop);
+    push(modeBox, t('manga.tone'), () => this.fixTone());
+    push(modeBox, t('manga.thumbs'), () => this.setPref('thumbs', !this.prefs.thumbs), this.prefs.thumbs);
+    push(modeBox, t('manga.whole'), () => this.showWholePage());
+  }
+
+  private fitName(): string {
+    const key = {
+      smart: 'settings.manga.fit.smart',
+      screen: 'settings.manga.fit.screen',
+      width: 'settings.manga.fit.width',
+      height: 'settings.manga.fit.height',
+      fill: 'settings.manga.fit.fill',
+      original: 'settings.manga.fit.original',
+    } as const;
+    return t(key[this.prefs.fit] ?? 'settings.manga.fit.smart');
   }
 
   private async renderThumbs(): Promise<void> {
@@ -504,7 +691,7 @@ export class MangaView {
     this.thumbs.replaceChildren();
     for (let i = 0; i < this.pages.length; i += 1) {
       const box = el('button', `bzr-manga-thumb${i === this.currentPage() ? ' is-cur' : ''}`);
-      box.title = String(i + 1);
+      box.type = 'button';
       const img = el('img');
       img.alt = '';
       box.append(img);
@@ -523,6 +710,7 @@ export class MangaView {
 
   private setPref<K extends keyof MangaPrefs>(key: K, value: MangaPrefs[K]): void {
     (this.prefs as Mutable<MangaPrefs>)[key] = value;
+    if (key === 'flow') this.pan = { x: 0, y: 0 };
     this.rebuild();
     this.emitViewState();
   }
@@ -549,6 +737,7 @@ export class MangaView {
     this.prefs.brightness = tone.brightness;
     this.prefs.contrast = tone.contrast;
     this.prefs.gamma = tone.gamma;
+    this.syncGamma();
     this.rebuild();
     this.emitViewState();
   }
@@ -557,8 +746,8 @@ export class MangaView {
     this.panel = -1;
     this.panelRects = [];
     this.panelLayer.replaceChildren();
-    this.film.style.removeProperty('transform');
-    void this.render();
+    this.pan = { x: 0, y: 0 };
+    this.layout();
   }
 
   /** 设置页改了全局偏好：只覆盖用户没在本里单独调过的项 */
@@ -618,7 +807,7 @@ export class MangaView {
       const fn = document.createElementNS(ns, 'feComponentTransfer');
       const transfer = document.createElementNS(ns, `feFunc${channel}`);
       transfer.setAttribute('type', 'gamma');
-      transfer.setAttribute('exponent', String(1 / this.prefs.gamma));
+      transfer.setAttribute('exponent', String(1 / Math.max(0.1, this.prefs.gamma)));
       fn.append(transfer);
       filter.append(fn);
     }
@@ -629,7 +818,7 @@ export class MangaView {
 
   private syncGamma(): void {
     const fns = this.gammaSvg?.querySelectorAll('feFuncR, feFuncG, feFuncB');
-    fns?.forEach((fn) => fn.setAttribute('exponent', String(1 / this.prefs.gamma)));
+    fns?.forEach((fn) => fn.setAttribute('exponent', String(1 / Math.max(0.1, this.prefs.gamma))));
   }
 
   /* ─────────────── 输入 ─────────────── */
@@ -649,11 +838,11 @@ export class MangaView {
       if (this.prefs.tapReverse) dir = dir === 'prev' ? 'next' : 'prev';
       this.hooks.onTurn(dir);
     });
-    this.stage.addEventListener('dblclick', () => this.zoomBy(1.5));
+    this.stage.addEventListener('dblclick', () => this.zoomBy(ZOOM_STEP));
     this.stage.addEventListener('wheel', (ev) => {
       if (this.prefs.flow !== 'paged' || !ev.ctrlKey) return;
       ev.preventDefault();
-      this.zoomBy(ev.deltaY < 0 ? 1.15 : 1 / 1.15);
+      this.zoomBy(ev.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
     }, { passive: false });
     this.stage.addEventListener('pointerdown', (ev) => {
       this.dragStart = { x: ev.clientX, y: ev.clientY, px: this.pan.x, py: this.pan.y };
@@ -664,7 +853,8 @@ export class MangaView {
       if (!d) return;
       const dx = ev.clientX - d.x;
       const dy = ev.clientY - d.y;
-      if (Math.abs(dx) > 48 && this.prefs.flow === 'paged' && this.prefs.zoom <= 1) {
+      /* 未放大时横向滑动 = 翻页；放大后 = 拖动看图 */
+      if (Math.abs(dx) > 48 && this.prefs.flow === 'paged' && this.prefs.zoom <= 1.001) {
         const rtl = this.direction === 'rtl';
         const dir = (dx < 0 ? 'next' : 'prev') === 'next' ? (rtl ? 'prev' : 'next') : (rtl ? 'next' : 'prev');
         this.hooks.onTurn(dir);
@@ -700,7 +890,7 @@ export class MangaView {
     this.stage.addEventListener('pointerleave', () => { if (hold !== null) window.clearTimeout(hold); });
 
     if ('ResizeObserver' in window) {
-      this.resizeObserver = new ResizeObserver(() => this.applyZoom());
+      this.resizeObserver = new ResizeObserver(() => this.layout());
       this.resizeObserver.observe(this.stage);
     }
     void this.setAwake(this.prefs.keepAwake);

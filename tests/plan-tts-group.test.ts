@@ -70,13 +70,13 @@ describe('对照表 · 朗读与听书段', () => {
     }
   });
 
-  it('排版段收四行：单双栏、竖排、并排与鸟瞰，不再重复收朗读', () => {
+  it('排版段收五行：单双栏、竖排、并排、鸟瞰与漫画，不再重复收朗读', () => {
     const layout = PLAN_GROUPS.find((g) => g.key === 'layout');
-    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap']);
+    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap', 'manga']);
   });
 
-  it('合计 18 / 44，全表 49 行', () => {
-    expect(planTotals()).toEqual({ free: 18, pro: 44 });
+  it('合计 18 / 45，全表 49 行', () => {
+    expect(planTotals()).toEqual({ free: 18, pro: 45 });
     expect(PLAN_TABLE).toHaveLength(49);
   });
 

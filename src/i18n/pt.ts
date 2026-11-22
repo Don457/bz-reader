@@ -1765,4 +1765,10 @@ export const PT: Record<MsgKey, string> = {
   'settings.manga.tapReverse': '[TODO] settings.manga.tapReverse',
   'settings.manga.keepAwake': '[TODO] settings.manga.keepAwake',
   'settings.manga.hint': '[TODO] settings.manga.hint',
+  'manga.fitName': '[TODO] manga.fitName {fit}',
+  'manga.zoomIn': '[TODO] manga.zoomIn',
+  'manga.zoomOut': '[TODO] manga.zoomOut',
+  'manga.zoomReset': '[TODO] manga.zoomReset',
+  'manga.err.notZip': '[TODO] manga.err.notZip',
+  'manga.err.noImages': '[TODO] manga.err.noImages',
 };

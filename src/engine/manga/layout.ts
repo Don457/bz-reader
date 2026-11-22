@@ -318,6 +318,16 @@ export function fitScale(fit: MangaFit, imgW: number, imgH: number, viewW: numbe
   }
 }
 
+/**
+ * 长条图（整话一张 700×50000 的竖图）在 smart 下会被「整页装进视口」
+ * 压成一条几像素宽的线。这类图按宽度铺、交给拖动看下半截，才是能读的。
+ */
+export function effectiveFit(fit: MangaFit, imgW: number, imgH: number): MangaFit {
+  if (fit !== 'smart') return fit;
+  if (!(imgW > 0) || !(imgH > 0)) return fit;
+  return imgW / imgH < 1 / 6 ? 'width' : fit;
+}
+
 /** 放大后能拖动的边界：图片比视口小的时候不许拖出空白 */
 export function clampPan(
   x: number, y: number, scale: number,

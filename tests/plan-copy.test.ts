@@ -50,6 +50,7 @@ const CHANGED: ReadonlyArray<readonly [string, string]> = [
   ['tts', '朗读：EPUB、TXT、PDF，念完自动翻页'],
   ['parallel', '并排对照：与另一本书同步段落'],
   ['bookmap', '全书鸟瞰：各章划线数与一句话摘要'],
+  ['manga', '漫画模式：分格、右到左、跨页'],
 ];
 
 describe('对照表 · 引用页签归入高级版', () => {
@@ -112,7 +113,7 @@ describe('对照表 · 稿子与勾叉', () => {
     expect(PLAN_TABLE[kbAt]?.name).toBe('AI 知识库：增量阅读、知识输入、整理与输出的闭环');
     expect(PLAN_TABLE[kbAt + 1]?.key).toBe('tts');
     const layout = PLAN_GROUPS.find((g) => g.key === 'layout');
-    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap']);
+    expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap', 'manga']);
   });
 });
 

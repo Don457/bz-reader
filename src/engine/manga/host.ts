@@ -75,6 +75,8 @@ export class MangaEngineHost implements ReaderEngine {
   private opts: MountOptions | null = null;
   private mangaPrefs: MangaPrefs = DEFAULT_MANGA_PREFS;
   private direction: MangaDirection = 'rtl';
+  /** ComicInfo.xml 标的方向：applyPrefs 重算时必须带着它，否则被默认值冲掉 */
+  private comicDir: MangaDirection | null = null;
   private tocItems: FoliateTOCItem[] = [];
   private meta: EngineMeta = {};
   private phase = 'idle';
@@ -94,9 +96,13 @@ export class MangaEngineHost implements ReaderEngine {
     await this.destroy();
     this.destroyed = false;
     this.opts = opts;
+    this.comicDir = null;
     const stored = normalizeMangaPrefs(opts.prefs.manga);
     this.mangaPrefs = stored;
     this.phase = 'read';
+    /* 上层先画了「正在打开…」占位；漫画视图自己接管整个容器，
+       不清掉的话那条加载态会一直留在 DOM 里（2026-11-22 真机发现）。 */
+    container.replaceChildren();
 
     const adapter = this.app.vault.adapter;
     const isFolder = await adapter.exists(vaultPath).then(async (yes) => {
@@ -126,6 +132,7 @@ export class MangaEngineHost implements ReaderEngine {
       if (infoName) comicDir = readingDirectionFromComicInfo(await zip.text(infoName));
     }
     this.source = archive;
+    this.comicDir = comicDir;
 
     const saved = normalizeMangaView(opts.mangaView);
     this.mangaPrefs = mangaSettingsOf(stored, saved);
@@ -238,7 +245,10 @@ export class MangaEngineHost implements ReaderEngine {
     const next = normalizeMangaPrefs(prefs.manga);
     const merged = mangaSettingsOf(next, normalizeMangaView(this.opts?.mangaView));
     this.mangaPrefs = merged;
-    this.direction = resolveDirection(merged.direction, null);
+    /* 方向必须带上开书时从 ComicInfo.xml 读到的值：mount 之后 ReaderView
+       会再调一次 applyPrefs 套全局偏好，这里传 null 的话，文件里写的
+       右到左/左到右会被一句「默认」冲掉（2026-11-22 真机发现）。 */
+    this.direction = resolveDirection(merged.direction, this.comicDir);
     this.view?.applyPrefs(merged);
     this.view?.setDirection(this.direction);
   }
@@ -247,7 +257,7 @@ export class MangaEngineHost implements ReaderEngine {
     if (!state) return;
     const saved = normalizeMangaView(state);
     this.mangaPrefs = mangaSettingsOf(this.mangaPrefs, saved);
-    this.direction = resolveDirection(this.mangaPrefs.direction, null);
+    this.direction = resolveDirection(this.mangaPrefs.direction, this.comicDir);
     this.view?.applyPrefs(this.mangaPrefs);
     this.view?.setDirection(this.direction);
   }

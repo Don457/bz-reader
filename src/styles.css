@@ -2013,11 +2013,12 @@ body.is-mobile .bzr-pdf-toolbar {
 }
 .bzr-imgview-btn:hover { background: var(--interactive-hover); }
 .bzr-imgview-btn.is-close { color: var(--text-error, var(--text-muted)); }
-/* ── 漫画阅读（2026-11-15） ──
-   不用 iframe：图片直接挂宿主 DOM，objectURL 由视图自己回收。
-   stage 是唯一的滚动容器；film 的 transform 由 JS 按适配 / 缩放 / 分格设置，
-   所以这里一律不碰 transform，免得两边互相覆盖。
-   HUD 与缩略图带都在 flex 流里，不开缩略图时自动收起，不互相压。 */
+
+/* ── 漫画阅读（2026-11-22 重做尺寸与工具条） ──
+   cell 的宽高由 JS 按 fit 算好后写死，img 填满 cell；film 只负责
+   zoom / pan。旧版把 fit 乘进 film 的 transform、img 却按容器宽铺满，
+   两者各算各的，整页永远只剩四成大小。
+   工具条悬浮在右上角：桌面端把整块阅读区让给图片，手机上折行也不压底部。 */
 .bzr-manga {
   position: absolute;
   inset: 0;
@@ -2048,21 +2049,29 @@ body.is-mobile .bzr-pdf-toolbar {
   overflow: hidden;
 }
 
+.bzr-manga[data-flow="horizontal"] .bzr-manga-stage {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .bzr-manga-film {
   position: relative;
   display: flex;
-  flex: none;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  min-height: 100%;
   transform-origin: 50% 50%;
   will-change: transform;
 }
 
 .bzr-manga-film.is-paged {
   flex-direction: row;
+  width: 100%;
   height: 100%;
+}
+
+.bzr-manga-film.is-column {
+  flex-direction: column;
+  width: 100%;
 }
 
 .bzr-manga-film.is-row {
@@ -2071,78 +2080,41 @@ body.is-mobile .bzr-pdf-toolbar {
   height: 100%;
 }
 
-.bzr-manga[data-flow="vertical"] .bzr-manga-film,
-.bzr-manga[data-flow="webtoon"] .bzr-manga-film {
-  flex-direction: column;
-  width: 100%;
-  height: auto;
-}
-
 .bzr-manga-screen {
   display: flex;
-  flex: none;
   align-items: center;
   justify-content: center;
+}
+
+.bzr-manga-film.is-column > .bzr-manga-screen {
+  flex-direction: column;
   width: 100%;
-  min-height: 100%;
 }
 
 .bzr-manga-film.is-row > .bzr-manga-screen {
-  width: 100vw;
+  flex-direction: row;
   height: 100%;
-}
-
-.bzr-manga[data-flow="webtoon"] .bzr-manga-screen {
-  display: block;
-  min-height: 0;
 }
 
 .bzr-manga-cell {
   position: relative;
   display: flex;
-  flex: 0 1 auto;
+  flex: none;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  min-height: 0;
-  max-width: 100%;
-  max-height: 100%;
   overflow: hidden;
-}
-
-.bzr-manga-film.is-paged > .bzr-manga-cell.is-paired {
-  flex: 1 1 50%;
 }
 
 .bzr-manga-img {
   display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-
-.bzr-manga:not([data-flow="paged"]) .bzr-manga-cell {
-  flex: 1 1 auto;
   width: 100%;
-  max-height: none;
-}
-
-.bzr-manga:not([data-flow="paged"]) .bzr-manga-img {
-  width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: fill;
   max-width: none;
   max-height: none;
 }
 
-/* 跨页大图拆两半：同一张图各裁一半，不复制像素 */
-.bzr-manga-cell[data-half="left"] .bzr-manga-img,
-.bzr-manga-cell[data-half="right"] .bzr-manga-img {
-  width: 200%;
-  max-width: none;
-}
-
+/* 跨页拆半：同一张图画成两倍宽，由 cell 裁掉另一半 */
 .bzr-manga-cell[data-half="right"] .bzr-manga-img {
   margin-left: -100%;
 }
@@ -2167,33 +2139,67 @@ body.is-mobile .bzr-pdf-toolbar {
 .bzr-manga-frame {
   position: absolute;
   border: 2px solid var(--interactive-accent, var(--copper));
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.25);
 }
 
+/* 悬浮工具条：右上角，不占阅读区 */
 .bzr-manga-hud {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: min(660px, calc(100% - 20px));
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--background-modifier-border);
+  background: color-mix(in srgb, var(--background-primary) 80%, transparent);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.16);
+  /* 工具条压着图：平时半透明，鼠标移上去才实心，别挡着看画 */
+  opacity: 0.72;
+  transition: opacity 0.12s ease;
+}
+
+.bzr-manga-hud:hover,
+.bzr-manga-hud:focus-within {
+  opacity: 1;
+}
+
+.bzr-manga-hud-grp {
   display: flex;
   flex: none;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
-  max-width: 100%;
-  padding: 5px 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  border-top: 1px solid var(--background-modifier-border);
-  background: var(--background-primary, #ffffff);
 }
 
-.bzr-manga-hud::-webkit-scrollbar {
-  display: none;
+/* 页码组靠右；阅读方式组独占第二行，手机上组内还能再折 */
+.bzr-manga-hud-grp.is-nav {
+  margin-left: auto;
+  padding-left: 6px;
+  border-left: 1px solid var(--background-modifier-border);
+}
+
+.bzr-manga-hud-grp.is-modes {
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.bzr-manga-hud-grp + .bzr-manga-hud-grp {
+  padding-left: 6px;
+  border-left: 1px solid var(--background-modifier-border);
 }
 
 .bzr-manga-btn {
-  flex: none;
   height: 26px;
-  padding: 0 8px;
-  border: 0;
+  padding: 0 9px;
+  border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  background: transparent;
+  background: var(--background-secondary);
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1;
@@ -2202,55 +2208,58 @@ body.is-mobile .bzr-pdf-toolbar {
 }
 
 .bzr-manga-btn:hover {
-  background: var(--background-modifier-hover);
+  background: var(--interactive-hover);
   color: var(--text-normal);
 }
 
 .bzr-manga-btn.is-on {
   background: var(--interactive-accent, var(--copper));
-  color: var(--text-on-accent, #ffffff);
+  border-color: transparent;
+  color: var(--text-on-accent, #fff);
+}
+
+.bzr-manga-pct {
+  min-width: 46px;
+  font-variant-numeric: tabular-nums;
 }
 
 .bzr-manga-count {
-  flex: none;
-  padding: 0 4px;
-  color: var(--text-muted);
   font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .bzr-manga-goto {
-  flex: none;
-  width: 58px;
-  height: 24px;
+  width: 52px;
+  height: 26px;
   padding: 0 4px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  background: transparent;
+  background: var(--background-primary);
   color: var(--text-normal);
   font-size: 12px;
 }
 
+/* 缩略图带：底部，只在开了缩略图时占位 */
 .bzr-manga-thumbs {
   display: none;
-  flex: none;
-  gap: 6px;
-  height: 88px;
-  padding: 8px 10px;
-  overflow-x: auto;
-  border-top: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary, var(--background-primary));
 }
 
 .bzr-manga-thumbs.is-on {
   display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
 }
 
 .bzr-manga-thumb {
   flex: none;
-  width: 52px;
-  height: 72px;
+  width: 44px;
+  height: 60px;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--background-modifier-border);
@@ -2271,7 +2280,15 @@ body.is-mobile .bzr-pdf-toolbar {
   object-fit: cover;
 }
 
-/* 手机底栏会盖住最下面一条：把 HUD 底部留白跟着抬高 */
+/* 手机：工具条贴安全区右上，按钮大一点好点；底部不给导航栏留白 */
 body.is-mobile .bzr-manga-hud {
-  padding-bottom: calc(5px + max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)));
+  top: calc(8px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+  left: 8px;
+  right: 8px;
+  max-width: none;
+}
+
+body.is-mobile .bzr-manga-btn {
+  height: 28px;
+  padding: 0 8px;
 }
