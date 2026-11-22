@@ -1727,4 +1727,8 @@ export const EN: Record<MsgKey, string> = {
   'settings.plugin.fail.enable': '[TODO] settings.plugin.fail.enable',
   'settings.plugin.tag.diary': '[TODO] settings.plugin.tag.diary',
   'settings.plugin.tag.kb': '[TODO] settings.plugin.tag.kb',
+  'settings.grp.review': '[TODO] settings.grp.review',
+  'settings.bz.needInstall': '[TODO] settings.bz.needInstall',
+  'settings.plugin.tag.box': '[TODO] settings.plugin.tag.box',
+  'settings.plugin.tag.brain': '[TODO] settings.plugin.tag.brain',
 };

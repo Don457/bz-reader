@@ -77,9 +77,20 @@ describe('AI 组 · 知识库那一行已经搬进 bz 组', () => {
 });
 
 describe('AI 组 · 旧文案不许回潮', () => {
-  it('文案里不再有「第二大脑」这个旧名字', () => {
-    expect(html()).not.toContain('第二大脑');
-    expect(html(LINKED)).not.toContain('第二大脑');
+  /* 2026-11-22：bz 的状态卡改为面向 Reader 描述知识库闭环，用户点名要
+     「知识盒」「第二大脑」这两个词。只许出现在 bz 组，AI 组仍不许回潮。 */
+  it('「第二大脑」只出现在 bz 组的状态卡里', () => {
+    const out = html(LINKED);
+    const start = out.indexOf('<h3>bz</h3>');
+    const next = out.indexOf('<h3>', start + 1);
+    const bz = out.slice(start, next < 0 ? undefined : next);
+    expect(bz).toContain('第二大脑');
+    expect(bz).toContain('知识盒');
+    /* 描述里一次、标签里一次；两处都在 bz 组，别的地方一次都不许有 */
+    const inBz = (bz.match(/第二大脑/g) ?? []).length;
+    expect(inBz).toBeGreaterThanOrEqual(2);
+    expect((out.match(/第二大脑/g) ?? []).length).toBe(inBz);
+    expect(aiGroup(out)).not.toContain('第二大脑');
   });
 
   /* 安装步骤属于教程：写在设置行里既占地方，又和教程按钮抢同一件事 */

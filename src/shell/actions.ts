@@ -3717,6 +3717,14 @@ export function dispatchAction(
       /* bz 卡的教程：同一支视频的第 2P（第 1P 是推荐向总览） */
       window.open(BZ_INSTALL_TUTORIAL_URL, '_blank', 'noopener,noreferrer');
       break;
+    case 'bzjump': {
+      /* 没装 bz 时点功能卡（2026-11-22 原型）：滚回本组顶部的安装卡。
+         下载与功能并组之后不用再跳去别的组，用户视线不离开「bz」。 */
+      const page = el.closest('.bzs-set-page');
+      page?.querySelector<HTMLElement>('#bz-set-bz')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      notify(t('settings.bz.needInstall'), 'info');
+      break;
+    }
     case 'bzinstall': {
       /* 一键装 bz（2026-11-22）：与 bz Review 同一条路——后台下载三件套、
          写插件目录、让宿主启用。下载几 MB，按钮先锁住防连点。

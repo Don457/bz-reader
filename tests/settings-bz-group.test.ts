@@ -91,12 +91,15 @@ describe('设置页 bz 组 · 剪藏本', () => {
     expect(off).not.toContain('class="bzs-switch on" data-act="toggle" data-k="clipBook"');
   });
 
-  /* 2026-11-22：没装 bz 时整组不画——安装入口统一在「插件」组的 bz 卡里，
-     不会再出现一排灰着的空卡让人以为「选项在但点不动」。 */
-  it('没装 bz：整组不出现', () => {
+  /* 2026-11-22：没装 bz 时组还在（下载与功能并组），两张功能卡灰着留在
+     原位，整卡可点回本组顶部的安装卡。 */
+  it('没装 bz：组还在，功能卡灰着、可点回安装卡', () => {
     const out = html();
-    expect(out).not.toContain('<h3>bz</h3>');
-    expect(out).not.toContain(CLIP_HINT);
+    const g = bzGroup(out);
+    expect(g).toContain('data-act="bzinstall"');
+    expect(g).toContain(CLIP_HINT);
+    expect(g).not.toContain('data-k="clipBook"');
+    expect((g.match(/data-act="bzjump"/g) ?? []).length).toBe(2);
   });
 
   it('剪藏本有自己的教程出口，不是组头共用一颗', () => {
@@ -139,11 +142,10 @@ describe('设置页 bz 组 · AI 知识盒', () => {
 });
 
 describe('设置页 bz 组 · 没装 bz 时', () => {
-  it('整组不画，安装出口统一走「插件」组', () => {
-    const out = html();
-    expect(out).not.toContain('<h3>bz</h3>');
-    const plugins = out.slice(out.indexOf('<h3>插件</h3>'));
-    expect(plugins).toContain('data-act="bzinstall"');
+  it('安装卡就在本组最上面，不用去别的组找', () => {
+    const g = bzGroup(html());
+    expect(g).toContain('data-act="bzinstall"');
+    expect(g).toContain('未安装');
   });
 
   it('装了之后不再摆安装引导', () => {

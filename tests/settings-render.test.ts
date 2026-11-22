@@ -611,16 +611,16 @@ describe('设置页 · 两列各自成流', () => {
   it('左列六组：界面、版式、外观、标注、数据、PDF', () => {
     const [left] = splitCols(html());
     for (const h of ['界面', '版式', '外观', '标注', '数据', 'PDF']) expect(left, h).toContain(`<h3>${h}</h3>`);
-    for (const h of ['阅读页图标', '朗读', 'AI 助手', 'bz', '插件', '授权'])
+    for (const h of ['阅读页图标', '朗读', 'AI 助手', 'bz', 'bz review', '授权'])
       expect(left, h).not.toContain(`<h3>${h}</h3>`);
   });
 
-  /* 2026-11-22：bz 组只在 bz 装好并启用后出现（和 bz Review 的选项一样，
-     没装就不摆一排灰着的空卡）。默认没人装，右列只剩四组。 */
-  it('右列四组（没装 bz）：朗读、AI 助手、插件、授权', () => {
+  /* 2026-11-22：下载与功能并组——「插件」组拆成「bz」「bz review」，
+     右列变成五组；bz 组不再按装没装隐藏（没装时功能卡灰着、可点回安装卡）。 */
+  it('右列五组：朗读、AI 助手、bz、bz review、授权', () => {
     const [, right] = splitCols(html());
-    for (const h of ['朗读', 'AI 助手', '插件', '授权']) expect(right, h).toContain(`<h3>${h}</h3>`);
-    expect(right, '没装 bz 时不该有 bz 组').not.toContain('<h3>bz</h3>');
+    for (const h of ['朗读', 'AI 助手', 'bz', 'bz review', '授权']) expect(right, h).toContain(`<h3>${h}</h3>`);
+    expect(right, '不再有单独的插件组').not.toContain('<h3>插件</h3>');
     for (const h of ['界面', '版式', '外观', '标注', '数据', 'PDF', '阅读页图标'])
       expect(right, h).not.toContain(`<h3>${h}</h3>`);
   });
@@ -642,7 +642,7 @@ describe('设置页 · 两列各自成流', () => {
      朗读 2026-11-11 从「PDF 之后」挪到「AI 之上」（用户要求放在右列），
      所以它在序号里往后走了一格，其余顺序不动。
 bz 组 2026-11-13 从 AI 组里抽出来，紧跟在 AI 之后、授权之前；
-2026-11-22 起只在 bz 装好并启用后出现，默认顺序里没有它。
+2026-11-22 下载与功能并组，原来的「插件」组拆成 bz 与 bz review。
 扫描页识别 2026-11-11 紧跟 PDF：它是 PDF 的一个子话题（同一组控件口径）。 */
   it('摊平后的组分顺序：左边本机设置、右边接服务', () => {
     const out = html();
@@ -657,7 +657,8 @@ bz 组 2026-11-13 从 AI 组里抽出来，紧跟在 AI 之后、授权之前；
       'PDF',
       '朗读',
       'AI 助手',
-      '插件',
+      'bz',
+      'bz review',
       '授权',
       '阅读页图标',
       '快捷键',
@@ -1016,25 +1017,16 @@ describe('设置页 · 2026-11-17 重排', () => {
     return src.slice(start, next < 0 ? undefined : next);
   }
 
-  it('顶部页内索引：没装 bz 时 12 个组，落点 id 都在', () => {
+  it('顶部页内索引：13 个组各一颗，落点 id 都在', () => {
     const src = out();
     const jumps = [...src.matchAll(/data-act="setjump" data-k="([a-z]+)"/g)].map((m) => m[1]);
-    expect(jumps).toEqual(['ui', 'layout', 'look', 'marks', 'data', 'pdf', 'tts', 'ai', 'plugins', 'lic', 'header', 'keys']);
+    expect(jumps).toEqual(['ui', 'layout', 'look', 'marks', 'data', 'pdf', 'tts', 'ai', 'bz', 'review', 'lic', 'header', 'keys']);
     for (const id of jumps) expect(src, id).toContain(`id="bz-set-${id}"`);
   });
 
-  it('bz 启用后索引补回「bz」那一颗，且落点真在页面上', () => {
-    const src = viewSettings({
-      prefs: DEFAULT_PREFS,
-      settings: DEFAULT_SETTINGS,
-      pen: 'amber',
-      hotkeys: [],
-      version: '1.0.0',
-      bz: { state: 'enabled', ok: true, version: '1.44.6', model: '', entry: true, notes: true },
-    });
-    const jumps = [...src.matchAll(/data-act="setjump" data-k="([a-z]+)"/g)].map((m) => m[1]);
-    expect(jumps).toEqual(['ui', 'layout', 'look', 'marks', 'data', 'pdf', 'tts', 'ai', 'bz', 'plugins', 'lic', 'header', 'keys']);
-    expect(src).toContain('id="bz-set-bz"');
+  it('「插件」组拆成 bz / bz review 之后，索引里没有 plugins 那颗', () => {
+    const src = out();
+    expect(src).not.toContain('data-act="setjump" data-k="plugins"');
   });
 
   it('大组切成小分区，行数少的组保持平铺', () => {
@@ -1096,15 +1088,15 @@ describe('设置页 · 2026-11-17 重排', () => {
     expect(src).toContain('还没填服务地址');
   });
 
-  it('bz 没装时只剩插件组两张安装卡（bz 与 bz Review）', () => {
+  it('没装时四张卡：bz 状态卡、剪藏本、AI 知识库、bz review 状态卡', () => {
     const src = out();
-    expect((src.match(/class="bzs-cap[ "]/g) ?? []).length).toBe(2);
+    expect((src.match(/class="bzs-cap[ "]/g) ?? []).length).toBe(4);
     expect(src).toContain('bzs-capchip');
     /* 状态徽章是词，不是句子：长句单独一行（渲染成卡片里的 <p>） */
-    expect(groupOf(src, '插件')).toMatch(/<p>[^<]+<\/p>/);
+    expect(groupOf(src, 'bz')).toMatch(/<p>[^<]+<\/p>/);
   });
 
-  it('bz 启用后四张卡都在：bz、bz Review、剪藏本、AI 知识库', () => {
+  it('都启用后五张卡：bz、剪藏本、AI 知识库、bz review、内嵌复习', () => {
     const src = viewSettings({
       prefs: DEFAULT_PREFS,
       settings: DEFAULT_SETTINGS,
@@ -1114,10 +1106,10 @@ describe('设置页 · 2026-11-17 重排', () => {
       bz: { state: 'enabled', ok: true, version: '1.44.6', model: '', entry: true, notes: true },
       review: { state: 'enabled', embed: true },
     });
-    expect((src.match(/class="bzs-cap[ "]/g) ?? []).length).toBe(4);
-    expect(src).toContain('<h3>bz</h3>');
+    expect((src.match(/class="bzs-cap[ "]/g) ?? []).length).toBe(5);
     expect(groupOf(src, 'bz')).toContain('剪藏本');
     expect(groupOf(src, 'bz')).toContain('AI 知识库');
+    expect(groupOf(src, 'bz review')).toContain('书架内显示复习');
   });
 
   it('阅读页图标 16 行改双列容器', () => {
@@ -1133,13 +1125,11 @@ describe('设置页 · 2026-11-17 重排', () => {
 });
 
 /**
- * 「插件」组三态（2026-11-21 起 bz Review；2026-11-22 起 bz 也进来）。
+ * 「bz」「bz review」两组的三种状态（2026-11-21 起 bz Review；
+ * 2026-11-22 起下载与功能并组）。
  *
- * 以前只有「装了没装」两种：装了就没按钮，没装就给一个跳浏览器下载的按钮。
- * 现在安装与启用都在卡片里完成，三种状态各自给对应的动作。
- *
- * bz 与 bz Review 用同一套卡片：没装 →「安装」；装了没启用 →「启用」；
- * 已启用 → 只留状态与教程。bz 的剪藏本 / AI 知识库两项在 bz 启用前整组不画。
+ * 每组第一张卡是状态卡：没装 →「安装」；装了没启用 →「启用」；
+ * 已启用 → 只留状态与教程。功能卡跟在状态卡后面，同组可见。
  */
 describe('设置页 · 插件组三态', () => {
   type State = 'enabled' | 'disabled' | 'missing';
@@ -1208,23 +1198,55 @@ describe('设置页 · 插件组三态', () => {
     expect(html()).toContain('data-act="reviewinstall"');
   });
 
-  it('两根插件卡在「插件」组里，bz 在前、bz Review 在后', () => {
-    const g = groupOf(pluginHtml('missing', 'missing'), '插件');
-    const bzAt = g.indexOf('data-act="bzinstall"');
-    const reviewAt = g.indexOf('data-act="reviewinstall"');
-    expect(bzAt, 'bz 卡').toBeGreaterThan(-1);
-    expect(reviewAt, 'review 卡').toBeGreaterThan(bzAt);
+  it('bz 卡在 bz 组里、review 卡在 bz review 组里', () => {
+    const src = pluginHtml('missing', 'missing');
+    const bz = groupOf(src, 'bz');
+    const review = groupOf(src, 'bz review');
+    expect(bz).toContain('data-act="bzinstall"');
+    expect(review).toContain('data-act="reviewinstall"');
   });
 
-  /* 2026-11-22：内嵌复习开关从「界面」组搬进「插件」组，紧跟在 bz Review
-     卡下面——它管的是 Review 的界面放在哪，和 Review 的安装状态是同一件事。 */
-  it('内嵌复习开关在「插件」组、bz Review 卡下面，不在「界面」组', () => {
+  /* 2026-11-22：没装 bz 时功能卡留在原位、灰着，整卡可点——点了滚回本组
+     顶部的安装卡（bzjump），不再把人送到另一个组。 */
+  it('没装 bz：剪藏本 / AI 知识库灰着可点，点回本组安装卡', () => {
+    const src = pluginHtml('missing', 'missing');
+    const bz = groupOf(src, 'bz');
+    expect((bz.match(/data-act="bzjump"/g) ?? []).length).toBe(2);
+    expect(bz).not.toContain('data-k="clipBook"');
+  });
+
+  it('装了 bz：功能卡不再挂跳转，剪藏本开关回来', () => {
+    const bz = groupOf(pluginHtml('enabled', 'missing'), 'bz');
+    expect(bz).not.toContain('data-act="bzjump"');
+    /* 基础版是解锁按钮、高级版是开关，两档都算「开关位回来了」 */
+    expect(bz).toMatch(/data-(k|mode)="clipBook"/);
+  });
+
+  /* 内嵌复习做成能力卡，和 bz 组的剪藏本同一套边框；位置在 bz review
+     状态卡下面，不在「界面」组。 */
+  it('内嵌复习卡在 bz review 组、状态卡下面，不在「界面」组', () => {
     const src = pluginHtml('missing', 'enabled', true);
-    const plugins = groupOf(src, '插件');
+    const review = groupOf(src, 'bz review');
     const ui = groupOf(src, '界面');
-    expect(plugins).toContain('data-k="embedReview"');
+    expect(review).toContain('data-k="embedReview"');
+    expect(review).toContain('<b>书架内显示复习</b>');
     expect(ui).not.toContain('data-k="embedReview"');
-    expect(plugins.indexOf('data-k="embedReview"')).toBeGreaterThan(plugins.indexOf('reviewtut'));
+    expect(review.indexOf('data-k="embedReview"')).toBeGreaterThan(review.indexOf('reviewtut'));
+  });
+
+  it('内嵌复习卡打开后带「已开启」徽章与 is-on', () => {
+    const on = viewSettings({
+      prefs: DEFAULT_PREFS,
+      settings: { ...DEFAULT_SETTINGS, embedReview: true },
+      pen: 'amber',
+      hotkeys: [],
+      version: '1.0.0',
+      bz: { state: 'missing', ok: false, version: '', model: '', entry: false, notes: false },
+      review: { state: 'enabled', embed: true },
+    });
+    const review = groupOf(on, 'bz review');
+    expect(review).toContain('已开启');
+    expect(review).toContain('class="bzs-cap is-on"');
   });
 
   it('bz Review 没启用 / 不支持嵌入时不画那颗开关', () => {

@@ -919,6 +919,7 @@ export const ZH = {
   'settings.grp.keys': '快捷键',
   'settings.grp.pdf': 'PDF',
   'settings.grp.bz': 'bz',
+  'settings.grp.review': 'bz review',
   'settings.grp.plugins': '插件',
 
   /* ── 设置页：组内分区标题（2026-11-17） ─────────────────────
@@ -1179,11 +1180,12 @@ export const ZH = {
   'settings.bz.kb': 'AI 知识库',
   'settings.bz.missing': '没检测到 bz，装上并启用之后这两项才会生效。',
   'settings.bz.install': '怎么装 bz',
+  'settings.bz.needInstall': '先装上 bz，剪藏本和 AI 知识库才会生效。点上面的「安装」。',
   'settings.bz.tut': '看教程',
-  'settings.plugin.bz.desc': '日记、备忘、收藏、剪藏、知识库、工具坞……bz 把 Obsidian 变成一间自己的书房。',
+  'settings.plugin.bz.desc': 'bz 给 bz Reader 提供 AI 知识库：知识盒收下名词、段落、图版和书摘，第二大脑建索引、做检索，读到的内容在同一个库里完成输入、整理、输出的闭环。',
   'settings.plugin.bz.enabled': '已启用',
   'settings.plugin.bz.disabled': '已安装 · 未启用',
-  'settings.plugin.bz.missing': '点「安装」会在后台下载并启用 bz，不用自己去发布页找文件。装好后下面「bz」组里的剪藏本和 AI 知识库才会出现。',
+  'settings.plugin.bz.missing': '点「安装」会在后台下载并启用 bz，不用自己去发布页找文件。装好后剪藏本和 AI 知识库就能用。',
   'settings.plugin.bz.disabledHint': '已经装好了，只是还没启用。点「启用」就能用。',
   'settings.plugin.bz.install': '安装',
   'settings.plugin.bz.enable': '启用',
@@ -1216,6 +1218,8 @@ export const ZH = {
   'settings.plugin.review.mirror': '备用下载（码云）',
   'settings.plugin.review.tut': '看教程',
   /* 能力卡上的三条卖点（2026-11-17）：卡片位置有限，只能是词，不是句子 */
+  'settings.plugin.tag.box': '知识盒',
+  'settings.plugin.tag.brain': '第二大脑',
   'settings.plugin.tag.diary': '日记备忘',
   'settings.plugin.tag.kb': 'AI 知识库',
   'settings.plugin.tag.cards': 'AI 制卡',

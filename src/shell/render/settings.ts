@@ -156,7 +156,7 @@ const NAV: Array<[string, MsgKey]> = [
   ['tts', 'settings.grp.tts'],
   ['ai', 'settings.grp.ai'],
   ['bz', 'settings.grp.bz'],
-  ['plugins', 'settings.grp.plugins'],
+  ['review', 'settings.grp.review'],
   ['lic', 'settings.grp.lic'],
   ['header', 'settings.grp.header'],
   ['keys', 'settings.grp.keys'],
@@ -922,18 +922,19 @@ export function viewSettings(v: SettingsView): string {
     },
   );
 
-  /* 能力卡（2026-11-17）：bz 两项。原来是一行标签 + 一段灰字，
-     状态和说明挤在同一行里（真机上「还没装 bz review…」会顶出卡片）。
-     现在每项一张卡：图标 + 名称 + 状态徽章 + 一句话 + 动作，装没装、
-     开没开、下一步点哪里都在同一块里。
+  /* 能力卡（2026-11-17）：原来是一行标签 + 一段灰字，状态和说明挤在同一行
+     里（真机上「还没装 bz review…」会顶出卡片）。现在每项一张卡：图标 +
+     名称 + 状态徽章 + 一句话 + 动作，装没装、开没开、下一步点哪里都在
+     同一块里。
      · 剪藏本——要人主动打开，所以是开关。
      · AI 知识盒——检测到 bz 就自动连（data/bz-bridge 逐项降级），没有
        「关掉」这个动作，所以永远只报连没连上，不给开关。
      两项各有自己的教程：剪藏本讲成书，知识盒讲索引怎么建，共一颗就会指错。
 
-     2026-11-22：**bz 没装 / 没启用时整组不画**。安装与启用的入口统一收进
-     「插件」组的 bz 卡；这两项是装好之后才有的选项，没装就摆一排灰卡只会
-     让人以为「选项在但点不动」。 */
+     **2026-11-22 原型：下载与功能并进同一个组。** bz 的状态卡（安装 /
+     启用 / 已启用 + 版本）在本组最上面，剪藏本与 AI 知识库紧跟其后——
+     用户想用哪一项、还差什么，在同一屏里就能看到。没装 bz 时功能卡灰着，
+     点一下滚回本组顶部的安装卡并提示一句。 */
   const bzGrpState: 'enabled' | 'disabled' | 'missing' =
     v.bz?.state ?? (v.bz?.ok ? 'enabled' : 'missing');
   const bzOk = bzGrpState === 'enabled';
@@ -956,18 +957,22 @@ export function viewSettings(v: SettingsView): string {
         'setscope',
       )}</div>`
     : '';
-  const clipSwitch = clipUnlocked
-    ? `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
-        'settings.bz.clip',
-      )}</span></button>`
-    : `<button class="bzs-switch" data-act="unlock" data-mode="clipBook"><span class="bzs-sr-only">${t(
-        'settings.locked',
-      )}</span><span class="bzs-sr-only">${t('settings.bz.clip')}</span></button>`;
-  const clipCard = `<div class="bzs-cap${clipOn ? ' is-on' : ''}">
-      <span class="bzs-capico">${ico('shelf')}</span>
+  /* 未装 bz 时开关不画：摆一颗点不动的开关只会让人以为「我点坏了」；
+     整张卡可点，点了滚回本组顶部的安装卡。 */
+  const clipSwitch = !bzOk
+    ? ''
+    : clipUnlocked
+      ? `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
+          'settings.bz.clip',
+        )}</span></button>`
+      : `<button class="bzs-switch" data-act="unlock" data-mode="clipBook"><span class="bzs-sr-only">${t(
+          'settings.locked',
+        )}</span><span class="bzs-sr-only">${t('settings.bz.clip')}</span></button>`;
+  const clipCard = `<div class="bzs-cap${clipOn ? ' is-on' : ''}"${bzOk ? '' : ' data-act="bzjump"'}>
+      <span class="bzs-capico${bzOk ? '' : ' is-muted'}">${ico('shelf')}</span>
       <div class="bzs-capmain">
         <div class="bzs-cap-t"><b>${t('settings.bz.clip')}</b>${
-          clipUnlocked ? (clipOn ? chip(t('settings.cap.on'), true) : '') : chip(t('settings.about.paid'))
+          !bzOk ? '' : clipUnlocked ? (clipOn ? chip(t('settings.cap.on'), true) : '') : chip(t('settings.about.paid'))
         }</div>
         <p>${t('settings.bz.clip.hint')}</p>
         ${clipScopeSeg}
@@ -975,7 +980,7 @@ export function viewSettings(v: SettingsView): string {
       </div>
       ${clipSwitch}
     </div>`;
-  const kbCard = `<div class="bzs-cap${kbLinked ? ' is-on' : ''}">
+  const kbCard = `<div class="bzs-cap${kbLinked ? ' is-on' : ''}"${bzOk ? '' : ' data-act="bzjump"'}>
       <span class="bzs-capico${kbLinked ? '' : ' is-muted'}">${ico('ai')}</span>
       <div class="bzs-capmain">
         <div class="bzs-cap-t"><b>${t('settings.bz.kb')}</b>${chip(
@@ -986,15 +991,10 @@ export function viewSettings(v: SettingsView): string {
         <div class="bzs-capfoot">${tutBtn('aitutorial', 'settings.bz.tut')}</div>
       </div>
     </div>`;
-  const bzGrp = bzOk ? grp('bz', t('settings.grp.bz'), `${clipCard}${kbCard}`) : '';
 
-  /* 「插件」组（2026-11-17；2026-11-22 起 bz 也进来）：
-     两张安装卡 + 一颗内嵌开关。
-     · bz：没装 / 装了没启用 / 已启用；「安装」在后台下载三件套并启用。
-     · bz review：同上（2026-11-21 起三态）。
-     · 「书架内显示复习」紧跟在 bz Review 卡下面——它管的是 Review 的界面
-       放在哪，和 Review 的安装状态是同一件事，不该散在「界面」组。
-     状态只写词，安装指引单独一行（窄栏不会顶出卡片）。 */
+  /* 「bz」组 = 状态卡（安装 / 启用 / 已启用）+ 两张功能卡。
+     功能卡在没装 bz 时灰着、整卡可点：点一下滚回本组顶部，那里就是
+     「安装」——不再把下载入口甩到另一个组里。 */
   const bzBadge = bzOk
     ? chip(t('settings.plugin.bz.enabled'), true)
     : bzGrpState === 'disabled'
@@ -1020,8 +1020,8 @@ export function viewSettings(v: SettingsView): string {
       <div class="bzs-capmain">
         <div class="bzs-cap-t"><b>bz</b>${bzBadge}</div>
         <p>${t('settings.plugin.bz.desc')}</p>
-        <div class="bzs-captags"><span class="bzs-tag">${t('settings.plugin.tag.diary')}</span><span class="bzs-tag">${t(
-          'settings.plugin.tag.kb',
+        <div class="bzs-captags"><span class="bzs-tag">${t('settings.plugin.tag.box')}</span><span class="bzs-tag">${t(
+          'settings.plugin.tag.brain',
         )}</span>${bzVersionTag}</div>
         <div class="bzs-capfoot">${bzAction}${tutBtn('bztut', 'settings.plugin.bz.tut')}</div>
       </div>
@@ -1056,17 +1056,31 @@ export function viewSettings(v: SettingsView): string {
         <div class="bzs-capfoot">${reviewAction}${tutBtn('reviewtut', 'settings.plugin.review.tut')}</div>
       </div>
     </div>`;
-  /* 内嵌复习开关：只在 Review 已启用且支持嵌入（v3+）时才画。
-     说明文字是普通 small 行，不是悬停气泡。 */
-  const embedRow =
+  /* 内嵌复习做成能力卡（2026-11-22）：和 bz 组的剪藏本同一套边框卡，
+     不再是一行裸设置。只在 Review 已启用且支持嵌入（v3+）时才画。 */
+  const embedOn = reviewOk && v.review?.embed === true && s.embedReview === true;
+  const embedCard =
     reviewOk && v.review?.embed
-      ? `${toggle('embedReview', s.embedReview === true, t('settings.embedReview'))}
-        <div class="bzs-setrow"><small class="bzs-mini">${t('settings.embedReview.hint')}</small></div>`
+      ? `<div class="bzs-cap${embedOn ? ' is-on' : ''}">
+      <span class="bzs-capico">${ico('review')}</span>
+      <div class="bzs-capmain">
+        <div class="bzs-cap-t"><b>${t('settings.embedReview')}</b>${embedOn ? chip(t('settings.cap.on'), true) : ''}</div>
+        <p>${t('settings.embedReview.hint')}</p>
+      </div>
+      <button class="bzs-switch${embedOn ? ' on' : ''}" data-act="toggle" data-k="embedReview"><span class="bzs-sr-only">${t(
+        'settings.embedReview',
+      )}</span></button>
+    </div>`
       : '';
-  const pluginsGrp = grp(
-    'plugins',
-    t('settings.grp.plugins'),
-    `${bzCard}${bzNote}${reviewCard}${reviewNote}${embedRow}`,
+  /* 两个组各自「状态卡 + 功能」：
+     · 「bz」组 = bz 状态卡 + 剪藏本 + AI 知识库；
+     · 「bz review」组 = bz review 状态卡 + 书架内显示复习。
+     下载入口就在功能旁边，不再有单独的「插件」组。 */
+  const bzGrp = grp('bz', t('settings.grp.bz'), `${bzCard}${bzNote}${clipCard}${kbCard}`);
+  const reviewGrp = grp(
+    'review',
+    t('settings.grp.review'),
+    `${reviewCard}${reviewNote}${embedCard}`,
   );
 
   /* 激活之后这组变成「凭证」：码只读，日常不让人误改。
@@ -1124,21 +1138,19 @@ export function viewSettings(v: SettingsView): string {
     ? ''
     : grp('keys', t('settings.grp.keys'), `<div class="bzs-keys">${keyRows}</div>`, { wide: true });
 
-  /* 页内索引跟着组走：bz 组没渲染时，索引里也不能留一颗点了没反应的
-     「bz」——落点不存在，用户只会以为索引坏了。 */
-  const navItems = NAV.filter(([id]) => id !== 'bz' || bzOk);
-  const nav = `<div class="bzs-setnav">${navItems.map(
+  /* 页内索引跟着组走（2026-11-22 原型）：原来的「插件」组拆成
+     「bz」「bz review」两个组，索引也是这两颗。 */
+  const nav = `<div class="bzs-setnav">${NAV.map(
     ([id, key]) => `<button class="bzs-setnav-i" data-act="setjump" data-k="${id}">${t(key)}</button>`,
   ).join('')}</div>`;
 
   /* 两列各自成流（布局说明见 study.css 的 .bzs-set-page）。
      2026-11-17 按「本机怎么显示 / 接什么服务」重排：
        左列 = 界面 · 版式 · 外观 · 标注 · 数据 · PDF（含扫描页识别）
-       右列 = 朗读 · AI 助手 · bz · 插件 · 授权
-     2026-11-22 起「bz」是条件项：bz 没装 / 没启用时 bzGrp 是空串，
-     右列自动变成四组（窄屏叠一列时也不会留一个空标题）。 */
+       右列 = 朗读 · AI 助手 · bz · bz review · 授权
+     2026-11-22 原型：下载与功能并组，原来的「插件」组拆进 bz / bz review。 */
   const leftCol = `${languageGrp}${layoutGrp}${lookGrp}${marksGrp}${dataGrp}${pdfGrp}`;
-  const rightCol = `${ttsGrp}${aiGrp}${bzGrp}${pluginsGrp}${licGrp}`;
+  const rightCol = `${ttsGrp}${aiGrp}${bzGrp}${reviewGrp}${licGrp}`;
 
   return `<div class="bzs-set-page">${aboutBar(v.version || '', paid, ent.patron, ent.name)}${nav}<div class="bzs-set-grid"><div class="bzs-set-col">${leftCol}</div><div class="bzs-set-col">${rightCol}</div></div>${headerGrp}${keysGrp}</div>`;
 }
