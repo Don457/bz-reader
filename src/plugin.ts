@@ -49,7 +49,7 @@ import { isDeferredViewOf } from './view/leaf-reuse';
 import { setShelfSource, setShelfProActions, notifyShelf } from './view/shelf-state';
 import { mountImport } from './ui/import-panel';
 import { releaseCovers } from './data/cover';
-import { activateLicense as applyLicense, can, clearLicense, entitlement, recordActivity, revalidateLicense, setEntBackend, setProBuild, unlockModeFor } from './data/entitlement';
+import { activateLicense as applyLicense, can, clearLicense, clearRevokedMark, entitlement, noteRevoked, recordActivity, revalidateLicense, setEntBackend, setProBuild, unlockModeFor } from './data/entitlement';
 import { refreshRevoked } from './data/revoked';
 import { forceBaseTier, initDevTier } from './core/dev-tier';
 import { normalizePluginData, type PluginDataFile } from './data/plugin-data';
@@ -1469,7 +1469,12 @@ export function createPlugin(cfg: PluginConfig) {
       if (!code) return;
       void refreshRevoked(code)
         .then((verdict) => {
-          if (this.closed || verdict !== 'hit') return;
+          if (this.closed) return;
+          /* 命中 / 解封都记一笔给 bz 的探针：它读的是 data.json，读不到内存。
+             判定本身仍走 data/revoked 的本地标记，这里只是留痕。 */
+          if (verdict === 'hit') noteRevoked();
+          else if (verdict === 'clear') clearRevokedMark();
+          if (verdict !== 'hit') return;
           const id = entitlement().licenseId ?? '';
           notify(t('notice.license.revoked', { id }), 'error');
           notifyShell();
@@ -1490,9 +1495,11 @@ export function createPlugin(cfg: PluginConfig) {
       if (!code) return 'unknown';
       const verdict = await refreshRevoked(code, { force: true });
       if (verdict === 'hit') {
+        noteRevoked();
         const id = entitlement().licenseId ?? '';
         notify(t('notice.license.revoked', { id }), 'error');
       } else if (verdict === 'clear') {
+        clearRevokedMark();
         notify(t('notice.license.rechecked'));
       } else {
         notify(t('notice.license.recheckFailed'), 'error');

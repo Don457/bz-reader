@@ -168,7 +168,12 @@ describe('验签三态（A10）', () => {
     await revalidateLicense();
     expect(entitlement().verify).toBe('ok');
     expect(can('stats')).toBe(true);
-    expect(written).toBeNull(); // 验过不等于要重写盘
+    /* 验签通过本身不改码。2026-11-22 起会顺手补一笔「档位成因」给 bz 的探针
+       （它读 data.json，读不到内存），写一次就够——第二次重验不该再动文件。 */
+    expect((written as { tierReason?: string } | null)?.tierReason).toBe('ok');
+    const afterFirst = written;
+    await revalidateLicense();
+    expect(written).toBe(afterFirst);
   });
 
   it.runIf(hasKey)('过期码：verify 是 ok（签名是真的），但 tier 是 free', async () => {

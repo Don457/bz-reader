@@ -148,6 +148,26 @@ interface Ent {
   license: string;
   /** 上次验签时间，0 = 从没验过 */
   checkedTs: number;
+  /*
+   * ↓ 2026-11-22 起多存的四笔，**全是观测数据，不是授权结论**。
+   *
+   * 授权真相仍然只看 `license` + 启动时那次真验签（`entitlement()` 里现算），
+   * 所以手改这里的 `revoked` 不会解封——它只会让 bz 的统计看错一眼。
+   * 反过来也不行：这里写 true 也不会凭空把人降级，判定仍走 data/revoked
+   * 的本地标记。两边各自独立。
+   *
+   * 为什么非要落盘：bz 主插件的探针读的是这份 data.json，读不到内存。
+   */
+  /** 这枚码是否已被停用名单判死 */
+  revoked: boolean;
+  /** 被判死的时刻（0 = 没判死过） */
+  revokedAt: number;
+  /** 当前档位的成因：none / expired / revoked / invalid / ok */
+  tierReason: string;
+  /** 上次激活失败的原因（只记分类，绝不记码原文） */
+  activateFail: string;
+  /** 上次激活失败的时刻 */
+  activateFailAt: number;
 }
 
 export interface EntitlementView {
@@ -287,6 +307,11 @@ function defaults(): Ent {
     trialVoid: false,
     license: '',
     checkedTs: 0,
+    revoked: false,
+    revokedAt: 0,
+    tierReason: '',
+    activateFail: '',
+    activateFailAt: 0,
   };
 }
 
@@ -315,6 +340,12 @@ function applyEnt(d: Ent, raw: unknown): boolean {
   if (p.trialVoid === true) d.trialVoid = true;
   if (typeof p.license === 'string') d.license = p.license;
   if (typeof p.checkedTs === 'number') d.checkedTs = p.checkedTs;
+  /* 观测字段：类型不对就当没见过，不猜 */
+  if (typeof p.revoked === 'boolean') d.revoked = p.revoked;
+  if (typeof p.revokedAt === 'number' && p.revokedAt > 0) d.revokedAt = p.revokedAt;
+  if (typeof p.tierReason === 'string') d.tierReason = p.tierReason.slice(0, 12);
+  if (typeof p.activateFail === 'string') d.activateFail = p.activateFail.slice(0, 12);
+  if (typeof p.activateFailAt === 'number' && p.activateFailAt > 0) d.activateFailAt = p.activateFailAt;
   return true;
 }
 
@@ -451,6 +482,87 @@ export function setLicense(code: string): void {
   /* activateLicense 只在验签通过后调这里，所以此刻结论就是 ok */
   verifyState = 'ok';
   save();
+  refreshFacts();
+}
+
+/* ── 授权事实（2026-11-22，给 bz 的探针读）───────────────────────────
+ * 这四笔**只影响统计**，不参与任何放行判定：授权真相仍是「码 + 启动时真验签」，
+ * 停用真相仍是 data/revoked 的本地标记。两边各自独立，手改这里既解不了封，
+ * 也不会把人误降级——但会让看板看错，所以只在真发生时才写。
+ */
+
+/** 当前档位成因：没码 / 到期 / 被封 / 码坏了 / 正常 */
+function tierReasonNow(): string {
+  const e = load();
+  if (!e.license) return 'none';
+  const v = entitlement();
+  if (v.revoked) return 'revoked';
+  if (v.verify !== 'ok' || !v.licenseId && !v.plan) {
+    /* 验签没过、解不开：码本身不可信。老码 BZR1 没有 id 但有 plan，别误判 */
+    if (v.verify !== 'ok') return 'invalid';
+  }
+  if (v.exp && Date.now() > v.exp) return 'expired';
+  return 'ok';
+}
+
+/**
+ * 重算并落盘档位成因与停用标记。
+ *
+ * 在几个「授权可能刚变过」的节点调：激活成功、启动重验、名单核对回来。
+ * 变了才写盘——`entitlement()` 每次重绘都会调，不能顺手就存。
+ */
+export function refreshFacts(): void {
+  const e = load();
+  const reason = tierReasonNow();
+  const revoked = entitlement().revoked;
+  if (e.tierReason === reason && e.revoked === revoked) return;
+  e.tierReason = reason;
+  e.revoked = revoked;
+  save();
+}
+
+/**
+ * 命中停用名单：记一笔。
+ *
+ * `revokedAt` 只认第一次——探针要算「封了几天还没掉」，每次核对都刷新时刻
+ * 会让这个数永远是 0 天。
+ */
+export function noteRevoked(): void {
+  const e = load();
+  if (!e.license) return;
+  const needSave = !e.revoked || e.tierReason !== 'revoked' || !e.revokedAt;
+  e.revoked = true;
+  if (!e.revokedAt) e.revokedAt = Date.now();
+  e.tierReason = 'revoked';
+  if (needSave) save();
+}
+
+/** 解封：清掉停用标记（版本号在 data/revoked 那边留着，不影响这里） */
+export function clearRevokedMark(): void {
+  const e = load();
+  if (!e.revoked && !e.revokedAt) return;
+  e.revoked = false;
+  e.revokedAt = 0;
+  save();
+}
+
+/**
+ * 记一次激活失败。传空串 = 清空（激活成功时调）。
+ *
+ * 只记分类，**绝不记码原文**：这份 data.json 会被同库的 bz 读走。
+ */
+export function noteActivateFail(fail: string): void {
+  const e = load();
+  if (!fail) {
+    if (!e.activateFail && !e.activateFailAt) return;
+    e.activateFail = '';
+    e.activateFailAt = 0;
+    save();
+    return;
+  }
+  e.activateFail = fail.slice(0, 12);
+  e.activateFailAt = Date.now();
+  save();
 }
 
 /**
@@ -472,22 +584,31 @@ export async function activateLicense(
   code: string,
 ): Promise<{ ok: boolean; message: string; revoked?: boolean }> {
   const res = await verifyLicense(code);
-  if (!res.ok) return { ok: false, message: res.message };
+  if (!res.ok) {
+    /* 只记分类给探针看：格式不对让他检查粘贴，其余都算「码不认」 */
+    noteActivateFail(res.reason === 'expired' ? 'expired' : res.reason === 'format' ? 'format' : 'invalid');
+    return { ok: false, message: res.message };
+  }
 
   const clean = code.trim();
   /* 本地已判死的码：断网也贴不回来，不必再等一次网络 */
   if (revokedCode() === clean) {
+    noteActivateFail('revoked');
     return { ok: false, message: t('license.revoked'), revoked: true };
   }
 
   const verdict = await checkRevoked(clean);
   if (verdict === 'hit') {
+    noteActivateFail('revoked');
+    noteRevoked();
     return { ok: false, message: t('license.revoked'), revoked: true };
   }
   if (verdict === 'unknown') {
+    noteActivateFail('offline');
     return { ok: false, message: t('license.needOnline') };
   }
 
+  noteActivateFail('');
   setLicense(clean);
   return { ok: true, message: res.message };
 }
@@ -520,23 +641,28 @@ export async function revalidateLicense(): Promise<{ changed: boolean; reason?: 
   if (!e.license) {
     /* 没码就没有要验的东西：这不是「验不过」，别让界面显示「授权异常」 */
     verifyState = 'ok';
+    refreshFacts();
     return { changed: false };
   }
   const res = await verifyLicense(e.license);
   if (res.ok) {
     verifyState = 'ok';
+    refreshFacts();
     return { changed: false };
   }
   if (res.reason === 'expired') {
     verifyState = 'ok';
+    refreshFacts();
     return { changed: false, reason: res.reason };
   }
   if (res.reason === 'invalid' || res.reason === 'format' || res.reason === 'no-pubkey') {
     verifyState = 'failed';
     clearLicense();
+    refreshFacts();
     return { changed: true, reason: res.reason };
   }
   verifyState = 'failed';
+  refreshFacts();
   return { changed: false, reason: res.reason };
 }
 
@@ -554,6 +680,9 @@ export function clearLicense(): boolean {
   e.license = '';
   e.checkedTs = 0;
   save();
+  /* 码没了，档位成因跟着变「没码」；停用标记也一并清干净 */
+  clearRevokedMark();
+  refreshFacts();
   return had;
 }
 
