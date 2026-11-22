@@ -76,9 +76,9 @@ describe('对照表 · 朗读与听书段', () => {
     expect(layout?.rows).toEqual(['columns', 'vertical', 'parallel', 'bookmap']);
   });
 
-  it('合计 18 / 53，全表 57 行', () => {
-    expect(planTotals()).toEqual({ free: 18, pro: 53 });
-    expect(PLAN_TABLE).toHaveLength(57);
+  it('合计 22 / 54，全表 58 行', () => {
+    expect(planTotals()).toEqual({ free: 22, pro: 54 });
+    expect(PLAN_TABLE).toHaveLength(58);
   });
 
   it('导出本章音频不上表：功能照旧，只是不列在对比里', () => {

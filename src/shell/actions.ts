@@ -1712,7 +1712,7 @@ export function dispatchAction(
       overlay('reset');
       break;
     case 'export':
-      if (!requireCap('export')) break;
+      /* 导出整本摘录 2026-11-22 下放基础版：弹层照开，只是不再设门。 */
       overlay('export', d.id ? { bookId: d.id } : {});
       break;
 
@@ -1780,11 +1780,8 @@ export function dispatchAction(
             i.onClick(() => {
               if (requireCap('aiChat')) void enrichBookMeta(id);
             });
-          /* 导出没解锁就弹对照表，不悄悄降级成「复制一段纯文本」 */
-          if (it.act === 'export')
-            i.onClick(() => {
-              if (requireCap('export')) exportBookFile(id);
-            });
+          /* 导出整本摘录 2026-11-22 下放基础版：不再弹对照表。 */
+          if (it.act === 'export') i.onClick(() => exportBookFile(id));
           if (it.act === 'fav')
             i.onClick(() => {
               const on = toggleFav(id);
@@ -2330,7 +2327,7 @@ export function dispatchAction(
       break;
 
     case 'copymd':
-      if (!requireCap('export')) break;
+      /* 导出整本摘录 2026-11-22 下放基础版，不再设门。 */
       void copyText(exportMarkdown(d.book || undefined));
       break;
     /**
@@ -2340,7 +2337,6 @@ export function dispatchAction(
      * 「把这本的划线收进笔记库」，中间隔一个预览就是多一次点击。
      */
     case 'exportfile': {
-      if (!requireCap('export')) break;
       const id = d.id || d.book || getState().bookId;
       if (id) exportBookFile(id);
       else notify(t('notice.export.needBook'));
@@ -2627,10 +2623,9 @@ export function dispatchAction(
       if (d.k === 'embedReview' && patch.embedReview === false && getState().studyPage === 'review') {
         setState({ studyPage: 'library' });
       }
-      /* 剪藏成书是高级版能力（2026-11-14）：未解锁时点开关只弹解锁层，
-         **不落盘**——否则设置里显示「已开」、书架里却没有书，用户会当成坏掉。
-         requireCap 自己会弹层并高亮对照表里「剪藏成书」那一行。 */
-      if (d.k === 'clipBook' && patch.clipBook === true && !requireCap('clipBook')) break;
+      /* 剪藏成书 2026-11-22 下放基础版：开关不再需要能力位，直接落盘。
+         以前未解锁时点开关只弹解锁层、不落盘，免得「设置显示已开、书架
+         却没有书」；现在两版都能开，这条中间态不存在了。 */
       src.setSettings(patch);
       /* 必须自己重绘：setSettings 只落盘 + notifyShell，设置页那块的 DOM
          不会因为状态变了就重建，开关会停在旧位置（用户报的「点了不实时显示」）。 */
@@ -3195,8 +3190,8 @@ export function dispatchAction(
     }
     case 'hlai': {
       /* 点划线也能问 AI：以前这条工具条上根本没有 AI 这一颗，
-         想解释划线原文只能先划一遍再点。与 selai 同一个面板，只是带上了 markId。 */
-      if (!requireCap('aiSel')) break;
+         想解释划线原文只能先划一遍再点。与 selai 同一个面板，只是带上了 markId。
+         2026-11-22：解释 / 翻译 / 摘要下放基础版，这里不再设门。 */
       const book = findBookOfMark(d.id, d.book);
       const h = book?.notes?.highlights.find((x) => x.id === d.id);
       if (!book || !h) {
@@ -3315,15 +3310,16 @@ export function dispatchAction(
       break;
     case 'selai':
       /* 不再直接解释：先在工具条上方摊开五项（原型第 2 稿）。
-         2026-11-16 起只有点击一条路（悬停开合已撤）：点一下开，再点一下关。 */
+         2026-11-16 起只有点击一条路（悬停开合已撤）：点一下开，再点一下关。
+         2026-11-22：解释 / 翻译 / 摘要下放基础版，菜单照开；追问那一项
+         自己设门（见 aimenupick 与 aifollow）。 */
       if (!RT.sel) break;
-      if (requireCap('aiSel'))
-        openAiMenu({
-          text: RT.sel.text,
-          bookId: RT.sel.bookId,
-          chapterTitle: RT.sel.chapterTitle,
-          anchor: RT.sel.anchor,
-        });
+      openAiMenu({
+        text: RT.sel.text,
+        bookId: RT.sel.bookId,
+        chapterTitle: RT.sel.chapterTitle,
+        anchor: RT.sel.anchor,
+      });
       break;
     /* 两颗知识库按钮和 AI 问答同一道门：按钮在授权掉了之后不再渲染，
        但动作本身也该拦——data-act 是 DOM 属性，不是权限。
@@ -4021,6 +4017,9 @@ export function dispatchAction(
         break;
       }
       if (task !== 'explain' && task !== 'translate' && task !== 'summarize' && task !== 'follow') break;
+      /* 2026-11-22：解释 / 翻译 / 摘要是基础版，追问是高级版。
+         点「追问」就拦——不让他先打开输入框、打完字才说不能发。 */
+      if (task === 'follow' && !requireCap('aiAsk')) break;
       /* 落线的时机按「这一下有没有问东西」分开（2026-11-16 作者定）：
          · 解释 / 翻译 / 总结：点下去就是要这段的结果，立刻落线，和「想法」
            同一条路；失败 / 取消也不撤线——用户点下去就是要留这段。
@@ -4158,6 +4157,10 @@ export function dispatchAction(
     }
     /* 追问：空面板的第一问与后续轮次共用这一个动作 */
     case 'aifollow': {
+      /* 2026-11-22：追问是高级版。菜单里点「追问」已经拦过一道，这里再拦
+         一道——解释 / 翻译 / 摘要的浮框底下也能接着问，那是第二个入口。
+         先拦再读输入框：拦下时输入的文字还留在框里，解锁回来不用重打。 */
+      if (!requireCap('aiAsk')) break;
       const card = el.closest('.bzs-aifloat');
       const input = card?.querySelector<HTMLTextAreaElement>('[data-role="aifollow"]');
       void followAi(input?.value ?? '');
@@ -4258,7 +4261,7 @@ export function dispatchAction(
        划线重写进「书摘/书名.md」——点一次「存笔记」等于一次全量导出，
        用户在别处手改过的内容会被覆盖，也和卡片上看到的「这一条」对不上。 */
     case 'quotesave': {
-      if (!requireCap('export')) break;
+      /* 单条书摘存笔记跟着「导出整本摘录」一起下放基础版（2026-11-22）。 */
       const app = getShellSource()?.app;
       const book = currentBook();
       const overlayState = getState().overlay;

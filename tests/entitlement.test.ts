@@ -226,13 +226,15 @@ describe('界面文案', () => {
     expect(footnote).toBeLessThan(firstPaid);
   });
 
-  it('AI 解释 / 翻译 / 摘要 / 追问单独一行，紧跟在 AI 全书问答上面', () => {
-    const sel = PLAN_TABLE.findIndex((r) => r.cap === 'aiSel');
+  it('追问单独一行，紧跟在 AI 全书问答上面', () => {
+    /* 2026-11-22：解释 / 翻译 / 摘要下放基础版，追问留高级版并单独成行。
+       原来四件事共用一个勾，用户看不出买了能多出哪一下。 */
+    const follow = PLAN_TABLE.findIndex((r) => r.cap === 'aiAsk');
     const book = PLAN_TABLE.findIndex((r) => r.cap === 'ai');
-    expect(sel).toBeGreaterThan(-1);
-    expect(book).toBe(sel + 1);
-    expect(PLAN_TABLE[sel].name).toContain('解释');
-    expect(PLAN_TABLE[sel].name).toContain('追问');
+    expect(follow).toBeGreaterThan(-1);
+    expect(book).toBe(follow + 1);
+    expect(PLAN_TABLE[follow].name).toContain('追问');
+    expect(PLAN_TABLE[follow].free).toBe('no');
     expect(PLAN_TABLE[book].name).toContain('AI 全书问答');
     /* 2026-11-16：卖点从「AI 全书问答」这五个字换成「四种依据」那句话 */
     expect(capLabel('ai')).toContain('依据');

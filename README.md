@@ -114,10 +114,10 @@
 |  | 分类管理：自建分类归书 | ✓ | ✓ |
 | **排版** | 单栏 / 双栏排版 | ✓ | ✓ |
 |  | 竖排排版：EPUB / TXT | — | ✓ |
-|  | 并排对照：与另一本书同步段落 | — | ✓ |
+|  | 并排对照：与另一本书同步段落 | ✓ | ✓ |
 |  | 全书鸟瞰：各章划线数与一句话摘要 | ✓ | ✓ |
 | **导入** | Kindle 系（MOBI / AZW3）、FB2、CBZ 漫画、PDF | — | ✓ |
-|  | 剪藏成书：剪藏本合成一本 EPUB · [看教程](https://www.bilibili.com/video/BV1h3WB6XEL4) | — | ✓ |
+|  | 剪藏成书：剪藏本合成一本 EPUB · [看教程](https://www.bilibili.com/video/BV1h3WB6XEL4) | ✓ | ✓ |
 | **PDF 阅读** | PDF 阅读：缩放、旋转、单双页、滚动 | — | ✓ |
 |  | 页缩略图：几百页也能一屏找 | — | ✓ |
 |  | 复制页链接：页码、视图、嵌入、批注 | — | ✓ |
@@ -136,7 +136,7 @@
 |  | 页缩略图、读到哪记住 | — | ✓ |
 | **笔记与导出** | 划线存成双链：笔记里点回原文 | — | ✓ |
 |  | 引用页签：看哪些笔记引了这本书 | — | ✓ |
-|  | 导出整本摘录：每条带双链 | — | ✓ |
+|  | 导出整本摘录：每条带双链 | ✓ | ✓ |
 | **复习** | 复习：全文回顾，AI 抽认卡与出题 | ✓ | ✓ |
 |  | 复习页签：挑内容、制卡、复习都在一起 | ✓ | ✓ |
 |  | 划线挑重点：整本书的划线交给 AI 挑 | ✓ | ✓ |
@@ -146,7 +146,8 @@
 |  | 阅读海报：年度总结与数据长图 | — | ✓ |
 |  | 全库搜索：按字面搜所有书，含 PDF | — | ✓ |
 |  | 语义搜索：按意思找，本书或全库 | — | ✓ |
-| **AI** · [看教程](https://www.bilibili.com/video/BV1BNsz6zEBx) | AI 解释、翻译、摘要与追问：即划即用 | — | ✓ |
+| **AI** · [看教程](https://www.bilibili.com/video/BV1BNsz6zEBx) | AI 解释、翻译、摘要：即划即用 | ✓ | ✓ |
+|  | AI 追问：就这段接着问 | — | ✓ |
 |  | AI 全书问答：划线、正文、截图与笔记四种依据都可添加进去 | — | ✓ |
 |  | AI 对话留档并导出至笔记 | — | ✓ |
 |  | AI 伴读：边读边问，按章导读 | — | ✓ |
@@ -376,8 +377,8 @@ While the review is pending, or if search doesn't find it, install with [BRAT](h
 | **Formats & Export** | Kindle family (MOBI / AZW3), FB2, CBZ comics, PDF | — | ✓ |
 |  | Highlights as wikilinks: click back from your notes | — | ✓ |
 |  | Citations tab: see which notes cite this book | — | ✓ |
-|  | Export every excerpt, each with a wikilink | — | ✓ |
-|  | Clipbook to EPUB: bind clipped articles into one EPUB and read it on the shelf | — | ✓ |
+|  | Export every excerpt, each with a wikilink | ✓ | ✓ |
+|  | Clipbook to EPUB: bind clipped articles into one EPUB and read it on the shelf | ✓ | ✓ |
 | **PDF Reading** | Open a PDF: zoom, rotate, one or two pages, scroll; view remembered per book | — | ✓ |
 |  | Page thumbnails: find a page in a long book | — | ✓ |
 |  | Copy page links: page / view / embed / annotation | — | ✓ |
@@ -397,14 +398,15 @@ While the review is pending, or if search doesn't find it, install with [BRAT](h
 |  | Reading poster: yearly recap and stats long image | — | ✓ |
 |  | Whole-library search, PDF text included | — | ✓ |
 |  | Semantic search: by meaning, in this book or the shelf | — | ✓ |
-| **AI** | AI explain, translate, summarize and follow up: select and go | — | ✓ |
+| **AI** | AI explain, translate and summarize: select and go | ✓ | ✓ |
+|  | AI follow-up: keep asking about this passage | — | ✓ |
 |  | AI Q&A over the whole book: highlights, page text, screenshots and notes as evidence | — | ✓ |
 |  | AI chats are kept and can be exported to a note | — | ✓ |
 |  | AI companion: ask as you read, with a per-chapter guide | — | ✓ |
 |  | AI knowledge base: incremental reading, intake, and a loop from notes to output | — | ✓ |
 | **Advanced** | Vertical typesetting: EPUB / TXT | — | ✓ |
 |  | Read aloud: EPUB, TXT and PDF, auto page-turn | — | ✓ |
-|  | Read two books side by side | — | ✓ |
+|  | Read two books side by side | ✓ | ✓ |
 |  | Book overview | — | ✓ |
 | **Explorations** | PDF reflow: fixed layouts read as flowing text | — | — |
 |  | Chapter translation: source and translation side by side | — | — |

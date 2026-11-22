@@ -2315,14 +2315,13 @@ export class ReaderView extends ItemView {
   /* ─────────────────── 并排对照 ─────────────────── */
 
   private async toggleParallel(): Promise<void> {
-    // 关闭永远放行；只有「开启」才要高级版
+    // 关闭永远放行；开启 2026-11-22 起也放行（并排对照已下放基础版）
     if (this.parallelOn) {
       await this.closeParallel();
       return;
     }
     /* 对照卷：PDF 也能并排（每边各自一套引擎，互不认识对方的排版）。
        EPUB 那套 grid 两栏对 canvas 同样成立，不需要特判格式。 */
-    if (!requireCap('parallel')) return;
     /* 开一次要 mount + start 整本副卷，几百毫秒起。这段时间里再点一次
        （双击、头栏与命令面板同时来）会建出第二个副卷：第一个的 host2 被
        覆盖，iframe 与监听全漏，界面上还会并排出现两本书。 */

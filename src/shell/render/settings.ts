@@ -1002,41 +1002,33 @@ export function viewSettings(v: SettingsView): string {
   const bzGrpState: 'enabled' | 'disabled' | 'missing' =
     v.bz?.state ?? (v.bz?.ok ? 'enabled' : 'missing');
   const bzOk = bzGrpState === 'enabled';
-  /* 剪藏成书是高级版能力（2026-11-14 补的门禁）。基础版用户在设置里看到的
-     是一颗点了就弹解锁层的开关——不是灰着不动的死开关，那样人只会以为坏了。
-     范围内三选只在解锁后画：没解锁时选了也不会生效，摆出来等于骗人。 */
-  const clipUnlocked = can('clipBook');
-  const clipOn = clipUnlocked && s.clipBook === true;
+  /* 剪藏成书 2026-11-22 下放基础版：不再有「解锁后才有」这一档。
+     开关永远可点，范围内三选永远画出来——选了不生效才是骗人。 */
+  const clipOn = s.clipBook === true;
   const chip = (txt: string, on = false): string =>
     `<span class="bzs-capchip${on ? ' is-on' : ''}"><i></i>${txt}</span>`;
-  const clipScopeSeg = clipUnlocked
-    ? `<div class="bzs-capfield"><span>${t('settings.bz.clip.scope')}</span>${seg(
-        'clipScope',
-        [
-          ['all', t('settings.bz.clip.scope.all')],
-          ['unread', t('settings.bz.clip.scope.unread')],
-          ['todayUnread', t('settings.bz.clip.scope.today')],
-        ],
-        s.clipScope,
-        'setscope',
-      )}</div>`
-    : '';
+  const clipScopeSeg = `<div class="bzs-capfield"><span>${t('settings.bz.clip.scope')}</span>${seg(
+    'clipScope',
+    [
+      ['all', t('settings.bz.clip.scope.all')],
+      ['unread', t('settings.bz.clip.scope.unread')],
+      ['todayUnread', t('settings.bz.clip.scope.today')],
+    ],
+    s.clipScope,
+    'setscope',
+  )}</div>`;
   /* 未装 bz 时开关不画：摆一颗点不动的开关只会让人以为「我点坏了」；
      整张卡可点，点了滚回本组顶部的安装卡。 */
   const clipSwitch = !bzOk
     ? ''
-    : clipUnlocked
-      ? `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
-          'settings.bz.clip',
-        )}</span></button>`
-      : `<button class="bzs-switch" data-act="unlock" data-mode="clipBook"><span class="bzs-sr-only">${t(
-          'settings.locked',
-        )}</span><span class="bzs-sr-only">${t('settings.bz.clip')}</span></button>`;
+    : `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
+        'settings.bz.clip',
+      )}</span></button>`;
   const clipCard = `<div class="bzs-cap${clipOn ? ' is-on' : ''}"${bzOk ? '' : ' data-act="bzjump"'}>
       <span class="bzs-capico${bzOk ? '' : ' is-muted'}">${ico('shelf')}</span>
       <div class="bzs-capmain">
         <div class="bzs-cap-t"><b>${t('settings.bz.clip')}</b>${
-          !bzOk ? '' : clipUnlocked ? (clipOn ? chip(t('settings.cap.on'), true) : '') : chip(t('settings.about.paid'))
+          !bzOk ? '' : clipOn ? chip(t('settings.cap.on'), true) : ''
         }</div>
         <p>${t('settings.bz.clip.hint')}</p>
         ${clipScopeSeg}

@@ -56,11 +56,31 @@ describe('工具条 AI · 点击开合', () => {
     expect(getState().overlay).toBeNull();
   });
 
-  it('没有高级版：点击弹解锁页，不吞掉提示', () => {
+  it('没有高级版：解释仍能点开（2026-11-22 下放基础版）', () => {
     ent.ai = false;
     dispatchAction('selai', btn());
 
+    const o = getState().overlay;
+    expect(o?.kind).toBe('ai');
+    expect(o?.menu).toBe(true);
+  });
+
+  it('没有高级版：点「追问」弹解锁页，菜单不收', () => {
+    ent.ai = false;
+    dispatchAction('selai', btn());
+    dispatchAction('aimenupick', { dataset: { task: 'follow' } } as unknown as HTMLElement);
+
     expect(getState().overlay?.kind).toBe('unlock');
+  });
+
+  it('有高级版：点「追问」换成追问浮框', () => {
+    dispatchAction('selai', btn());
+    dispatchAction('aimenupick', { dataset: { task: 'follow' } } as unknown as HTMLElement);
+
+    const o = getState().overlay;
+    expect(o?.kind).toBe('ai');
+    expect(o?.menu).toBe(false);
+    expect(o?.mode).toBe('follow');
   });
 
   it('没有原文（选区已收）：不摊开空菜单', () => {

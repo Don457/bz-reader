@@ -36,12 +36,17 @@ import type { BookFormat } from './schema';
 
 /** 高级能力。只有能判断的地方才列进来，别造没人问的开关。 */
 export type Cap =
-  | 'export' // 结构化导出 Markdown
   | 'poster' // 阅读海报（书摘图片 2026-11-10 下放基础版，不再需要能力位）
   | 'stats' // 阅读统计
   | 'crossSearch' // 跨书搜索
-  | 'aiSel' // 划词 AI：解释 / 翻译 / 摘要（工具栏那颗）
+  /**
+   * 划词 AI 2026-11-22 拆开卖：解释 / 翻译 / 摘要下放基础版，只剩追问收费。
+   *
+   * 这里不再留 `aiSel`——免费的行挂着能力位，弹层就会把人往一个已经
+   * 不要钱的功能上引；追问有自己的 `aiAsk`，被拦时才能亮到正确那一行。
+   */
   | 'ai' // 侧栏 AI：全书问答
+  | 'aiAsk' // 划词追问：就这一段接着问
   | 'kb' // BZ AI 知识盒（划词录入 / 笔记当依据；行名按 bz 的文案）
   | 'fullFormats' // mobi / azw3 / fb2 / cbz（PDF 2026-11-10 起单列，见 pdf）
   | 'vertical' // 竖排（双栏已于 2026-11-05 下放基础版，不再挂在这个能力上）
@@ -54,7 +59,8 @@ export type Cap =
   | 'tts'
   /** 朗读 · 整本预生成（2026-11-14）。与整章分开，弹层才能高亮对那一行 */
   | 'ttsBook'
-  | 'parallel' // 并排 / 双语
+  /* 并排对照 2026-11-22 下放基础版：两边各挂一套引擎，不产生额外成本，
+     挡在门外只是把功能藏起来。 */
   /* 全书鸟瞰 2026-11-21 下放基础版：它只读画像做一张总览，不产生额外成本，
      留在 Cap 表里会让「基础版点不开鸟瞰」和对照表上那个勾对不上。 */
   | 'bilink' // 划线 → 双向链接
@@ -80,8 +86,8 @@ export type Cap =
    */
   | 'aiLog'
   | 'semantic' // 语义搜索：本书与全库，按意思找
-  /** 剪藏成书（2026-11-13）：把剪藏本里的订阅文章合成 EPUB，进书架读 */
-  | 'clipBook'
+  /* 剪藏成书 2026-11-22 下放基础版：把剪藏本合成 EPUB 本身不产生成本，
+     挡在门外只是把功能藏起来。设置页那颗开关也不再显示「高级版」。 */
   /** 漫画模式（2026-11-15 从探索中转正）：分格、右到左、跨页 */
   | 'manga'
   /**
@@ -712,16 +718,6 @@ export function tierText(v: EntitlementView = entitlement()): string {
  * 让「八种齐」变成类型约束——这张表是用户决定要不要付钱的地方，不能有洞。
  */
 const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
-  export: {
-    zh: '把整本摘录导出成 Markdown，每条都能点回原文',
-    'zh-TW': '把整本摘錄匯出成 Markdown，每條都能點回原文',
-    en: 'Export every excerpt as Markdown, each one links back to the page',
-    ja: '抜粋を Markdown に書き出し、各項目から原文へ戻れる',
-    de: 'Alle Exzerpte als Markdown exportieren, jeder Eintrag führt zur Stelle',
-    fr: 'Exporter tous les extraits en Markdown, chacun ramène au texte',
-    es: 'Exportar los extractos a Markdown, cada uno vuelve al texto',
-    pt: 'Exportar os excertos em Markdown, cada um volta ao texto',
-  },
   poster: {
     /* 2026-11-10：书摘图片下放基础版，这枚能力位改归「阅读海报」专用
        （统计页的数据长图 + 年度海报浮层）。以前两者共用 card，解锁弹窗会
@@ -769,15 +765,18 @@ const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
     es: 'Por significado, en este libro o el estante',
     pt: 'Por significado, neste livro ou na estante',
   },
-  aiSel: {
-    zh: '划词即用：解释 · 翻译 · 摘要 · 追问',
-    'zh-TW': '劃詞即用：解釋 · 翻譯 · 摘要 · 追問',
-    en: 'On a selection: explain · translate · summarize · follow up',
-    ja: '選択範囲で：解説 · 翻訳 · 要約 · 追加質問',
-    de: 'Zur Auswahl: erklären · übersetzen · zusammenfassen · nachfragen',
-    fr: 'Sur une sélection : expliquer · traduire · résumer · relancer',
-    es: 'Sobre una selección: explicar · traducir · resumir · repreguntar',
-    pt: 'Numa seleção: explicar · traduzir · resumir · perguntar de novo',
+  /* 划词追问（2026-11-22 从 aiSel 拆出来）。解释 / 翻译 / 摘要已下放
+     基础版，这道门只管「在答案底下接着问那几句」；卖点句要说清买了能
+     多出什么，不能只写「追问」两个字。 */
+  aiAsk: {
+    zh: '就这一段接着问，答完还能追问几轮',
+    'zh-TW': '就這一段接著問，答完還能追問幾輪',
+    en: 'Keep asking about this passage, round after round',
+    ja: 'この一節について続けて質問、何度でも',
+    de: 'Zu dieser Stelle weiterfragen, Runde für Runde',
+    fr: 'Continuer à poser des questions sur ce passage, tour après tour',
+    es: 'Seguir preguntando sobre este pasaje, ronda tras ronda',
+    pt: 'Continuar perguntando sobre este trecho, rodada após rodada',
   },
   ai: {
     /* 2026-11-16：照对照表新行名的口径，把四种依据在卖点里点出来。 */
@@ -875,17 +874,7 @@ const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
     es: 'Todo el libro de una vez, para escuchar del tirón',
     pt: 'O livro inteiro de uma vez, para ouvir do começo ao fim',
   },
-  parallel: {
-    /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。 */
-    zh: '两本书并排，段落跟着一起走',
-    'zh-TW': '兩本書並排，段落跟著一起走',
-    en: 'Two books side by side, scrolling in step',
-    ja: '2 冊を並べ、段落が一緒に動く',
-    de: 'Zwei Bücher nebeneinander, Absätze laufen mit',
-    fr: 'Deux livres côte à côte, les paragraphes suivent',
-    es: 'Dos libros en paralelo, los párrafos avanzan juntos',
-    pt: 'Dois livros lado a lado, os parágrafos acompanham',
-  },
+  /* 并排对照 2026-11-22 下放基础版：不再为它保留卖点条目。 */
   bilink: {
     zh: '把划线存成双链，笔记里点得回来',
     'zh-TW': '把劃線存成雙鏈，筆記裡點得回來',
@@ -945,16 +934,7 @@ const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
     es: 'Modo manga: viñeta a viñeta, derecha a izquierda, dobles páginas divididas',
     pt: 'Modo mangá: quadro a quadro, direita para esquerda, páginas duplas divididas',
   },
-  clipBook: {
-    zh: '剪藏成书：把 bz 剪藏本里的订阅文章合成一本 EPUB，进书架读',
-    'zh-TW': '剪藏成書：把 bz 剪藏本裡的訂閱文章合成一本 EPUB，進書架讀',
-    en: 'Clipbook to EPUB: bind your bz subscription articles into one EPUB and read it on the shelf',
-    ja: 'クリップブックを EPUB に：bz の購読記事を 1 冊の EPUB にまとめ、本棚で読む',
-    de: 'Clipbook als EPUB: deine bz-Aboartikel in ein EPUB binden und im Regal lesen',
-    fr: 'Le cahier de clips en EPUB : relier vos articles d’abonnement bz en un EPUB à lire dans la bibliothèque',
-    es: 'Clipbook a EPUB: encuaderna tus artículos de suscripción de bz en un EPUB y léelo en el estante',
-    pt: 'Clipbook em EPUB: encaderne os seus artigos de subscrição do bz num EPUB e leia-o na estante',
-  },
+  /* 剪藏成书 2026-11-22 下放基础版：不再为它保留卖点条目。 */
 };
 
 /** 能力卖点 → 当前界面语言的说法 */
@@ -1022,8 +1002,9 @@ export const PLAN_TABLE: PlanRow[] = [
    * 不产生额外成本，挂在高级版里与「只增不减」的承诺也说不通。 */
   row('columns', 'yes', 'yes'),
   row('vertical', 'no', 'yes', 'vertical'),
-  /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。 */
-  row('parallel', 'no', 'yes', 'parallel'),
+  /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。
+     2026-11-22 下放基础版：两边各挂一套引擎，不产生额外成本。 */
+  row('parallel', 'yes', 'yes'),
   row('bookmap', 'yes', 'yes'),
   /* 漫画模式 2026-11-22 从路线图转正后**独立成段**（见下面 pdfOcr 之后的
      九行）。这里不再留一行「漫画模式」——九行才说得清它到底能做什么。 */
@@ -1031,7 +1012,8 @@ export const PLAN_TABLE: PlanRow[] = [
    * 2026-11-10：PDF 不再由 formats 代表——它有自己的段（见下面的 pdfView…）。
    * 剪藏成书 2026-11-13 从「探索中」转正，与 formats 同类：都是「书怎么进来」。 */
   row('formats', 'no', 'yes', 'fullFormats'),
-  row('clipEpub', 'no', 'yes', 'clipBook'),
+  /* 剪藏成书 2026-11-22 下放基础版：书怎么进来，不该再分两种价钱。 */
+  row('clipEpub', 'yes', 'yes'),
   /* ── PDF 阅读：怎么读 → 怎么拿出来 ──
    * 只有段首那行挂 cap：整段共用一个拦点（打开 PDF）。给每行各配一个能力位
    * 是摆样子——基础版根本进不了 PDF，那些能力位在运行期永远不会被抛出。 */
@@ -1067,7 +1049,9 @@ export const PLAN_TABLE: PlanRow[] = [
    * 引用页签 2026-11-12 有独立能力位，点它被拦时点亮的是它自己那一行。 */
   row('bilink', 'no', 'yes', 'bilink'),
   row('cites', 'no', 'yes', 'cites'),
-  row('export', 'no', 'yes', 'export'),
+  /* 导出整本摘录 2026-11-22 下放基础版。但「从双链点回原书」仍由 bilink
+     管着（openFromTarget 带定位参数时拦）：导出免费，跳回原文付费。 */
+  row('export', 'yes', 'yes'),
   /* ── 复习（2026-11-21 独立成段） ──
    * Reader 负责「挑内容」，复习本身由 bz Review 承接：页签嵌入、按划线挑、
    * 按章生成卡片、已在复习状态。五件事都不设门——复习入口全在基础版，
@@ -1088,7 +1072,11 @@ export const PLAN_TABLE: PlanRow[] = [
    * 追问浮框、划词会话留痕、侧栏问答历史与等待态、依据按章跳转、连接笔记
    * 浮层、书架对话页）原来全被埋在四行旧行名下面，看不出贵在哪儿。
    * 现在拆成五行，一行只说一件事，「对话留档」与「伴读」各挂自己的能力位。 */
-  row('aiSel', 'no', 'yes', 'aiSel'),
+  /* 2026-11-22：解释 / 翻译 / 摘要下放基础版；追问单独一行、仍是高级版。
+     追问要带上下文、要多轮，和「让 AI 解释一下」是两件事；共用一个勾，
+     用户看不出买了能多出哪一下。 */
+  row('aiSel', 'yes', 'yes'),
+  row('aiFollow', 'no', 'yes', 'aiAsk'),
   row('aiBook', 'no', 'yes', 'ai'),
   /* 对话留档 2026-11-16 从 aiChat 拆出来：点「导出到笔记」被拦时，
      弹层要亮的是这一行，不是「AI 伴读」。 */
@@ -1235,8 +1223,9 @@ export const PLAN_GROUPS: PlanGroup[] = [
   {
     key: 'ai',
     /* 2026-11-16：五行。对话留档排在伴读之前——它是「问完之后」的去处，
-       与上一行「问的时候带什么」顺着读下来。 */
-    rows: ['aiSel', 'aiBook', 'aiLog', 'aiChat', 'kb'],
+       与上一行「问的时候带什么」顺着读下来。
+       2026-11-22：追问从划词那一行拆出来，六行。 */
+    rows: ['aiSel', 'aiFollow', 'aiBook', 'aiLog', 'aiChat', 'kb'],
   },
   {
     key: 'voice',

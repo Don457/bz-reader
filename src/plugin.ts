@@ -1309,10 +1309,10 @@ export function createPlugin(cfg: PluginConfig) {
     /** 剪藏本开关 → 书架入口。幂等，只有真的变了才落盘与重绘。 */
     private syncClipBookEntry(): void {
       if (!this.repo || !this.store) return;
-      /* 授权与开关**同时**成立才上架（2026-11-14）：基础版用户即使老数据里
-         开关是开的，书架上也不该有一本点不开的书。开关在设置里被锁住，
-         这里再兜一次运行期——「设置页骗人」比「书架上少一本」更难解释。 */
-      const on = this.cfg.settings?.clipBook === true && can('clipBook');
+      /* 2026-11-22 剪藏成书下放基础版：开关是开的就上架，不再看授权。
+         以前「授权与开关同时成立」是为了不摆一本点不开的书；现在两版都
+         点得开，这个兜底也就不需要了。 */
+      const on = this.cfg.settings?.clipBook === true;
       const r = syncClipBookEntry(this.repo.all(), on, t('clip.bookTitle'));
       if (!r.changed) return;
       this.store.touch();
@@ -1746,13 +1746,8 @@ export function createPlugin(cfg: PluginConfig) {
         });
         return;
       }
-      /* 剪藏成书是高级版能力（2026-11-14）：书架上可能留着老版本建的书、
-         或用户切回基础版之后那本书还在——只锁设置开关挡不住这条路径。
-         弹层高亮对照表里的「剪藏成书」（mode 与行的 cap 同名）。 */
-      if (book.meta.clipBook && !can('clipBook')) {
-        setState({ overlay: { kind: 'unlock', mode: 'clipBook' } });
-        return;
-      }
+      /* 剪藏成书 2026-11-22 下放基础版：老版本建的书、切回基础版之后
+         留着的那本书，现在都能照常打开，不再走解锁弹层。 */
       /* 文件不在了：不进阅读视图、不抛底层错误，直接开「重新定位」弹层。
          顺手把失联标记写上，书架下一次重绘就压暗封面、显示角标。
          剪藏本是虚拟书（没有文件），不走这条。 */
@@ -1809,9 +1804,20 @@ export function createPlugin(cfg: PluginConfig) {
     /**
      * 从位置链接跳到原文。
      * 开书交给 openBook，定位交给阅读视图的三级降级（CFI → 原文片段 → 百分比）。
+     *
+     * 2026-11-22：导出整本摘录下放基础版，但「从双链点回原书」仍是高级版
+     * （bilink）。只拦**带定位**的链接——纯书名链接是「打开这本书」，阅读
+     * 本身免费；带 CFI / 原文片段 / 百分比的才是在跳回具体那一句。
+     * 被拦时先把书架叫出来：弹层画在书架里，用户可能正从笔记里点过来。
      */
     async openFromTarget(target: LinkTarget | null): Promise<void> {
       if (!target) return;
+      const located = Boolean(target.cfi || target.text) || target.pct !== undefined;
+      if (located && !can('bilink')) {
+        this.openStudy('library');
+        setState({ overlay: { kind: 'unlock', mode: 'bilink' } });
+        return;
+      }
       const book = this.repo.byId(target.bookId) ?? this.repo.all().find((b) => b.id === target.bookId);
       if (!book) {
         notify(t('notice.link.bookMissing'));

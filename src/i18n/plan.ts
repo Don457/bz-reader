@@ -70,8 +70,10 @@ export type PlanKey =
    * 锚定追问浮框、划词会话留痕、侧栏问答历史、依据按章跳转、连接笔记
    * 浮层、书架对话页），表里原来四行装不下，拆成五行、一行只说一件事。
    * 「对话留档」与「伴读」以前同挤在 aiChat 一行，现在各占一行、
-   * 各挂一个能力位（aiLog / aiChat），被拦时才亮得对。 */
+   * 各挂一个能力位（aiLog / aiChat），被拦时才亮得对。
+   * 2026-11-22：解释 / 翻译 / 摘要下放基础版，追问单独成行（aiFollow）。 */
   | 'aiSel'
+  | 'aiFollow'
   | 'aiBook'
   | 'aiLog'
   | 'aiChat'
@@ -366,16 +368,29 @@ const PLAN_TEXT: Record<PlanKey, Record<Locale, string>> = {
     es: 'Búsqueda semántica: por significado, este libro o el estante',
     pt: 'Busca semântica: por significado, neste livro ou na estante',
   },
-  /* ── AI ── */
+  /* ── AI ──
+     2026-11-22：解释 / 翻译 / 摘要下放基础版（不再设门），「追问」单独
+     成行、仍是高级版。行名里不再写「与追问」——那是另一行的事。 */
   aiSel: {
-    zh: 'AI 解释、翻译、摘要与追问：即划即用',
-    'zh-TW': 'AI 解釋、翻譯、摘要與追問：即劃即用',
-    en: 'AI explain, translate, summarize and follow up: select and go',
-    ja: 'AI 解説・翻訳・要約・追加質問：選択するだけ',
-    de: 'KI: erklären, übersetzen, zusammenfassen, nachfragen — direkt zur Auswahl',
-    fr: 'IA : expliquer, traduire, résumer, relancer — sur une sélection',
-    es: 'IA: explicar, traducir, resumir y repreguntar — sobre una selección',
-    pt: 'IA: explicar, traduzir, resumir e perguntar de novo — numa seleção',
+    zh: 'AI 解释、翻译、摘要：即划即用',
+    'zh-TW': 'AI 解釋、翻譯、摘要：即劃即用',
+    en: 'AI explain, translate and summarize: select and go',
+    ja: 'AI 解説・翻訳・要約：選択するだけ',
+    de: 'KI: erklären, übersetzen, zusammenfassen — direkt zur Auswahl',
+    fr: 'IA : expliquer, traduire, résumer — sur une sélection',
+    es: 'IA: explicar, traducir y resumir — sobre una selección',
+    pt: 'IA: explicar, traduzir e resumir — numa seleção',
+  },
+  aiFollow: {
+    zh: 'AI 追问：就这段接着问',
+    'zh-TW': 'AI 追問：就這段接著問',
+    en: 'AI follow-up: keep asking about this passage',
+    /* 日德法西葡按仓库规矩先留英文占位，上架前统一翻 */
+    ja: 'AI follow-up: keep asking about this passage',
+    de: 'AI follow-up: keep asking about this passage',
+    fr: 'AI follow-up: keep asking about this passage',
+    es: 'AI follow-up: keep asking about this passage',
+    pt: 'AI follow-up: keep asking about this passage',
   },
   /* 2026-11-16：行名从「先建索引，再问整本」改成「四种依据都可添加进去」。
      索引仍然是内部步骤（建索引的入口没变），但卖点不是它——用户关心的是
