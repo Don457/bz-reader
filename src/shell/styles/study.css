@@ -2137,9 +2137,11 @@
 }
 
 /* ── 双链模板（2026-11-23）─────────────────────────────────
-   chip 选模板沿用 .bzs-seg；自定义框、变量按钮、预览、别名输入都收在
-   is-stack 行里整宽排。预览用 <pre> 展示导出后的真实 Markdown 文本。 */
-.bzs-setrow[data-linktpl-custom][hidden] {
+   chip 选模板沿用 .bzs-seg；导出与复制两套的自定义框、变量按钮、预览
+   都收在 is-stack 行里整宽排。预览用 <pre> 展示真实 Markdown 文本。 */
+/* .bzs-setrow 自己写了 display:flex，会盖过浏览器默认的 [hidden]；
+   两套模板的自定义行切到内置档时都必须藏起来，不能只认导出那一套。 */
+.bzs-setrow[hidden] {
   display: none;
 }
 .bzs-tpl-custom {
