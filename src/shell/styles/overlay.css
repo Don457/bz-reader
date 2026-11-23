@@ -704,6 +704,60 @@ body.theme-dark .bzs-aifloat {
   border-top: 1px solid var(--line);
 }
 
+/* 追问锁定行（2026-11-23）：解释/翻译/摘要已免费，浮框底下这条追问
+   对基础版是高级版。整条是一枚按钮，点它就弹对比表高亮 aiAsk——
+   不做成能打字却发不出去的空壳，也不挂悬停气泡。 */
+.bzs-aifloat button.bzs-af-ask.bzs-af-locked {
+  flex: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px dashed var(--copper-line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--t2);
+  font: 12.5px/1.55 var(--ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+
+.bzs-af-ask.bzs-af-locked:hover {
+  background: var(--copper-soft);
+}
+
+.bzs-af-lockico {
+  flex: none;
+  display: inline-flex;
+  color: var(--copper);
+}
+
+.bzs-af-lockico svg {
+  width: 15px;
+  height: 15px;
+}
+
+.bzs-af-locktx {
+  flex: 1;
+  min-width: 0;
+}
+
+.bzs-af-lockgo {
+  flex: none;
+  color: var(--copper);
+  white-space: nowrap;
+}
+
+/* 窄屏（手机整屏浮框）：完整文案 + 右侧「查看功能对照」一行放不下会叠字，
+   只留短句「追问需高级版」，长句收进 extra 隐藏——整条仍可点，含义不丢。 */
+@media (max-width: 600px) {
+  .bzs-af-locktx-extra {
+    display: none;
+  }
+}
+
 .bzs-af-ask textarea {
   flex: 1;
   min-width: 0;

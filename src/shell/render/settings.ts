@@ -925,13 +925,13 @@ export function viewSettings(v: SettingsView): string {
     { tut: tutBtn('ttstut', 'settings.bz.tut') },
   );
 
-  /* AI 组：入口平权。基础版整组灰掉、点一下就弹高级功能说明——
-     只读输入框既不说明为什么不能改，也点不出任何出口。
-     2026-11-19：从 bz 主仓移植 18 家服务商注册表；接入 / 模型配置 / 问答
-     三块分区，密钥与覆盖值按服务商分存，切服务商互不污染。 */
-  const aiUnlocked = can('ai');
-  const aiReadonly = aiUnlocked ? '' : ' readonly';
-  const aiDisabled = aiUnlocked ? '' : ' disabled';
+  /* AI 组（2026-11-23）：解释 / 翻译 / 摘要下放基础版后，用户必须能填自己的
+     密钥才能用这三项——所以整组配置区向基础版开放，不再整组灰掉弹对照表。
+     密钥配置本身不花钱；高级的部分（全书问答 / 追问 / 伴读 / 知识库）仍在
+     各自入口按能力位拦截。2026-11-19：从 bz 主仓移植 18 家服务商注册表；
+     接入 / 模型配置 / 问答三块分区，密钥与覆盖值按服务商分存互不污染。 */
+  const aiReadonly = '';
+  const aiDisabled = '';
   /* 「连上了」= bz 在且有嵌入模型。bz 装着但没选模型，索引照样建不了，
      对用户来说就是没连上——所以门禁看 model，不看 bz 在不在。 */
   const kbLinked = !!v.bz?.model;
@@ -948,7 +948,6 @@ export function viewSettings(v: SettingsView): string {
   const aiGrp = grp(
     'ai',
     t('settings.grp.ai'),
-    `${aiUnlocked ? '' : `<span class="bzs-sr-only">${t('settings.locked')}</span>`}` +
       sub(
         t('settings.ttsSub.conn'),
         `<div class="bzs-setrow"><label>${t('settings.ai.provider')}</label>
@@ -1013,21 +1012,17 @@ export function viewSettings(v: SettingsView): string {
       ) +
       sub(
         t('settings.sub.aiChat'),
-        `${
-          aiUnlocked
-            ? `${toggle('aiSpoiler', s.aiSpoiler === true, t('settings.ai.spoiler'))}
-           <div class="bzs-setrow"><label>${t('settings.sub.aiChat')}</label>
-             <span class="bzs-mini" style="flex:1" data-role="aiprobe-chat"></span>
-             <button class="bzs-btn sm" data-act="aiprobe">${t('settings.aiProbe.run')}</button>
-           </div>`
-            : ''
-        }`,
+        `${toggle('aiSpoiler', s.aiSpoiler === true, t('settings.ai.spoiler'))}
+         <div class="bzs-setrow"><label>${t('settings.sub.aiChat')}</label>
+           <span class="bzs-mini" style="flex:1" data-role="aiprobe-chat"></span>
+           <button class="bzs-btn sm" data-act="aiprobe">${t('settings.aiProbe.run')}</button>
+         </div>`,
       ),
     {
       tut: tutBtn('aichattut', 'settings.bz.tut'),
-      /* 基础版整组锁：AI 全是付费配置，连输入也不行 */
-      cls: aiUnlocked ? '' : 'is-locked',
-      attr: aiUnlocked ? '' : ' data-act="unlock" data-mode="ai"',
+      /* 2026-11-23：配置区向基础版开放，不再整组灰掉弹对照表。 */
+      cls: '',
+      attr: '',
     },
   );
 

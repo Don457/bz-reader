@@ -33,6 +33,9 @@ import { floatBoxStyle, type FloatBox } from './float-drag';
  */
 const PIN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>`;
 
+/** 追问锁定行的小锁图标（lucide lock，路径照抄） */
+const LOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+
 /** 浮框顶栏那枚类型标签：解释 / 翻译 / 总结 / 追问 */
 const KIND_KEYS = {
   explain: 'ai.mode.explain',
@@ -95,6 +98,12 @@ export interface AiCardInput extends AiFloatState {
   archivedAt?: string;
   /** 追问输入框里还没发出去的字：重画 / 关掉再开要原样回来 */
   draft?: string;
+  /**
+   * 追问是否已锁定（2026-11-23）：解释 / 翻译 / 摘要下放基础版后，浮框底部
+   * 仍可接着追问，但追问是高级版。锁定时整条输入行换成「解锁」按钮——
+   * 点它直接弹对比表并高亮 aiAsk，不摆一个能打字却发不出去的空壳。
+   */
+  followLocked?: boolean;
   /**
    * 定住了没有（2026-11-16）。
    *
@@ -188,9 +197,19 @@ export function aiCardHtml(input: AiCardInput): string {
   const quote = input.quote
     ? `<div class="bzs-af-quote">${esc(input.quote)}</div>`
     : '';
-  /* 没配服务不摆输入行：点了也只会得到一句「还没配置」 */
+  /* 没配服务不摆输入行：点了也只会得到一句「还没配置」。
+     2026-11-23：追问是高级版，锁定时整条换成「解锁」按钮——点它弹对比表
+     并高亮 aiAsk；不摆一个能打字却发不出去的输入框。 */
   const askrow = input.ready
-    ? `<div class="bzs-af-ask">
+    ? input.followLocked
+      ? `<button type="button" class="bzs-af-ask bzs-af-locked" data-act="unlock" data-mode="aiAsk">
+          <span class="bzs-af-lockico" aria-hidden="true">${LOCK_ICON}</span>
+          <span class="bzs-af-locktx">${esc(t('ai.follow.locked'))}<span class="bzs-af-locktx-extra">${esc(
+            t('ai.follow.locked.extra'),
+          )}</span></span>
+          <span class="bzs-af-lockgo">${esc(t('settings.lic.compare'))}</span>
+        </button>`
+      : `<div class="bzs-af-ask">
       <textarea rows="1" data-role="aifollow" placeholder="${esc(t('ai.float.reply'))}"></textarea>
       <button type="button" class="bzs-af-send" data-act="aifollow" disabled><span class="bzs-sr-only">${esc(
         t('ai.float.send'),

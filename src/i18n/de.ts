@@ -1814,4 +1814,6 @@ export const DE: Record<MsgKey, string> = {
   'license.summaryExpired': '[TODO] license.summaryExpired {date}',
   'license.summaryPaid': '[TODO] license.summaryPaid {who} {until}',
   'settings.lic.update': '[TODO] settings.lic.update',
+  'ai.follow.locked': '[TODO] ai.follow.locked',
+  'ai.follow.locked.extra': '[TODO] ai.follow.locked.extra',
 };

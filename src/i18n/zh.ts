@@ -628,6 +628,11 @@ export const ZH = {
   'ai.first.translate': '把这一段翻译成英文',
   'ai.first.summarize': '用三句话总结这一段',
   /* 浮框：输入行、空态与归档状态 */
+  /* 追问锁定（2026-11-23）：解释/翻译/摘要已免费，浮框底下这条追问仍要高级版。
+     拆两段是为了窄屏——手机上只留短句 + 右侧「查看功能对照」，长句藏进 extra，
+     免得和右侧按钮叠字（flex 一行放不下）。 */
+  'ai.follow.locked': '追问需高级版',
+  'ai.follow.locked.extra': ' · 解释 / 翻译 / 摘要已免费',
   'ai.float.reply': '回复…',
   'ai.float.send': '发送',
   'ai.float.empty': '直接问，问题会带着上面那段原文。',

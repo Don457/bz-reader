@@ -940,6 +940,9 @@ function overlayAi(markId?: string, bookId?: string): string {
           archivedAt: entry?.archivedAt,
           /* 没发出去的草稿：重画、切档、关掉再开都还在 */
           draft: cardKey ? aiCardDraft(cardKey) : '',
+          /* 追问是高级版（2026-11-23）：解释/翻译/摘要浮框底部这条追问
+             对基础版锁死，点它弹对比表高亮 aiAsk；有码才可输入发送。 */
+          followLocked: !can('aiAsk'),
           pinned: !!o?.pinned,
           /* 拖出来的位置（2026-11-16）：写进模板，卡片第一次画出来就在那一处。
              手机上不认——那边是整屏弹层，没有「挪开」这回事。 */
