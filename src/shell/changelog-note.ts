@@ -127,6 +127,7 @@ interface ChangelogCopy {
   fbSrcQqChannel: string;
   fbSrcQqFriend: string;
   fbSrcBili: string;
+  fbSrcBiliComment: string;
   /** 入口行 / 标题里的条数，如「3 条」 */
   fbCount: (n: number) => string;
 }
@@ -192,6 +193,7 @@ const COPY: Record<'zh' | 'en', ChangelogCopy> = {
     fbSrcQqChannel: 'QQ 频道',
     fbSrcQqFriend: 'QQ 好友',
     fbSrcBili: 'B 站私信',
+    fbSrcBiliComment: 'B 站评论区',
     fbCount: (n) => `${n} 条`,
   },
   en: {
@@ -250,6 +252,7 @@ const COPY: Record<'zh' | 'en', ChangelogCopy> = {
     fbSrcQqChannel: 'QQ channel',
     fbSrcQqFriend: 'QQ friend',
     fbSrcBili: 'Bilibili DM',
+    fbSrcBiliComment: 'Bilibili comment',
     fbCount: (n) => `${n} item${n === 1 ? '' : 's'}`,
   },
 } as const;
@@ -431,6 +434,7 @@ function feedbackSourceLabel(s: FeedbackSource): string {
     'qq-group': c.fbSrcQqGroup,
     'qq-channel': c.fbSrcQqChannel,
     'qq-friend': c.fbSrcQqFriend,
+    'bili-comment': c.fbSrcBiliComment,
     'bili-dm': c.fbSrcBili,
   };
   return map[s];

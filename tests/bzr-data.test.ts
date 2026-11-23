@@ -160,6 +160,15 @@ describe('用户反馈：两组、两态、坏条目', () => {
     expect(items.find((i) => i.id === 'r2')!.rejectedAt).toBe('');
   });
 
+  it('B 站评论区来源 bili-comment 能解析；老 bili-dm 私信条目照旧兼容', () => {
+    const d = withFeedback([{ key: 'bug', items: [
+      { id: 'cmt', source: 'bili-comment', summary: 's1', title: 't1', desc: '', href: '', submittedAt: '2026-11-23' },
+      { id: 'dm', source: 'bili-dm', summary: 's2', title: 't2', desc: '', href: '', submittedAt: '2026-11-18' },
+    ] }])!;
+    const items = d.feedback!.find((g) => g.key === 'bug')!.items;
+    expect(items.map((i) => i.source).sort()).toEqual(['bili-comment', 'bili-dm']);
+  });
+
   it('没有 feedback 块 → 两个空组（老 JSON 仍合法）', () => {
     const d = parseBzrData(doc())!;
     expect(d.feedback).toHaveLength(2);

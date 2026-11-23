@@ -246,6 +246,22 @@ describe('反馈 v2：五态、作者回复、Git 提交链接', () => {
     expect(s).toContain('2026.11.15 23:09');
     expect(s).toContain('2026.11.16 00:45');
   });
+
+  it('B 站评论区来源显示「B 站评论区」，与私信来源区分', () => {
+    const data: BzrData = {
+      ...DATA,
+      roadmap: [],
+      feedback: [{ key: 'feature', items: [
+        { id: 'cmt', source: 'bili-comment', summary: 's', title: '评论区的', desc: '', href: '',
+          state: 'doing', submittedAt: '2026-11-23' },
+        { id: 'dm', source: 'bili-dm', summary: 's', title: '私信的', desc: '', href: '',
+          state: 'doing', submittedAt: '2026-11-23' },
+      ] }, { key: 'bug', items: [] }],
+    };
+    const s = changelogNoteHtml(CHANGELOG_RELEASES, '1.5.2', NAMES, data);
+    expect(s).toContain('B 站评论区');
+    expect(s).toContain('B 站私信');
+  });
 });
 
 describe('反馈显示所有插件的条目（2026-11-19 去掉插件隔离）', () => {
