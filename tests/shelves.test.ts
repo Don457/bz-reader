@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeBook } from '../src/data/book-repo';
 import { sanitizeData } from '../src/data/store';
-import { shelfOf } from '../src/shell/domain';
+import { shelfOf, shelvesOf } from '../src/shell/domain';
 import { hydrateLibrary } from '../src/shell/state';
 import {
   ALL_SHELF,
@@ -169,6 +169,11 @@ describe('分类只认手动指定的值', () => {
   it('手动指定分类就用它，不被书自带题材覆盖', () => {
     hydrateLibrary([{ id: 'b-1', shelf: '写作' }], 20, []);
     expect(shelfOf(oneBook())).toBe('写作');
+  });
+
+  it('多分类查询同样不回退书自带题材', () => {
+    hydrateLibrary([{ id: 'b-1' }], 20, []);
+    expect(shelvesOf(oneBook())).toEqual([]);
   });
 
   it('读盘重建时不能把空串丢掉：丢了就等于撤销了用户的选择', () => {
