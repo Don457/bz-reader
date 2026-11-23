@@ -127,3 +127,53 @@ describe('扫描页识别设置', () => {
     expect(normalizeSettings({ pdfOcr: { engine: 'vision' } }).pdfOcr.engine).toBe('deepseek');
   });
 });
+
+/** 双链模板设置：两套独立配置（整本导出 / 复制划线），老数据没有 → 退回默认 */
+describe('双链模板设置', () => {
+  it('老数据缺省 → 两套都是简洁档 + 空自定义，导出格式与升级前一致', () => {
+    const s = normalizeSettings({});
+    expect(s.exportTemplate).toBe('simple');
+    expect(s.exportTemplateCustom).toBe('');
+    expect(s.copyTemplate).toBe('simple');
+    expect(s.copyTemplateCustom).toBe('');
+  });
+
+  it('导出模板只认四个 id，写坏了退回 simple', () => {
+    expect(normalizeSettings({ exportTemplate: 'quote' }).exportTemplate).toBe('quote');
+    expect(normalizeSettings({ exportTemplate: 'detail' }).exportTemplate).toBe('detail');
+    expect(normalizeSettings({ exportTemplate: 'custom' }).exportTemplate).toBe('custom');
+    expect(normalizeSettings({ exportTemplate: '乱写' }).exportTemplate).toBe('simple');
+  });
+
+  it('复制与导出是同一组 id：quote 合法，旧的 brief 写坏了退回 simple', () => {
+    expect(normalizeSettings({ copyTemplate: 'simple' }).copyTemplate).toBe('simple');
+    expect(normalizeSettings({ copyTemplate: 'quote' }).copyTemplate).toBe('quote');
+    expect(normalizeSettings({ copyTemplate: 'detail' }).copyTemplate).toBe('detail');
+    expect(normalizeSettings({ copyTemplate: 'custom' }).copyTemplate).toBe('custom');
+    expect(normalizeSettings({ copyTemplate: 'brief' }).copyTemplate).toBe('simple');
+  });
+
+  it('自定义模板保留原文（含换行），仅去掉首尾空白', () => {
+    const tpl = '\n> [!note] {书名}\n> {双链}\n  ';
+    expect(normalizeSettings({ exportTemplateCustom: tpl }).exportTemplateCustom).toBe('> [!note] {书名}\n> {双链}');
+    expect(normalizeSettings({ copyTemplateCustom: '《{书名}》\n· {章节}' }).copyTemplateCustom).toBe('《{书名}》\n· {章节}');
+  });
+
+  it('老 aliasTemplate 有内容 → 迁到复制自定义档，老别名保留且必须带上可点双链', () => {
+    const s = normalizeSettings({ aliasTemplate: '《{书名}》\n· {章节}' });
+    expect(s.copyTemplate).toBe('custom');
+    /* 老别名只是链接显示文字，不带 {双链}；直接当模板用会复制出纯文本，
+       所以迁移时要补上双链那一行，保住「复制双链到剪贴板」这个核心行为。 */
+    expect(s.copyTemplateCustom).toBe('> {双链}\n> ↳ 《{书名}》\n· {章节}');
+  });
+
+  it('老 aliasTemplate 为空 → 不迁移，复制保持简洁档', () => {
+    expect(normalizeSettings({ aliasTemplate: '  ' }).copyTemplate).toBe('simple');
+  });
+
+  it('两套配置互不影响', () => {
+    const s = normalizeSettings({ exportTemplate: 'quote', copyTemplate: 'detail' });
+    expect(s.exportTemplate).toBe('quote');
+    expect(s.copyTemplate).toBe('detail');
+  });
+});

@@ -264,6 +264,10 @@ export interface MountOptions {
   onPdfOcr?: (page: number) => void;
   /** 跳转历史条数变了：头栏那颗「回到上一处」据此亮 / 灰。两个引擎共用 */
   onHistoryChange?: (count: number) => void;
+  /** 漫画：开书时按书还原方向 / 单双页 / 读到第几页第几格 */
+  mangaView?: import('./manga/settings').MangaViewState;
+  /** 漫画视角变了，由阅读视图按 book 落盘 */
+  onMangaViewState?: (state: import('./manga/settings').MangaViewState) => void;
   /**
    * 虚拟书（剪藏本，2026-11-13）：不经 vault 文件，直接把造好的 foliate book
    * 交给引擎。有它时 `vaultPath` 只当标识用，不会去读盘。

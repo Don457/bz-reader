@@ -317,3 +317,59 @@ describe('导出目标路径（A-16）', () => {
     expect(r?.path).toBe('bz-reader/notes/同名书 (2).md');
   });
 });
+
+/** 双链导出模板：接进 buildNotesBody，默认不变，选模板后每条摘录换排版 */
+describe('导出模板接入', () => {
+  it('默认设置导出的正文 = 现在的格式（摘录双链 + 单独一行时间）', () => {
+    const { book } = bookWithNotes();
+    const md = buildNotesBody(book, DEFAULT_SETTINGS);
+    expect(md).toMatch(/> \[\[书\/测试书\.epub#[^\]]+\|第一章的划线\]\]/);
+    expect(md).toMatch(/> ↳ \d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+    expect(md).not.toContain('[!quote]');
+    expect(md).not.toContain('[!note]');
+  });
+
+  it('选 callout 引文模板：每条摘录变成 callout 块，书名·章节进标题', () => {
+    const { book } = bookWithNotes();
+    const md = buildNotesBody(book, { ...DEFAULT_SETTINGS, exportTemplate: 'quote' });
+    expect(md).toContain('> [!quote] 测试书 · 第一章');
+    expect(md).toContain('> [!quote] 测试书 · 第二章');
+    /* 双链仍在，点文字跳原文 */
+    expect(linksIn(md).filter((l) => l.parsed?.target.cfi?.startsWith('c'))).toHaveLength(3);
+  });
+
+  it('callout 详细模板：位置进标题、时间写在末尾', () => {
+    const { book } = bookWithNotes();
+    const md = buildNotesBody(book, { ...DEFAULT_SETTINGS, exportTemplate: 'detail' });
+    expect(md).toContain('> [!note] 测试书 — 第一章 · 第一章');
+    expect(md).toContain('> 划线于 ');
+  });
+
+  it('自定义模板：用户字符串里的占位符被真实值替换，链接仍可解析', () => {
+    const { book } = bookWithNotes();
+    const md = buildNotesBody(book, {
+      ...DEFAULT_SETTINGS,
+      exportTemplate: 'custom',
+      exportTemplateCustom: '> [!cite] 《{书名}》· {章节}\n> {双链}',
+    });
+    expect(md).toContain('> [!cite] 《测试书》· 第一章');
+    expect(linksIn(md).filter((l) => l.parsed?.target.cfi?.startsWith('c'))).toHaveLength(3);
+  });
+
+  it('自定义模板设成空：回退简洁模板，不导出空摘录', () => {
+    const { book } = bookWithNotes();
+    const fallback = buildNotesBody(book, DEFAULT_SETTINGS);
+    const md = buildNotesBody(book, { ...DEFAULT_SETTINGS, exportTemplate: 'custom', exportTemplateCustom: '  ' });
+    expect(md).toBe(fallback);
+  });
+
+  it('复制模板的配置不碰整本导出：两套配置独立', () => {
+    const { book } = bookWithNotes();
+    const withCopyTpl = buildNotesBody(book, {
+      ...DEFAULT_SETTINGS,
+      copyTemplate: 'detail',
+      copyTemplateCustom: '《{书名}》',
+    });
+    expect(withCopyTpl).toBe(buildNotesBody(book, DEFAULT_SETTINGS));
+  });
+});

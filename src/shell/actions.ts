@@ -89,7 +89,15 @@ import { userFacingActionIds, isMobileHiddenAction, type HeaderActionId } from '
 import { moveHeaderAction } from './header-order';
 import type { ReaderPrefs } from '../data/prefs';
 import { wikilinkOf, wikilinkOfMark } from '../data/wikilink';
-import { pdfLocatorPage } from '../engine/pdf/locator';
+import {
+  copyTemplateText,
+  isBuiltinTemplate,
+  isCopyTemplate,
+  previewVars,
+  renderExportItem,
+  templateVarsOf,
+} from '../data/link-template';
+import { isPdfLocator, pdfLocatorPage } from '../engine/pdf/locator';
 import { buildNotesBody, ensureDir, exportBookNotes, safeName } from '../data/export';
 import {
   aiSessionById,
@@ -1712,7 +1720,7 @@ export function dispatchAction(
       overlay('reset');
       break;
     case 'export':
-      if (!requireCap('export')) break;
+      /* 导出整本摘录 2026-11-22 下放基础版：弹层照开，只是不再设门。 */
       overlay('export', d.id ? { bookId: d.id } : {});
       break;
 
@@ -1780,11 +1788,8 @@ export function dispatchAction(
             i.onClick(() => {
               if (requireCap('aiChat')) void enrichBookMeta(id);
             });
-          /* 导出没解锁就弹对照表，不悄悄降级成「复制一段纯文本」 */
-          if (it.act === 'export')
-            i.onClick(() => {
-              if (requireCap('export')) exportBookFile(id);
-            });
+          /* 导出整本摘录 2026-11-22 下放基础版：不再弹对照表。 */
+          if (it.act === 'export') i.onClick(() => exportBookFile(id));
           if (it.act === 'fav')
             i.onClick(() => {
               const on = toggleFav(id);
@@ -2330,7 +2335,7 @@ export function dispatchAction(
       break;
 
     case 'copymd':
-      if (!requireCap('export')) break;
+      /* 导出整本摘录 2026-11-22 下放基础版，不再设门。 */
       void copyText(exportMarkdown(d.book || undefined));
       break;
     /**
@@ -2340,7 +2345,6 @@ export function dispatchAction(
      * 「把这本的划线收进笔记库」，中间隔一个预览就是多一次点击。
      */
     case 'exportfile': {
-      if (!requireCap('export')) break;
       const id = d.id || d.book || getState().bookId;
       if (id) exportBookFile(id);
       else notify(t('notice.export.needBook'));
@@ -2361,7 +2365,19 @@ export function dispatchAction(
         notify(t('notice.mark.notFound'), 'error');
         break;
       }
-      void copyText(wikilinkOfMark(b, h));
+      /* 复制模板与整本导出是同一套四档：产出整段 Markdown（可多行 / callout），
+         其中 {双链} 就是能点回原文的 wikilink。配置独立存 copyTemplate。 */
+      const s = shellSettings();
+      const page = h.cfiRange && isPdfLocator(h.cfiRange) ? pdfLocatorPage(h.cfiRange) ?? undefined : undefined;
+      const vars = templateVarsOf({
+        book: b,
+        chapter: h.chapterTitle || '',
+        quote: h.text,
+        link: wikilinkOfMark(b, h),
+        createdAt: h.createdAt,
+        page,
+      });
+      void copyText(renderExportItem(copyTemplateText(s.copyTemplate, s.copyTemplateCustom), vars));
       /* 与「复制」同一条规矩：拿到东西就把浮层收掉 */
       closeOverlay();
       break;
@@ -2573,6 +2589,43 @@ export function dispatchAction(
       if (changed) notify(t('notice.language.changed'));
       break;
     }
+    /**
+     * 双链导出模板：选内置档 / 自定义。写 settings + 重绘——模板一换，
+     * 自定义框的显隐和下面的预览都要跟着变。渲染层按 tplId 读同一份设置。
+     */
+    case 'setlinktpl': {
+      const src = getShellSource();
+      if (!src || !isBuiltinTemplate(d.v)) break;
+      src.setSettings({ exportTemplate: d.v });
+      repaint();
+      break;
+    }
+    /**
+     * 复制划线模板：四档独立配置，与导出的 setlinktpl 同一套交互。
+     */
+    case 'setcopytpl': {
+      const src = getShellSource();
+      if (!src || !isCopyTemplate(d.v)) break;
+      src.setSettings({ copyTemplate: d.v });
+      repaint();
+      break;
+    }
+    /**
+     * 变量按钮：把 `{书名}` 这类占位符插到目标输入框的光标处。
+     * 纯 DOM 操作，不落盘——真正的值在输入框 change 时由 dispatchInput 收口。
+     */
+    case 'insertvar': {
+      const target = d.target ? document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        `[data-k="${d.target}"]`,
+      ) : null;
+      if (!target || !d.v) break;
+      const at = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? at;
+      target.value = target.value.slice(0, at) + d.v + target.value.slice(end);
+      target.focus();
+      target.selectionStart = target.selectionEnd = at + d.v.length;
+      break;
+    }
     case 'setocr': {
       /* 扫描页识别的通道：只切开关不重认，用户上一批认过的结果照旧可用 */
       const src = getShellSource();
@@ -2632,10 +2685,9 @@ export function dispatchAction(
       if (d.k === 'embedReview' && patch.embedReview === false && getState().studyPage === 'review') {
         setState({ studyPage: 'library' });
       }
-      /* 剪藏成书是高级版能力（2026-11-14）：未解锁时点开关只弹解锁层，
-         **不落盘**——否则设置里显示「已开」、书架里却没有书，用户会当成坏掉。
-         requireCap 自己会弹层并高亮对照表里「剪藏成书」那一行。 */
-      if (d.k === 'clipBook' && patch.clipBook === true && !requireCap('clipBook')) break;
+      /* 剪藏成书 2026-11-22 下放基础版：开关不再需要能力位，直接落盘。
+         以前未解锁时点开关只弹解锁层、不落盘，免得「设置显示已开、书架
+         却没有书」；现在两版都能开，这条中间态不存在了。 */
       src.setSettings(patch);
       /* 必须自己重绘：setSettings 只落盘 + notifyShell，设置页那块的 DOM
          不会因为状态变了就重建，开关会停在旧位置（用户报的「点了不实时显示」）。 */
@@ -3200,8 +3252,8 @@ export function dispatchAction(
     }
     case 'hlai': {
       /* 点划线也能问 AI：以前这条工具条上根本没有 AI 这一颗，
-         想解释划线原文只能先划一遍再点。与 selai 同一个面板，只是带上了 markId。 */
-      if (!requireCap('aiSel')) break;
+         想解释划线原文只能先划一遍再点。与 selai 同一个面板，只是带上了 markId。
+         2026-11-22：解释 / 翻译 / 摘要下放基础版，这里不再设门。 */
       const book = findBookOfMark(d.id, d.book);
       const h = book?.notes?.highlights.find((x) => x.id === d.id);
       if (!book || !h) {
@@ -3320,15 +3372,16 @@ export function dispatchAction(
       break;
     case 'selai':
       /* 不再直接解释：先在工具条上方摊开五项（原型第 2 稿）。
-         2026-11-16 起只有点击一条路（悬停开合已撤）：点一下开，再点一下关。 */
+         2026-11-16 起只有点击一条路（悬停开合已撤）：点一下开，再点一下关。
+         2026-11-22：解释 / 翻译 / 摘要下放基础版，菜单照开；追问那一项
+         自己设门（见 aimenupick 与 aifollow）。 */
       if (!RT.sel) break;
-      if (requireCap('aiSel'))
-        openAiMenu({
-          text: RT.sel.text,
-          bookId: RT.sel.bookId,
-          chapterTitle: RT.sel.chapterTitle,
-          anchor: RT.sel.anchor,
-        });
+      openAiMenu({
+        text: RT.sel.text,
+        bookId: RT.sel.bookId,
+        chapterTitle: RT.sel.chapterTitle,
+        anchor: RT.sel.anchor,
+      });
       break;
     /* 两颗知识库按钮和 AI 问答同一道门：按钮在授权掉了之后不再渲染，
        但动作本身也该拦——data-act 是 DOM 属性，不是权限。
@@ -3385,15 +3438,25 @@ export function dispatchAction(
         break;
       }
       autoMarkSelection('selbilink');
-      void copyText(
-        wikilinkOf(book, {
-          text: sel.text,
-          cfiRange: sel.cfiRange,
-          chapterTitle: sel.chapterTitle,
-          pdfSelection: sel.pdfSelection,
-          pdfRect: sel.pdfRect,
-        }),
-      );
+      /* 与「复制划线」同一套模板配置，产出原样多行 Markdown。 */
+      const s = shellSettings();
+      const page = sel.cfiRange && isPdfLocator(sel.cfiRange) ? pdfLocatorPage(sel.cfiRange) ?? undefined : undefined;
+      const link = wikilinkOf(book, {
+        text: sel.text,
+        cfiRange: sel.cfiRange,
+        chapterTitle: sel.chapterTitle,
+        pdfSelection: sel.pdfSelection,
+        pdfRect: sel.pdfRect,
+      });
+      const vars = templateVarsOf({
+        book,
+        chapter: sel.chapterTitle || '',
+        quote: sel.text,
+        link,
+        createdAt: 0,
+        page,
+      });
+      void copyText(renderExportItem(copyTemplateText(s.copyTemplate, s.copyTemplateCustom), vars));
       finishSelection('selbilink');
       break;
     }
@@ -4026,6 +4089,9 @@ export function dispatchAction(
         break;
       }
       if (task !== 'explain' && task !== 'translate' && task !== 'summarize' && task !== 'follow') break;
+      /* 2026-11-22：解释 / 翻译 / 摘要是基础版，追问是高级版。
+         点「追问」就拦——不让他先打开输入框、打完字才说不能发。 */
+      if (task === 'follow' && !requireCap('aiAsk')) break;
       /* 落线的时机按「这一下有没有问东西」分开（2026-11-16 作者定）：
          · 解释 / 翻译 / 总结：点下去就是要这段的结果，立刻落线，和「想法」
            同一条路；失败 / 取消也不撤线——用户点下去就是要留这段。
@@ -4163,6 +4229,10 @@ export function dispatchAction(
     }
     /* 追问：空面板的第一问与后续轮次共用这一个动作 */
     case 'aifollow': {
+      /* 2026-11-22：追问是高级版。菜单里点「追问」已经拦过一道，这里再拦
+         一道——解释 / 翻译 / 摘要的浮框底下也能接着问，那是第二个入口。
+         先拦再读输入框：拦下时输入的文字还留在框里，解锁回来不用重打。 */
+      if (!requireCap('aiAsk')) break;
       const card = el.closest('.bzs-aifloat');
       const input = card?.querySelector<HTMLTextAreaElement>('[data-role="aifollow"]');
       void followAi(input?.value ?? '');
@@ -4263,7 +4333,7 @@ export function dispatchAction(
        划线重写进「书摘/书名.md」——点一次「存笔记」等于一次全量导出，
        用户在别处手改过的内容会被覆盖，也和卡片上看到的「这一条」对不上。 */
     case 'quotesave': {
-      if (!requireCap('export')) break;
+      /* 单条书摘存笔记跟着「导出整本摘录」一起下放基础版（2026-11-22）。 */
       const app = getShellSource()?.app;
       const book = currentBook();
       const overlayState = getState().overlay;
@@ -4399,9 +4469,41 @@ function toggleDone(id?: string): void {
  * 拖到一半手指还按着，拖动会话就断了，只能一格一格点。`change` / 松手时
  * 才补一次重绘。
  */
+/** 漫画全局默认的布尔项：白名单之外一律不认，免得手改 data-k 写坏 prefs */
+function withMangaBool(cur: ReaderPrefs['manga'], field: string, on: boolean): ReaderPrefs['manga'] | null {
+  switch (field) {
+    case 'spread': return { ...cur, spread: on };
+    case 'splitWide': return { ...cur, splitWide: on };
+    case 'coverAlone': return { ...cur, coverAlone: on };
+    case 'panels': return { ...cur, panels: on };
+    case 'crop': return { ...cur, crop: on };
+    case 'thumbs': return { ...cur, thumbs: on };
+    case 'tapReverse': return { ...cur, tapReverse: on };
+    case 'keepAwake': return { ...cur, keepAwake: on };
+    default: return null;
+  }
+}
+
 function setPref(k: string | undefined, v: string | undefined, opts: { silent?: boolean } = {}): void {
   const src = getShellSource();
   if (!src || !k || v === undefined) return;
+  /* 漫画全局默认（2026-11-15）：三个枚举档加一组开关统一收口到 prefs.manga。
+     窗口外的值一律回默认，与 normalizeMangaPrefs 同一口径。 */
+  if (k.startsWith('manga.')) {
+    const field = k.slice('manga.'.length);
+    const cur = shellPrefs().manga;
+    let next: ReaderPrefs['manga'] | null;
+    if (field === 'direction') next = { ...cur, direction: v === 'rtl' || v === 'ltr' ? v : 'auto' };
+    else if (field === 'flow') next = { ...cur, flow: v === 'vertical' || v === 'horizontal' || v === 'webtoon' ? v : 'paged' };
+    else if (field === 'fit') next = {
+      ...cur,
+      fit: v === 'screen' || v === 'width' || v === 'height' || v === 'fill' || v === 'original' ? v : 'smart',
+    };
+    else next = withMangaBool(cur, field, v !== '0');
+    if (next) src.setPrefs({ manga: next });
+    if (!opts.silent) repaint();
+    return;
+  }
   switch (k) {
     case 'fontSize':
       src.setPrefs({ fontSize: Number(v) });
@@ -5320,6 +5422,15 @@ async function archiveAiFloat(): Promise<void> {
 
 /* ─────────── 输入与快捷键 ─────────── */
 
+/** 自定义模板输入时局部刷新预览，不重绘整页（否则光标/软键盘会被打断） */
+function updateTplPreview(template: string, kind: 'export' | 'copy'): void {
+  const box = document.querySelector<HTMLElement>(
+    kind === 'export' ? '[data-linktpl-preview]' : '[data-copytpl-preview]',
+  );
+  if (!box) return;
+  box.textContent = renderExportItem(template, previewVars());
+}
+
 export function dispatchInput(
   target: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
   ev?: Event,
@@ -5380,12 +5491,32 @@ export function dispatchInput(
     return;
   }
   if (role === 'setting' && k) {
-    const src = getShellSource();
-    if (!src) return;
     /* 输入期间（input）一个字节都不落盘：以前每敲一个字就 setSettings，
        移动端软键盘会在同步 IO 的间隙收起，表现成「打一个字就失焦」。
-       松手（change）或输入法上屏（compositionend）才收口。 */
-    if (dragging) return;
+       松手（change）或输入法上屏（compositionend）才收口。
+       必须放在所有 setSettings 分支之前——否则双链模板输入框逐字落盘，
+       软键盘照样收起、光标照样跳走。 */
+    if (dragging) {
+      /* 双链模板：输入途中只更新预览（不落盘、不重绘），落盘留到 change。 */
+      if (k === 'exportTemplateCustom') updateTplPreview(value, 'export');
+      if (k === 'copyTemplateCustom') updateTplPreview(value, 'copy');
+      return;
+    }
+    const src = getShellSource();
+    if (!src) return;
+    /* 双链模板：两套自定义正文，松手才落盘，避免软键盘逐字收起。 */
+    if (k === 'exportTemplateCustom' || k === 'copyTemplateCustom') {
+      if (k === 'exportTemplateCustom') {
+        if (value === String(shellSettings().exportTemplateCustom ?? '')) return;
+        src.setSettings({ exportTemplateCustom: value });
+        updateTplPreview(value, 'export');
+      } else {
+        if (value === String(shellSettings().copyTemplateCustom ?? '')) return;
+        src.setSettings({ copyTemplateCustom: value });
+        updateTplPreview(value, 'copy');
+      }
+      return;
+    }
     /* AI 组（注册表移植后）：custom 的旧三件套 + 各家按 id 分表的覆盖值。
        切服务商 / 协议会改变这一组显示哪些行，落盘后要重绘。 */
     if (k.startsWith('ai.')) {

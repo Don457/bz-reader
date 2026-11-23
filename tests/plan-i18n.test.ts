@@ -83,11 +83,11 @@ describe('解锁弹层的其余文案', () => {
   });
 });
 
-describe('不发试用时，弹层只留交流群入口', () => {
-  it('TRIAL_ACTIVE=false：按钮不提试用，只印群号', () => {
+describe('交流群入口', () => {
+  it('TRIAL_ACTIVE 仍为 false：试用只由群里人工发，插件不自己发', () => {
     expect(TRIAL_ACTIVE).toBe(false);
     const html = groupButtonHtml();
-    expect(html).not.toContain('试用');
+    expect(html).toContain('进群领试用');
     expect(html).toContain(GROUP_ID);
   });
 });

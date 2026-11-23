@@ -22,13 +22,23 @@
  * 名单内容本身不落盘：每次启动重拉。
  * ============================================================ */
 import { requestUrl } from 'obsidian';
+import { locale } from '../i18n';
 import { parseLicense, verifySignedBytes } from './license';
 
-/** 两条下载通道：GitHub raw 主源、码云 raw 国内直连 */
-export const REVOKED_URLS: readonly string[] = [
-  'https://raw.githubusercontent.com/yeshimei/bz-reader/master/docs/revoked.json',
-  'https://gitee.com/ntbl/bz-reader/raw/master/docs/revoked.json',
-];
+const GITHUB_RAW = 'https://raw.githubusercontent.com/yeshimei/bz-reader/master/docs/revoked.json';
+const GITEE_RAW = 'https://gitee.com/ntbl/bz-reader/raw/master/docs/revoked.json';
+
+/** 两条下载通道，顺序固定只为对外可见；实际拉取顺序看 revokedOrder() */
+export const REVOKED_URLS: readonly string[] = [GITHUB_RAW, GITEE_RAW];
+
+/**
+ * 两源一起抓、谁先回用谁（2026-11-23）：这里只决定**谁先发起请求**——
+ * 简中先码云（国内直连快），其余语言先 GitHub。发完就竞速，不比较两份
+ * 名单的新旧（作者保证两处内容一致），先回且验签通过的那份立刻生效。
+ */
+export function revokedOrder(): readonly string[] {
+  return locale() === 'zh' ? [GITEE_RAW, GITHUB_RAW] : [GITHUB_RAW, GITEE_RAW];
+}
 
 /** 本地状态键。带版本号：将来换结构时老状态自动作废 */
 export const REVOKED_STATE_KEY = 'bz-reader:revoked:v1';
@@ -273,25 +283,50 @@ async function requestText(url: string, timeoutMs: number): Promise<string | nul
 let http: RevokedHttp = requestText;
 
 /**
- * 两个源并发，都拿回来再挑。
+ * 两源并发，谁先回一份**合法**名单就用谁（2026-11-23 加速）。
  *
- * 不走「先回者胜」：停用名单的正确性比速度重要——若一个源被污染成旧名单
- * （或一份伪造的旧内容），先回者胜会把已封的码放出来。这里只认验签通过
- * 且 `updatedAt` 最大的那一份。
+ * 作者保证两个 CDN 的名单内容一致，所以不再等齐、也不比新旧——先回且
+ * 验签通过的那份立刻生效，用户不必等慢的那个站。
+ *
+ * 「合法」仍卡两道，和速度无关，不能省：
+ *   · 验签不过 → 当没拉到，继续等另一份（防代理 / 公共 WiFi 塞假名单）；
+ *   · `updatedAt` 比本地见过的还旧 → 当没拉到（防旧名单把已封的码救活）。
+ * 两份都不合法才返回 null（→ unknown，放行）。
  */
 async function pull(timeoutMs: number): Promise<RevokedDoc | null> {
-  const texts = await Promise.all(
-    REVOKED_URLS.map((u) => http(bust(u), timeoutMs).catch(() => null)),
-  );
-  let best: RevokedDoc | null = null;
-  for (const text of texts) {
-    if (text == null) continue;
-    const doc = parseRevoked(text);
-    if (!doc) continue;
-    if (!(await verifyRevoked(doc))) continue;
-    if (!best || doc.updatedAt > best.updatedAt) best = doc;
-  }
-  return best;
+  const seen = revokedSeenAt();
+
+  return await new Promise<RevokedDoc | null>((resolve) => {
+    let settled = false;
+    let left = revokedOrder().length;
+
+    const finish = (doc: RevokedDoc | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(doc);
+    };
+    /* 这一份不合法：等另一份；两份都用不上才 unknown */
+    const drop = (): void => {
+      left -= 1;
+      if (left <= 0) finish(null);
+    };
+
+    for (const url of revokedOrder()) {
+      void http(bust(url), timeoutMs)
+        .then(async (text) => {
+          if (settled) return;
+          if (text == null) return drop();
+          const doc = parseRevoked(text);
+          if (!doc) return drop();
+          if (doc.updatedAt < seen) return drop();
+          if (!(await verifyRevoked(doc))) return drop();
+          finish(doc);
+        })
+        .catch(() => {
+          if (!settled) drop();
+        });
+    }
+  });
 }
 
 /* ── 对外 ─────────────────────────────────────────────────── */

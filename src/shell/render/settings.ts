@@ -32,6 +32,7 @@ import { ACCENT_OPTIONS, accentLabel, FONT_FAMILIES, fontLabel, FONT_SIZE_RANGE,
 import { ttsEngineReady, type TtsEngine } from '../../core/tts-engine';
 import { HIGHLIGHT_COLORS, colorLabel } from '../../data/notes';
 import { DEFAULT_SETTINGS, ocrEngineChoices, type ReaderSettings } from '../../data/settings';
+import { PLACEHOLDERS, builtinTemplate, previewVars, renderExportItem } from '../../data/link-template';
 import {
   AI_PROVIDER_REGISTRY,
   DEFAULT_AI_PROVIDER,
@@ -428,6 +429,47 @@ export function viewSettings(v: SettingsView): string {
      任何控件，讲的双链能力在复制书摘时本来就有，2026-11-05 整行去掉。
      笔色五档走 bzs-seg-wrap：与语言、强调色同一套格子下限，窄窗不会叠字。
      2026-11-17：说明行去掉（用户定稿），色点本身就是「上次用的那个」。 */
+  /* 双链模板（2026-11-23）：导出与复制各一套四档，档位、标签、变量、预览
+     全部相同——都是多行 Markdown / callout；只有配置与 action 分开。
+     预览用固定示例数据，不随时间变；切换档位 / 输入正文时局部刷新。 */
+  const templateBlock = (kind: 'export' | 'copy'): string => {
+    const isExport = kind === 'export';
+    const id: string = isExport ? s.exportTemplate ?? 'simple' : s.copyTemplate ?? 'simple';
+    const custom = isExport ? s.exportTemplateCustom : s.copyTemplateCustom;
+    const act = isExport ? 'setlinktpl' : 'setcopytpl';
+    const key = isExport ? 'exportTemplateCustom' : 'copyTemplateCustom';
+    /* 四档与文案完全复用导出那套，复制侧不再另设单行别名档 */
+    const opts: readonly (readonly [string, string])[] = [
+      ['simple', t('settings.linkTpl.simple')],
+      ['quote', t('settings.linkTpl.quote')],
+      ['detail', t('settings.linkTpl.detail')],
+      ['custom', t('settings.linkTpl.custom')],
+    ];
+    const tplText = isExport
+      ? (s.exportTemplate === 'custom' ? s.exportTemplateCustom : builtinTemplate(s.exportTemplate ?? 'simple'))
+      : (s.copyTemplate === 'custom' ? s.copyTemplateCustom : builtinTemplate(s.copyTemplate ?? 'simple'));
+    const previewText = renderExportItem(tplText, previewVars());
+    const vars = PLACEHOLDERS;
+    return `
+      <div class="bzs-setrow is-stack"><label>${t(isExport ? 'settings.linkTpl' : 'settings.copyTpl')}</label>
+        <div class="hint">${t(isExport ? 'settings.linkTpl.hint' : 'settings.copyTpl.hint')}</div>
+        <div class="bzs-seg bzs-seg-wrap">
+          ${opts.map(([oid, olabel]) => `<button class="${id === oid ? 'on' : ''}" data-act="${act}" data-v="${oid}">${olabel}</button>`).join('')}
+        </div>
+      </div>
+      <div class="bzs-setrow is-stack" ${isExport ? 'data-linktpl-custom' : 'data-copytpl-custom'}${id === 'custom' ? '' : ' hidden'}>
+        <textarea class="bzs-tpl-custom" data-role="setting" data-k="${key}" rows="4" placeholder="${t(isExport ? 'settings.linkTpl.custom.ph' : 'settings.copyTpl.custom.ph')}">${esc(custom)}</textarea>
+        <div class="hint">${t(isExport ? 'settings.linkTpl.vars' : 'settings.copyTpl.vars')}</div>
+        <div class="bzs-tpl-vars">${vars.map(
+          (p) => `<button type="button" data-act="insertvar" data-target="${key}" data-v="${p}">${p}</button>`,
+        ).join('')}</div>
+      </div>
+      <div class="bzs-setrow is-stack"><label>${t(isExport ? 'settings.linkTpl.preview' : 'settings.copyTpl.preview')}</label>
+        <pre class="bzs-tpl-preview" ${isExport ? 'data-linktpl-preview' : 'data-copytpl-preview'}>${esc(previewText)}</pre>
+      </div>`;
+  };
+  const tplBlock = templateBlock('export') + templateBlock('copy');
+
   const marksGrp = grp(
     'marks',
     t('settings.grp.marks'),
@@ -439,7 +481,8 @@ export function viewSettings(v: SettingsView): string {
         <button class="bzs-pickdir" data-act="pickexportdir"><span class="bzs-sr-only">${t('settings.pickFromList')}</span>
           <span>${esc(s.exportDir)}/</span>${ico('folder') || ''}<i>${t('settings.pick')}</i>
         </button></div>
-      ${toggle('exportComments', s.exportComments, t('settings.exportComments'))}`,
+      ${toggle('exportComments', s.exportComments, t('settings.exportComments'))}
+      ${tplBlock}`,
   );
 
   /* 数据组分三块：目录 / 备份与恢复 / 排查。
@@ -621,6 +664,70 @@ export function viewSettings(v: SettingsView): string {
       ),
     { tut: tutBtn('pdftut', 'settings.bz.tut'), cls: 'bzs-setgrp-pdf' },
   );
+
+  /* 漫画（2026-11-15 转正）：这里是全局默认，正在读的那本可以单独覆盖，
+     覆盖值存在 ReaderBook.mangaView。基础版整组灰掉、点一下弹对照表并高亮
+     漫画那一行，与 PDF / AI 同口径。 */
+  const mangaUnlocked = can('manga');
+  const mp = p.manga;
+  const mangaLock = mangaUnlocked ? '' : 'is-locked';
+  const mangaLockAttr = mangaUnlocked ? '' : ' data-act="unlock" data-mode="manga"';
+  const mangaLockSr = mangaUnlocked ? '' : `<span class="bzs-sr-only">${t('settings.locked')}</span>`;
+  const mangaSwitch = (field: string, on: boolean, key: MsgKey): string =>
+    `<div class="bzs-setrow"><label>${t(key)}</label><button class="bzs-switch${
+      on ? ' on' : ''
+    }" data-act="setpref" data-k="manga.${field}" data-v="${on ? '0' : '1'}"><span class="bzs-sr-only">${t(
+      key,
+    )}</span></button></div>`;
+  const manga = `<div class="bzs-setgrp${mangaLock ? ` ${mangaLock}` : ''}"${mangaLockAttr}>${mangaLockSr}
+      <h3>${t('settings.grp.manga')}</h3>
+      <div class="bzs-setrow is-segrow"><label>${t('settings.manga.direction')}</label>${seg(
+        'manga.direction',
+        [
+          ['auto', t('settings.manga.direction.auto')],
+          ['rtl', t('settings.manga.direction.rtl')],
+          ['ltr', t('settings.manga.direction.ltr')],
+        ],
+        mp.direction,
+        'setpref',
+        'bzs-seg bzs-seg-wrap',
+      )}</div>
+      <div class="bzs-setrow is-segrow"><label>${t('settings.manga.flow')}</label>${seg(
+        'manga.flow',
+        [
+          ['paged', t('settings.manga.flow.paged')],
+          ['vertical', t('settings.manga.flow.vertical')],
+          ['horizontal', t('settings.manga.flow.horizontal')],
+          ['webtoon', t('settings.manga.flow.webtoon')],
+        ],
+        mp.flow,
+        'setpref',
+        'bzs-seg bzs-seg-wrap',
+      )}</div>
+      <div class="bzs-setrow is-segrow"><label>${t('settings.manga.fit')}</label>${seg(
+        'manga.fit',
+        [
+          ['smart', t('settings.manga.fit.smart')],
+          ['screen', t('settings.manga.fit.screen')],
+          ['width', t('settings.manga.fit.width')],
+          ['height', t('settings.manga.fit.height')],
+          ['fill', t('settings.manga.fit.fill')],
+          ['original', t('settings.manga.fit.original')],
+        ],
+        mp.fit,
+        'setpref',
+        'bzs-seg bzs-seg-wrap',
+      )}</div>
+      ${mangaSwitch('spread', mp.spread, 'settings.manga.spread')}
+      ${mangaSwitch('splitWide', mp.splitWide, 'settings.manga.splitWide')}
+      ${mangaSwitch('coverAlone', mp.coverAlone, 'settings.manga.coverAlone')}
+      ${mangaSwitch('panels', mp.panels, 'settings.manga.panels')}
+      ${mangaSwitch('crop', mp.crop, 'settings.manga.crop')}
+      ${mangaSwitch('thumbs', mp.thumbs, 'settings.manga.thumbs')}
+      ${mangaSwitch('tapReverse', mp.tapReverse, 'settings.manga.tapReverse')}
+      ${mangaSwitch('keepAwake', mp.keepAwake, 'settings.manga.keepAwake')}
+      <div class="bzs-mini" style="margin-top:2px">${t('settings.manga.hint')}</div>
+    </div>`;
 
   /* 阅读页右上角图标：可排序、可收起。收起的进 ⋮；移动端最多露 3 颗。
      手机上不提供的那几项（并排 / 对照书籍 / 朗读）不列出来——
@@ -938,41 +1045,33 @@ export function viewSettings(v: SettingsView): string {
   const bzGrpState: 'enabled' | 'disabled' | 'missing' =
     v.bz?.state ?? (v.bz?.ok ? 'enabled' : 'missing');
   const bzOk = bzGrpState === 'enabled';
-  /* 剪藏成书是高级版能力（2026-11-14 补的门禁）。基础版用户在设置里看到的
-     是一颗点了就弹解锁层的开关——不是灰着不动的死开关，那样人只会以为坏了。
-     范围内三选只在解锁后画：没解锁时选了也不会生效，摆出来等于骗人。 */
-  const clipUnlocked = can('clipBook');
-  const clipOn = clipUnlocked && s.clipBook === true;
+  /* 剪藏成书 2026-11-22 下放基础版：不再有「解锁后才有」这一档。
+     开关永远可点，范围内三选永远画出来——选了不生效才是骗人。 */
+  const clipOn = s.clipBook === true;
   const chip = (txt: string, on = false): string =>
     `<span class="bzs-capchip${on ? ' is-on' : ''}"><i></i>${txt}</span>`;
-  const clipScopeSeg = clipUnlocked
-    ? `<div class="bzs-capfield"><span>${t('settings.bz.clip.scope')}</span>${seg(
-        'clipScope',
-        [
-          ['all', t('settings.bz.clip.scope.all')],
-          ['unread', t('settings.bz.clip.scope.unread')],
-          ['todayUnread', t('settings.bz.clip.scope.today')],
-        ],
-        s.clipScope,
-        'setscope',
-      )}</div>`
-    : '';
+  const clipScopeSeg = `<div class="bzs-capfield"><span>${t('settings.bz.clip.scope')}</span>${seg(
+    'clipScope',
+    [
+      ['all', t('settings.bz.clip.scope.all')],
+      ['unread', t('settings.bz.clip.scope.unread')],
+      ['todayUnread', t('settings.bz.clip.scope.today')],
+    ],
+    s.clipScope,
+    'setscope',
+  )}</div>`;
   /* 未装 bz 时开关不画：摆一颗点不动的开关只会让人以为「我点坏了」；
      整张卡可点，点了滚回本组顶部的安装卡。 */
   const clipSwitch = !bzOk
     ? ''
-    : clipUnlocked
-      ? `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
-          'settings.bz.clip',
-        )}</span></button>`
-      : `<button class="bzs-switch" data-act="unlock" data-mode="clipBook"><span class="bzs-sr-only">${t(
-          'settings.locked',
-        )}</span><span class="bzs-sr-only">${t('settings.bz.clip')}</span></button>`;
+    : `<button class="bzs-switch${clipOn ? ' on' : ''}" data-act="toggle" data-k="clipBook"><span class="bzs-sr-only">${t(
+        'settings.bz.clip',
+      )}</span></button>`;
   const clipCard = `<div class="bzs-cap${clipOn ? ' is-on' : ''}"${bzOk ? '' : ' data-act="bzjump"'}>
       <span class="bzs-capico${bzOk ? '' : ' is-muted'}">${ico('shelf')}</span>
       <div class="bzs-capmain">
         <div class="bzs-cap-t"><b>${t('settings.bz.clip')}</b>${
-          !bzOk ? '' : clipUnlocked ? (clipOn ? chip(t('settings.cap.on'), true) : '') : chip(t('settings.about.paid'))
+          !bzOk ? '' : clipOn ? chip(t('settings.cap.on'), true) : ''
         }</div>
         <p>${t('settings.bz.clip.hint')}</p>
         ${clipScopeSeg}
@@ -1151,10 +1250,10 @@ export function viewSettings(v: SettingsView): string {
 
   /* 两列各自成流（布局说明见 study.css 的 .bzs-set-page）。
      2026-11-17 按「本机怎么显示 / 接什么服务」重排：
-       左列 = 界面 · 版式 · 外观 · 标注 · 数据 · PDF（含扫描页识别）
+       左列 = 界面 · 版式 · 外观 · 标注 · 数据 · PDF（含扫描页识别）· 漫画
        右列 = 朗读 · AI 助手 · bz · bz review · 授权
      2026-11-22 原型：下载与功能并组，原来的「插件」组拆进 bz / bz review。 */
-  const leftCol = `${languageGrp}${layoutGrp}${lookGrp}${marksGrp}${dataGrp}${pdfGrp}`;
+  const leftCol = `${languageGrp}${layoutGrp}${lookGrp}${marksGrp}${dataGrp}${pdfGrp}${manga}`;
   const rightCol = `${ttsGrp}${aiGrp}${bzGrp}${reviewGrp}${licGrp}`;
 
   return `<div class="bzs-set-page">${aboutBar(v.version || '', paid, ent.patron, ent.name)}${nav}<div class="bzs-set-grid"><div class="bzs-set-col">${leftCol}</div><div class="bzs-set-col">${rightCol}</div></div>${headerGrp}${keysGrp}</div>`;

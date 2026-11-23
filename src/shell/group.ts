@@ -16,9 +16,10 @@ import { GROUP_ID } from '../data/entitlement';
 /**
  * 解锁弹层里的群按钮。
  *
- * 2026-11-03 起不对外发试用，这颗按钮从「进群领试用」退成纯加群入口：
- * 常驻渲染、只印群号。留着试用字样等于让用户去群里领一枚根本不存在的码。
- * 动作与设置页「关于」条那颗共用（`copygroup`），两处点下去说同一句话。
+ * 2026-11-22 起文案在群号后加「进群领试用」：试用不在插件里发
+ * （`TRIAL_ACTIVE` 仍为 false），由管理员在群里人工给码，所以这五个字
+ * 是进群理由而不是功能承诺。动作与设置页「关于」条那颗共用（`copygroup`），
+ * 两处点下去说同一句话。
  */
 export function groupButtonHtml(): string {
   return `<button class="bzs-btn" data-act="copygroup">${t('unlock.group', { id: GROUP_ID })}</button>`;

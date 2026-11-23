@@ -327,6 +327,11 @@ export interface ReaderBook {
    * bz 侧读到不认识的键会忽略，不影响数据同构。
    */
   pdfView?: { rotation: number; spread: boolean };
+  /**
+   * 漫画按书记住的视角：方向、单双页、缩放、读到第几页第几格。
+   * 与 pdfView 同理——调一本漫画不该让全库都改成右到左。
+   */
+  mangaView?: import('../engine/manga/settings').MangaViewState;
 }
 
 export interface ReaderData {

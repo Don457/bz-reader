@@ -22,6 +22,7 @@
  * ============================================================ */
 
 import { isLocale, type LanguagePref } from '../i18n';
+import { isBuiltinTemplate, isCopyTemplate, type CopyTemplateId, type ExportTemplateId } from './link-template';
 import { normalizeFormat } from '../core/tts-local';
 import type { LocalTtsSettings, OnlineTtsSettings } from '../core/tts-engine';
 import { normalizeTtsResume, type TtsResumePoint } from '../core/tts-resume';
@@ -91,6 +92,16 @@ export interface ReaderSettings {
   exportDir: string;
   /** 导出时带上想法 */
   exportComments: boolean;
+  /**
+   * 双链模板（2026-11-23）：两套完全相同的四档配置，设备本地偏好，不跟库走。
+   *   exportTemplate / exportTemplateCustom：整本导出；
+   *   copyTemplate / copyTemplateCustom：复制划线到剪贴板。
+   * 两边都支持多行 Markdown / callout，只有配置分开；老 aliasTemplate 迁到复制自定义。
+   */
+  exportTemplate: ExportTemplateId;
+  exportTemplateCustom: string;
+  copyTemplate: CopyTemplateId;
+  copyTemplateCustom: string;
   /** 本地文件导入时写进哪个文件夹（vault 相对路径，默认 `bz-reader/books`；'/' = 库根目录） */
   importDir: string;
   /**
@@ -235,6 +246,10 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
      `notes` 是唯一要被用户当笔记编辑的：导出后它就归用户的笔记系统管了。 */
   exportDir: 'bz-reader/notes',
   exportComments: true,
+  exportTemplate: 'simple',
+  exportTemplateCustom: '',
+  copyTemplate: 'simple',
+  copyTemplateCustom: '',
   importDir: 'bz-reader/books',
   language: 'auto',
   ai: {
@@ -479,11 +494,25 @@ function normalizePdfOcr(raw: unknown, ai: AiSettings, legacy: Record<string, un
 }
 
 export function normalizeSettings(raw: unknown): ReaderSettings {
-  const s = (raw ?? {}) as Partial<ReaderSettings>;
+  const s = (raw ?? {}) as Partial<ReaderSettings> & { aliasTemplate?: unknown };
   const ai = normalizeAi(s.ai);
+  /* 老版本把复制别名存在一个字段里——那只是 wikilink 的显示文字，本身不带
+     {双链}。现在复制档是完整 Markdown 模板，直接拿老别名当模板会复制出纯文本，
+     所以迁到自定义档时补上双链那一行，老别名降为紧随其后的说明，双链不丢。 */
+  const legacyAlias = str(s.aliasTemplate, '').trim();
+  const copyTemplateCustom = typeof s.copyTemplateCustom === 'string'
+    ? s.copyTemplateCustom.trim()
+    : (legacyAlias ? `> {双链}\n> ↳ ${legacyAlias}` : '');
   return {
     exportDir: cleanDir(str(s.exportDir, DEFAULT_SETTINGS.exportDir)),
     exportComments: s.exportComments !== false,
+    exportTemplate: isBuiltinTemplate(s.exportTemplate) ? s.exportTemplate : DEFAULT_SETTINGS.exportTemplate,
+    exportTemplateCustom: str(s.exportTemplateCustom, '').trim(),
+    /* 有老别名就必须走自定义档——否则默认的 simple 会把刚补好双链的模板吞掉 */
+    copyTemplate: legacyAlias
+      ? 'custom'
+      : (isCopyTemplate(s.copyTemplate) ? s.copyTemplate : DEFAULT_SETTINGS.copyTemplate),
+    copyTemplateCustom,
     importDir: cleanDir(str(s.importDir, DEFAULT_SETTINGS.importDir), DEFAULT_SETTINGS.importDir),
     /* 只认八种语言 + auto：手改坏的 JSON、旧版本没有这个字段、写了别的语言，
        都退回 auto——宁可跟随宿主，也不要钉死一个用户没选过的语言。 */

@@ -189,7 +189,12 @@ describe('验签三态（A10）', () => {
     await revalidateLicense();
     expect(entitlement().verify).toBe('ok');
     expect(can('stats')).toBe(true);
-    expect(written).toBeNull(); // 验过不等于要重写盘
+    /* 验签通过本身不改码。2026-11-22 起会顺手补一笔「档位成因」给 bz 的探针
+       （它读 data.json，读不到内存），写一次就够——第二次重验不该再动文件。 */
+    expect((written as { tierReason?: string } | null)?.tierReason).toBe('ok');
+    const afterFirst = written;
+    await revalidateLicense();
+    expect(written).toBe(afterFirst);
   });
 
   it.runIf(hasKey)('过期码：verify 是 ok（签名是真的），但 tier 是 free', async () => {
@@ -242,13 +247,15 @@ describe('界面文案', () => {
     expect(footnote).toBeLessThan(firstPaid);
   });
 
-  it('AI 解释 / 翻译 / 摘要 / 追问单独一行，紧跟在 AI 全书问答上面', () => {
-    const sel = PLAN_TABLE.findIndex((r) => r.cap === 'aiSel');
+  it('追问单独一行，紧跟在 AI 全书问答上面', () => {
+    /* 2026-11-22：解释 / 翻译 / 摘要下放基础版，追问留高级版并单独成行。
+       原来四件事共用一个勾，用户看不出买了能多出哪一下。 */
+    const follow = PLAN_TABLE.findIndex((r) => r.cap === 'aiAsk');
     const book = PLAN_TABLE.findIndex((r) => r.cap === 'ai');
-    expect(sel).toBeGreaterThan(-1);
-    expect(book).toBe(sel + 1);
-    expect(PLAN_TABLE[sel].name).toContain('解释');
-    expect(PLAN_TABLE[sel].name).toContain('追问');
+    expect(follow).toBeGreaterThan(-1);
+    expect(book).toBe(follow + 1);
+    expect(PLAN_TABLE[follow].name).toContain('追问');
+    expect(PLAN_TABLE[follow].free).toBe('no');
     expect(PLAN_TABLE[book].name).toContain('AI 全书问答');
     /* 2026-11-16：卖点从「AI 全书问答」这五个字换成「四种依据」那句话 */
     expect(capLabel('ai')).toContain('依据');

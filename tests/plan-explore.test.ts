@@ -6,16 +6,15 @@ import { PLAN_GROUP_TEXT_PACK, PLAN_TEXT_PACK, planGroupLabel, planGroupNameZh, 
 /**
  * 对照表 · 路线图段（2026-11-11 叫「探索中」，2026-11-21 改叫「路线图」）。
  *
- * 还剩五项没实现：PDF 重排把固定版式变成流式；漫画模式补上分格 / 右到左 /
- * 跨页；整章翻译做原文译文对照；墨水屏优化让黑白更清、翻页不闪；界面动效
- * 给翻页、切章与书架过渡，且可随时关。
+ * 还剩四项没实现：PDF 重排把固定版式变成流式；整章翻译做原文译文对照；
+ * 墨水屏优化让黑白更清、翻页不闪；界面动效给翻页、切章与书架过渡，且可随时关。
  *
  * 写进表里是为了让「高级版能力只增不减」有落点，但不能假装已经能用：
- *   · 五行两版都不打勾（free / pro 都是 no），也不挂能力位；
+ *   · 四行两版都不打勾（free / pro 都是 no），也不挂能力位；
  *   · 段名「路线图」说明状态，行里不再加「开发中」小字；
- *   · 不进合计——图上基础版 18 项、高级版 44 项。
+ *   · 不进合计——图上基础版 18 项、高级版 45 项。
  *
- * 「复习」2026-11-21 已上线，从这一段搬去独立的「复习」段，这里不再列。
+ * 「复习」2026-11-21、「漫画」2026-11-22 已上线，各自搬去正式段，这里不再列。
  */
 
 const CJK = /[\u4e00-\u9fff]/;
@@ -23,7 +22,7 @@ const LATIN = ['en', 'de', 'fr', 'es', 'pt'] as const;
 /** 简繁必然异形的字：繁中行名里出现任何一个就说明抄了简体。
     「可」简繁同形，列进来会把「可随时关」这种正确繁体判成错——检测器只收异形字。 */
 const SIMPLIFIED = /[选线图复认与题扫样页读译对]/;
-const ROADMAP_ROWS = ['pdfReflow', 'manga', 'transChapter', 'eink', 'motion'] as const;
+const ROADMAP_ROWS = ['pdfReflow', 'transChapter', 'eink', 'motion'] as const;
 
 afterEach(() => setLocale('zh'));
 
@@ -32,7 +31,7 @@ function row(key: string) {
 }
 
 describe('对照表 · 路线图段的位置与内容', () => {
-  it('放在最末一段，只收五行，顺序固定', () => {
+  it('放在最末一段，只收四行，顺序固定', () => {
     const last = PLAN_GROUPS.at(-1);
     expect(last?.key).toBe('roadmap');
     expect(last?.rows).toEqual([...ROADMAP_ROWS]);
@@ -48,9 +47,8 @@ describe('对照表 · 路线图段的位置与内容', () => {
     }
   });
 
-  it('中文行名就是图上的那五行', () => {
+  it('中文行名就是图上的那四行', () => {
     expect(planNameZh('pdfReflow')).toBe('PDF 重排：固定版式变流式');
-    expect(planNameZh('manga')).toBe('漫画模式：分格、右到左、跨页');
     expect(planNameZh('transChapter')).toBe('整章翻译：原文译文对照');
     expect(planNameZh('eink')).toBe('墨水屏：黑白更清、翻页不闪');
     expect(planNameZh('motion')).toBe('界面动效：翻页与切章过渡，可关');
@@ -62,10 +60,10 @@ describe('对照表 · 路线图段的位置与内容', () => {
     expect(names.has('路线图')).toBe(false);
   });
 
-  it('路线行不计入已实现项：基础版 18、高级版 44、共 49 行', () => {
-    expect(PLAN_TABLE.filter((r) => r.pro === 'yes')).toHaveLength(44);
-    expect(PLAN_TABLE.filter((r) => r.free === 'yes')).toHaveLength(18);
-    expect(PLAN_TABLE).toHaveLength(49);
+  it('路线行不计入已实现项：基础版 22、高级版 54、共 58 行', () => {
+    expect(PLAN_TABLE.filter((r) => r.pro === 'yes')).toHaveLength(54);
+    expect(PLAN_TABLE.filter((r) => r.free === 'yes')).toHaveLength(22);
+    expect(PLAN_TABLE).toHaveLength(58);
   });
 
   it('知识库之后是听书段，再往后才是路线图', () => {
@@ -85,7 +83,7 @@ describe('对照表 · 路线图段的位置与内容', () => {
 });
 
 describe('对照表 · 路线图段八种语言', () => {
-  it('段名与五行都填了八种语言，没有空串', () => {
+  it('段名与四行都填了八种语言，没有空串', () => {
     for (const l of LOCALES) {
       expect(String(PLAN_GROUP_TEXT_PACK.roadmap[l]).trim().length, l).toBeGreaterThan(0);
       for (const key of ROADMAP_ROWS) {
@@ -113,7 +111,6 @@ describe('对照表 · 路线图段八种语言', () => {
     setLocale('en');
     expect(planGroupLabel('roadmap')).toBe('Roadmap');
     expect(planLabel('pdfReflow')).toContain('reflow');
-    expect(planLabel('manga')).toContain('Manga');
     expect(planLabel('transChapter')).toContain('translation');
     expect(planLabel('eink')).toContain('E Ink');
     expect(planLabel('motion')).toContain('motion');

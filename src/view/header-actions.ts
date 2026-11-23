@@ -268,17 +268,59 @@ export function userFacingActionIds(): HeaderActionId[] {
  * 只对 PDF 有意义的图标。
  *
  * 单个功能包只有一份产物，所以这里不做「构建时裁掉」，而是**运行时按书过滤**：
- * 引擎不是 PDF 时这三颗一律不露（也不进 ⋮），用户配的顺序照样保留在偏好里，
+ * 引擎不是 PDF 时这几颗一律不露（也不进 ⋮），用户配的顺序照样保留在偏好里，
  * 换回 PDF 时原位复现。
  *
  * 「回到上一处」2026-11-10 从这里移走了：EPUB 也补上了同一条跳转历史，
- * 两边共用一颗按钮。
+ * 两边共用一颗按钮。缩略图 2026-11-22 移走：漫画也是图片页，同样需要它
+ * （见 IMAGE_PAGE_ACTIONS）。
  */
-export const PDF_ONLY_ACTIONS: readonly HeaderActionId[] = ['thumb', 'copy', 'export', 'ocr'];
+export const PDF_ONLY_ACTIONS: readonly HeaderActionId[] = ['copy', 'export', 'ocr'];
 
 export function isPdfAction(id: HeaderActionId): boolean {
   return PDF_ONLY_ACTIONS.includes(id);
 }
+
+/**
+ * 有「页图」的书都能用：PDF 与 CBZ 漫画。
+ *
+ * 缩略图不再算 PDF 专属——漫画和 PDF 一样是一页一张图，跳页最直接的方式
+ * 就是看缩略图。导出页图 / 复制链接仍然只有 PDF 实现，留在这之外。
+ */
+export const IMAGE_PAGE_ACTIONS: readonly HeaderActionId[] = ['thumb'];
+
+export function isImagePageAction(id: HeaderActionId): boolean {
+  return IMAGE_PAGE_ACTIONS.includes(id);
+}
+
+/**
+ * 漫画里不提供的动作（2026-11-22）。
+ *
+ * CBZ 只有图片、没有文字层，也没有章节：搜索、朗读、本章导读、全书鸟瞰
+ * 点了都只会得到一块空白面板或「取不到文字」的提示。宁可不出现——手机
+ * 上 ⋮ 是唯一入口，塞四条死项比少几颗更糟。
+ *
+ * 目录保留：带 ComicInfo 或按文件夹分卷的漫画有真目录，`publishToc` 走
+ * 同一条路；空目录的 CBZ 自己有「目录为空」的占位。
+ */
+export const MANGA_HIDDEN_ACTIONS: readonly HeaderActionId[] = [
+  'search',
+  'tts',
+  'guide',
+  'bookmap',
+];
+
+export function isMangaHiddenAction(id: HeaderActionId): boolean {
+  return MANGA_HIDDEN_ACTIONS.includes(id);
+}
+
+/**
+ * 漫画在头栏的前三颗（手机也只有三个名额）。
+ *
+ * 排版必须排第一：它是漫画唯一的入口集合（缩放 / 适配 / 方向 / 单双页 /
+ * 翻页方式都在里面），被挤进 ⋮ 就等于没有。缩略图第二、书签第三。
+ */
+export const MANGA_LEAD_ACTIONS: readonly HeaderActionId[] = ['type', 'thumb', 'mark'];
 
 /**
  * 手机上不提供的动作（2026-11-11，2026-11-13 朗读已放开）。
@@ -323,11 +365,19 @@ export function isClipAction(id: HeaderActionId): boolean {
  * 「头栏藏了、⋮ 里还在」——而手机上 ⋮ 才是主入口。
  *
  * @param clip 是不是剪藏本：剪藏四颗只在这本书里存在
+ * @param manga 是不是 CBZ 漫画：缩略图开放，搜索 / 朗读 / 导读 / 鸟瞰收起来
  */
-export function availableActions(mobile: boolean, pdf = false, clip = false): HeaderActionId[] {
+export function availableActions(
+  mobile: boolean,
+  pdf = false,
+  clip = false,
+  manga = false,
+): HeaderActionId[] {
   return HEADER_ACTION_IDS.filter(
     (id) =>
       (pdf || !isPdfAction(id)) &&
+      (pdf || manga || !isImagePageAction(id)) &&
+      (!manga || !isMangaHiddenAction(id)) &&
       (clip || !isClipAction(id)) &&
       !(mobile && isMobileHiddenAction(id)),
   );
@@ -356,6 +406,7 @@ function orderedIds(cfg?: HeaderCfg | null): HeaderActionId[] {
  *   @param phoneForm  **有哪些动作**看手机形态（`isMobileShell()`）。桌面
  *     按手机形态验收时，本该和真机看到同一套入口，否则「隐藏生没生效」
  *     只能拿手机试。缺省跟 mobile 走（老调用点行为不变）。
+ *   @param manga  漫画：前三颗换成 排版 / 缩略图 / 书签（见 MANGA_LEAD_ACTIONS）
  */
 export function headerActionsFor(
   mobile: boolean,
@@ -363,18 +414,23 @@ export function headerActionsFor(
   pdf = false,
   phoneForm = mobile,
   clip = false,
+  manga = false,
 ): HeaderActionId[] {
   const hidden = new Set(cfg?.hidden ?? []);
-  const allowed = new Set(availableActions(phoneForm, pdf, clip));
+  const allowed = new Set(availableActions(phoneForm, pdf, clip, manga));
   const list = orderedIds(cfg).filter((id) => allowed.has(id) && !hidden.has(id));
   /* 手机上剪藏四颗不参与那 3 个名额：它们只在剪藏本里有意义，挤掉目录 / 搜索
      会让同一台机器上的普通书也少一颗。四颗全部走 ⋮（见 headerOverflowFor）。 */
   const usable = mobile ? list.filter((id) => !isClipAction(id)) : list;
+  /* 漫画把「排版 / 缩略图 / 书签」提到最前：手机上只有 3 个名额，排版被挤进
+     ⋮ 等于没有；桌面上也照这个顺序，两端看到的是同一排图标。 */
+  const lead: HeaderActionId[] = manga ? MANGA_LEAD_ACTIONS.filter((id) => usable.includes(id)) : [];
+  const rest = usable.filter((id) => !lead.includes(id));
   /* 手机上 PDF 的「识别」是主功能，默认顺序却排在导出之后——前三颗永远
      轮不到它，扫描件在手机上就只剩 ⋮ 里一条。提到最前，其余仍按用户顺序。 */
   const prioritized: HeaderActionId[] =
-    mobile && pdf && usable.includes('ocr') ? ['ocr', ...usable.filter((id) => id !== 'ocr')] : usable;
-  return mobile ? prioritized.slice(0, 3) : prioritized;
+    mobile && pdf && rest.includes('ocr') ? ['ocr', ...rest.filter((id) => id !== 'ocr')] : rest;
+  return mobile ? [...lead, ...prioritized].slice(0, 3) : [...lead, ...prioritized];
 }
 
 /** ⋮ 里的：显式隐藏的 + 移动端被名额挤出去的（不含这台设备不提供的） */
@@ -384,9 +440,10 @@ export function headerOverflowFor(
   pdf = false,
   phoneForm = mobile,
   clip = false,
+  manga = false,
 ): HeaderActionId[] {
-  const shown = headerActionsFor(mobile, cfg, pdf, phoneForm, clip);
-  const allowed = new Set(availableActions(phoneForm, pdf, clip));
+  const shown = headerActionsFor(mobile, cfg, pdf, phoneForm, clip, manga);
+  const allowed = new Set(availableActions(phoneForm, pdf, clip, manga));
   return orderedIds(cfg).filter((id) => allowed.has(id) && !shown.includes(id));
 }
 

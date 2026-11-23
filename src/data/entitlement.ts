@@ -45,12 +45,17 @@ import type { BookFormat } from './schema';
 
 /** 高级能力。只有能判断的地方才列进来，别造没人问的开关。 */
 export type Cap =
-  | 'export' // 结构化导出 Markdown
   | 'poster' // 阅读海报（书摘图片 2026-11-10 下放基础版，不再需要能力位）
   | 'stats' // 阅读统计
   | 'crossSearch' // 跨书搜索
-  | 'aiSel' // 划词 AI：解释 / 翻译 / 摘要（工具栏那颗）
+  /**
+   * 划词 AI 2026-11-22 拆开卖：解释 / 翻译 / 摘要下放基础版，只剩追问收费。
+   *
+   * 这里不再留 `aiSel`——免费的行挂着能力位，弹层就会把人往一个已经
+   * 不要钱的功能上引；追问有自己的 `aiAsk`，被拦时才能亮到正确那一行。
+   */
   | 'ai' // 侧栏 AI：全书问答
+  | 'aiAsk' // 划词追问：就这一段接着问
   | 'kb' // BZ AI 知识盒（划词录入 / 笔记当依据；行名按 bz 的文案）
   | 'fullFormats' // mobi / azw3 / fb2 / cbz（PDF 2026-11-10 起单列，见 pdf）
   | 'vertical' // 竖排（双栏已于 2026-11-05 下放基础版，不再挂在这个能力上）
@@ -63,7 +68,8 @@ export type Cap =
   | 'tts'
   /** 朗读 · 整本预生成（2026-11-14）。与整章分开，弹层才能高亮对那一行 */
   | 'ttsBook'
-  | 'parallel' // 并排 / 双语
+  /* 并排对照 2026-11-22 下放基础版：两边各挂一套引擎，不产生额外成本，
+     挡在门外只是把功能藏起来。 */
   /* 全书鸟瞰 2026-11-21 下放基础版：它只读画像做一张总览，不产生额外成本，
      留在 Cap 表里会让「基础版点不开鸟瞰」和对照表上那个勾对不上。 */
   | 'bilink' // 划线 → 双向链接
@@ -89,8 +95,10 @@ export type Cap =
    */
   | 'aiLog'
   | 'semantic' // 语义搜索：本书与全库，按意思找
-  /** 剪藏成书（2026-11-13）：把剪藏本里的订阅文章合成 EPUB，进书架读 */
-  | 'clipBook'
+  /* 剪藏成书 2026-11-22 下放基础版：把剪藏本合成 EPUB 本身不产生成本，
+     挡在门外只是把功能藏起来。设置页那颗开关也不再显示「高级版」。 */
+  /** 漫画模式（2026-11-15 从探索中转正）：分格、右到左、跨页 */
+  | 'manga'
   /**
    * PDF 整段（2026-11-10）。
    *
@@ -155,6 +163,26 @@ interface Ent {
   license: string;
   /** 上次验签时间，0 = 从没验过 */
   checkedTs: number;
+  /*
+   * ↓ 2026-11-22 起多存的四笔，**全是观测数据，不是授权结论**。
+   *
+   * 授权真相仍然只看 `license` + 启动时那次真验签（`entitlement()` 里现算），
+   * 所以手改这里的 `revoked` 不会解封——它只会让 bz 的统计看错一眼。
+   * 反过来也不行：这里写 true 也不会凭空把人降级，判定仍走 data/revoked
+   * 的本地标记。两边各自独立。
+   *
+   * 为什么非要落盘：bz 主插件的探针读的是这份 data.json，读不到内存。
+   */
+  /** 这枚码是否已被停用名单判死 */
+  revoked: boolean;
+  /** 被判死的时刻（0 = 没判死过） */
+  revokedAt: number;
+  /** 当前档位的成因：none / expired / revoked / invalid / ok */
+  tierReason: string;
+  /** 上次激活失败的原因（只记分类，绝不记码原文） */
+  activateFail: string;
+  /** 上次激活失败的时刻 */
+  activateFailAt: number;
 }
 
 export interface EntitlementView {
@@ -346,6 +374,11 @@ function defaults(): Ent {
     trialVoid: false,
     license: '',
     checkedTs: 0,
+    revoked: false,
+    revokedAt: 0,
+    tierReason: '',
+    activateFail: '',
+    activateFailAt: 0,
   };
 }
 
@@ -374,6 +407,12 @@ function applyEnt(d: Ent, raw: unknown): boolean {
   if (p.trialVoid === true) d.trialVoid = true;
   if (typeof p.license === 'string') d.license = p.license;
   if (typeof p.checkedTs === 'number') d.checkedTs = p.checkedTs;
+  /* 观测字段：类型不对就当没见过，不猜 */
+  if (typeof p.revoked === 'boolean') d.revoked = p.revoked;
+  if (typeof p.revokedAt === 'number' && p.revokedAt > 0) d.revokedAt = p.revokedAt;
+  if (typeof p.tierReason === 'string') d.tierReason = p.tierReason.slice(0, 12);
+  if (typeof p.activateFail === 'string') d.activateFail = p.activateFail.slice(0, 12);
+  if (typeof p.activateFailAt === 'number' && p.activateFailAt > 0) d.activateFailAt = p.activateFailAt;
   return true;
 }
 
@@ -531,6 +570,87 @@ export function setLicense(code: string): void {
   /* activateLicense 只在验签通过后调这里，所以此刻结论就是 ok */
   verifyState = 'ok';
   save();
+  refreshFacts();
+}
+
+/* ── 授权事实（2026-11-22，给 bz 的探针读）───────────────────────────
+ * 这四笔**只影响统计**，不参与任何放行判定：授权真相仍是「码 + 启动时真验签」，
+ * 停用真相仍是 data/revoked 的本地标记。两边各自独立，手改这里既解不了封，
+ * 也不会把人误降级——但会让看板看错，所以只在真发生时才写。
+ */
+
+/** 当前档位成因：没码 / 到期 / 被封 / 码坏了 / 正常 */
+function tierReasonNow(): string {
+  const e = load();
+  if (!e.license) return 'none';
+  const v = entitlement();
+  if (v.revoked) return 'revoked';
+  if (v.verify !== 'ok' || !v.licenseId && !v.plan) {
+    /* 验签没过、解不开：码本身不可信。老码 BZR1 没有 id 但有 plan，别误判 */
+    if (v.verify !== 'ok') return 'invalid';
+  }
+  if (v.exp && Date.now() > v.exp) return 'expired';
+  return 'ok';
+}
+
+/**
+ * 重算并落盘档位成因与停用标记。
+ *
+ * 在几个「授权可能刚变过」的节点调：激活成功、启动重验、名单核对回来。
+ * 变了才写盘——`entitlement()` 每次重绘都会调，不能顺手就存。
+ */
+export function refreshFacts(): void {
+  const e = load();
+  const reason = tierReasonNow();
+  const revoked = entitlement().revoked;
+  if (e.tierReason === reason && e.revoked === revoked) return;
+  e.tierReason = reason;
+  e.revoked = revoked;
+  save();
+}
+
+/**
+ * 命中停用名单：记一笔。
+ *
+ * `revokedAt` 只认第一次——探针要算「封了几天还没掉」，每次核对都刷新时刻
+ * 会让这个数永远是 0 天。
+ */
+export function noteRevoked(): void {
+  const e = load();
+  if (!e.license) return;
+  const needSave = !e.revoked || e.tierReason !== 'revoked' || !e.revokedAt;
+  e.revoked = true;
+  if (!e.revokedAt) e.revokedAt = Date.now();
+  e.tierReason = 'revoked';
+  if (needSave) save();
+}
+
+/** 解封：清掉停用标记（版本号在 data/revoked 那边留着，不影响这里） */
+export function clearRevokedMark(): void {
+  const e = load();
+  if (!e.revoked && !e.revokedAt) return;
+  e.revoked = false;
+  e.revokedAt = 0;
+  save();
+}
+
+/**
+ * 记一次激活失败。传空串 = 清空（激活成功时调）。
+ *
+ * 只记分类，**绝不记码原文**：这份 data.json 会被同库的 bz 读走。
+ */
+export function noteActivateFail(fail: string): void {
+  const e = load();
+  if (!fail) {
+    if (!e.activateFail && !e.activateFailAt) return;
+    e.activateFail = '';
+    e.activateFailAt = 0;
+    save();
+    return;
+  }
+  e.activateFail = fail.slice(0, 12);
+  e.activateFailAt = Date.now();
+  save();
 }
 
 /**
@@ -548,19 +668,27 @@ export async function activateLicense(
   code: string,
 ): Promise<{ ok: boolean; message: string; revoked?: boolean }> {
   const res = await verifyLicense(code);
-  if (!res.ok) return { ok: false, message: res.message };
+  if (!res.ok) {
+    /* 只记分类给探针看：格式不对让他检查粘贴，其余都算「码不认」 */
+    noteActivateFail(res.reason === 'expired' ? 'expired' : res.reason === 'format' ? 'format' : 'invalid');
+    return { ok: false, message: res.message };
+  }
 
   const clean = code.trim();
   /* 本地已判死的码：断网也贴不回来，不必再等一次网络 */
   if (revokedCode() === clean) {
+    noteActivateFail('revoked');
     return { ok: false, message: t('license.revoked'), revoked: true };
   }
 
   const verdict = await checkRevoked(clean);
   if (verdict === 'hit') {
+    noteActivateFail('revoked');
+    noteRevoked();
     return { ok: false, message: t('license.revoked'), revoked: true };
   }
   if (verdict === 'unknown') {
+    noteActivateFail('offline');
     return { ok: false, message: t('license.needOnline') };
   }
 
@@ -575,6 +703,7 @@ export async function activateLicense(
     }
   }
 
+  noteActivateFail('');
   setLicense(clean);
   return { ok: true, message: res.message };
 }
@@ -607,6 +736,7 @@ export async function revalidateLicense(): Promise<{ changed: boolean; reason?: 
   if (!e.license) {
     /* 没码就没有要验的东西：这不是「验不过」，别让界面显示「授权异常」 */
     verifyState = 'ok';
+    refreshFacts();
     return { changed: false };
   }
   const res = await verifyLicense(e.license);
@@ -618,20 +748,24 @@ export async function revalidateLicense(): Promise<{ changed: boolean; reason?: 
       if (latest) setLatestVersion(latest);
     }
     verifyState = 'ok';
+    refreshFacts();
     return { changed: false };
   }
   /* 过期是「码是真的、只是现在不可用」：保留码、只降级。
      续费后下次启动自动恢复。 */
   if (res.reason === 'expired') {
     verifyState = 'ok';
+    refreshFacts();
     return { changed: false, reason: res.reason };
   }
   if (res.reason === 'invalid' || res.reason === 'format' || res.reason === 'no-pubkey') {
     verifyState = 'failed';
     clearLicense();
+    refreshFacts();
     return { changed: true, reason: res.reason };
   }
   verifyState = 'failed';
+  refreshFacts();
   return { changed: false, reason: res.reason };
 }
 
@@ -649,6 +783,9 @@ export function clearLicense(): boolean {
   e.license = '';
   e.checkedTs = 0;
   save();
+  /* 码没了，档位成因跟着变「没码」；停用标记也一并清干净 */
+  clearRevokedMark();
+  refreshFacts();
   return had;
 }
 
@@ -693,16 +830,6 @@ export function tierText(v: EntitlementView = entitlement()): string {
  * 让「八种齐」变成类型约束——这张表是用户决定要不要付钱的地方，不能有洞。
  */
 const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
-  export: {
-    zh: '把整本摘录导出成 Markdown，每条都能点回原文',
-    'zh-TW': '把整本摘錄匯出成 Markdown，每條都能點回原文',
-    en: 'Export every excerpt as Markdown, each one links back to the page',
-    ja: '抜粋を Markdown に書き出し、各項目から原文へ戻れる',
-    de: 'Alle Exzerpte als Markdown exportieren, jeder Eintrag führt zur Stelle',
-    fr: 'Exporter tous les extraits en Markdown, chacun ramène au texte',
-    es: 'Exportar los extractos a Markdown, cada uno vuelve al texto',
-    pt: 'Exportar os excertos em Markdown, cada um volta ao texto',
-  },
   poster: {
     /* 2026-11-10：书摘图片下放基础版，这枚能力位改归「阅读海报」专用
        （统计页的数据长图 + 年度海报浮层）。以前两者共用 card，解锁弹窗会
@@ -750,15 +877,18 @@ const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
     es: 'Por significado, en este libro o el estante',
     pt: 'Por significado, neste livro ou na estante',
   },
-  aiSel: {
-    zh: '划词即用：解释 · 翻译 · 摘要 · 追问',
-    'zh-TW': '劃詞即用：解釋 · 翻譯 · 摘要 · 追問',
-    en: 'On a selection: explain · translate · summarize · follow up',
-    ja: '選択範囲で：解説 · 翻訳 · 要約 · 追加質問',
-    de: 'Zur Auswahl: erklären · übersetzen · zusammenfassen · nachfragen',
-    fr: 'Sur une sélection : expliquer · traduire · résumer · relancer',
-    es: 'Sobre una selección: explicar · traducir · resumir · repreguntar',
-    pt: 'Numa seleção: explicar · traduzir · resumir · perguntar de novo',
+  /* 划词追问（2026-11-22 从 aiSel 拆出来）。解释 / 翻译 / 摘要已下放
+     基础版，这道门只管「在答案底下接着问那几句」；卖点句要说清买了能
+     多出什么，不能只写「追问」两个字。 */
+  aiAsk: {
+    zh: '就这一段接着问，答完还能追问几轮',
+    'zh-TW': '就這一段接著問，答完還能追問幾輪',
+    en: 'Keep asking about this passage, round after round',
+    ja: 'この一節について続けて質問、何度でも',
+    de: 'Zu dieser Stelle weiterfragen, Runde für Runde',
+    fr: 'Continuer à poser des questions sur ce passage, tour après tour',
+    es: 'Seguir preguntando sobre este pasaje, ronda tras ronda',
+    pt: 'Continuar perguntando sobre este trecho, rodada após rodada',
   },
   ai: {
     /* 2026-11-16：照对照表新行名的口径，把四种依据在卖点里点出来。 */
@@ -856,17 +986,7 @@ const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
     es: 'Todo el libro de una vez, para escuchar del tirón',
     pt: 'O livro inteiro de uma vez, para ouvir do começo ao fim',
   },
-  parallel: {
-    /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。 */
-    zh: '两本书并排，段落跟着一起走',
-    'zh-TW': '兩本書並排，段落跟著一起走',
-    en: 'Two books side by side, scrolling in step',
-    ja: '2 冊を並べ、段落が一緒に動く',
-    de: 'Zwei Bücher nebeneinander, Absätze laufen mit',
-    fr: 'Deux livres côte à côte, les paragraphes suivent',
-    es: 'Dos libros en paralelo, los párrafos avanzan juntos',
-    pt: 'Dois livros lado a lado, os parágrafos acompanham',
-  },
+  /* 并排对照 2026-11-22 下放基础版：不再为它保留卖点条目。 */
   bilink: {
     zh: '把划线存成双链，笔记里点得回来',
     'zh-TW': '把劃線存成雙鏈，筆記裡點得回來',
@@ -914,16 +1034,19 @@ const CAP_TEXT: Record<Cap, Record<Locale, string>> = {
     es: 'OCR de páginas escaneadas: seleccionarlas, buscarlas y resaltarlas como texto',
     pt: 'OCR de páginas digitalizadas: selecioná-las, pesquisá-las e destacá-las como texto',
   },
-  clipBook: {
-    zh: '剪藏成书：把 bz 剪藏本里的订阅文章合成一本 EPUB，进书架读',
-    'zh-TW': '剪藏成書：把 bz 剪藏本裡的訂閱文章合成一本 EPUB，進書架讀',
-    en: 'Clipbook to EPUB: bind your bz subscription articles into one EPUB and read it on the shelf',
-    ja: 'クリップブックを EPUB に：bz の購読記事を 1 冊の EPUB にまとめ、本棚で読む',
-    de: 'Clipbook als EPUB: deine bz-Aboartikel in ein EPUB binden und im Regal lesen',
-    fr: 'Le cahier de clips en EPUB : relier vos articles d’abonnement bz en un EPUB à lire dans la bibliothèque',
-    es: 'Clipbook a EPUB: encuaderna tus artículos de suscripción de bz en un EPUB y léelo en el estante',
-    pt: 'Clipbook em EPUB: encaderne os seus artigos de subscrição do bz num EPUB e leia-o na estante',
+  /* 漫画模式的卖点（2026-11-15 从路线图转正）。分格、右到左、跨页拆合
+     三件事都有运行期实现，被拦时弹层第一句就是它。 */
+  manga: {
+    zh: '漫画模式：分格逐格读、右到左翻页、跨页自动拆合',
+    'zh-TW': '漫畫模式：分格逐格讀、右到左翻頁、跨頁自動拆合',
+    en: 'Manga mode: panel-by-panel, right-to-left, auto split spreads',
+    ja: 'マンガモード：コマごとに読む、右から左へ、見開きを自動分割',
+    de: 'Manga-Modus: Panel für Panel, rechts nach links, Doppelseiten automatisch teilen',
+    fr: 'Mode manga : case par case, droite à gauche, doubles pages découpées automatiquement',
+    es: 'Modo manga: viñeta a viñeta, derecha a izquierda, dobles páginas divididas',
+    pt: 'Modo mangá: quadro a quadro, direita para esquerda, páginas duplas divididas',
   },
+  /* 剪藏成书 2026-11-22 下放基础版：不再为它保留卖点条目。 */
 };
 
 /** 能力卖点 → 当前界面语言的说法 */
@@ -991,14 +1114,18 @@ export const PLAN_TABLE: PlanRow[] = [
    * 不产生额外成本，挂在高级版里与「只增不减」的承诺也说不通。 */
   row('columns', 'yes', 'yes'),
   row('vertical', 'no', 'yes', 'vertical'),
-  /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。 */
-  row('parallel', 'no', 'yes', 'parallel'),
+  /* 1.0.0：并排的是任意两本书、段落同步，不是「原文 + 译文」。
+     2026-11-22 下放基础版：两边各挂一套引擎，不产生额外成本。 */
+  row('parallel', 'yes', 'yes'),
   row('bookmap', 'yes', 'yes'),
+  /* 漫画模式 2026-11-22 从路线图转正后**独立成段**（见下面 pdfOcr 之后的
+     九行）。这里不再留一行「漫画模式」——九行才说得清它到底能做什么。 */
   /* ── 导入：书从哪儿来 ──
    * 2026-11-10：PDF 不再由 formats 代表——它有自己的段（见下面的 pdfView…）。
    * 剪藏成书 2026-11-13 从「探索中」转正，与 formats 同类：都是「书怎么进来」。 */
   row('formats', 'no', 'yes', 'fullFormats'),
-  row('clipEpub', 'no', 'yes', 'clipBook'),
+  /* 剪藏成书 2026-11-22 下放基础版：书怎么进来，不该再分两种价钱。 */
+  row('clipEpub', 'yes', 'yes'),
   /* ── PDF 阅读：怎么读 → 怎么拿出来 ──
    * 只有段首那行挂 cap：整段共用一个拦点（打开 PDF）。给每行各配一个能力位
    * 是摆样子——基础版根本进不了 PDF，那些能力位在运行期永远不会被抛出。 */
@@ -1014,12 +1141,29 @@ export const PLAN_TABLE: PlanRow[] = [
      OCR 都要钱），所以单独一行、单独一个能力位；拦点只放在「识别」上，
      读普通 PDF 不受影响。 */
   row('pdfOcr', 'no', 'yes', 'pdfOcr'),
+  /* ── 漫画（2026-11-22 从「排版」组里单独拆出来）──
+   * 原来只有一行「漫画模式：分格、右到左、跨页」，塞不进漫画实际能做的事，
+   * 也说不清「买了能多出哪几件事」。现在按 打开 → 方向 → 单双页 → 翻法 →
+   * 逐格 → 画面 → 缩略图 摊成九行。
+   * 只有段首挂 cap：基础版根本进不了漫画（openBook 里 requireCap('manga')），
+   * 后面八行各配一个能力位在运行期永远不会被抛出——与 PDF 段同一处理。 */
+  row('mangaOpen', 'no', 'yes', 'manga'),
+  row('mangaInfo', 'no', 'yes'),
+  row('mangaDir', 'no', 'yes'),
+  row('mangaSpread', 'no', 'yes'),
+  row('mangaFlow', 'no', 'yes'),
+  row('mangaPanels', 'no', 'yes'),
+  row('mangaFit', 'no', 'yes'),
+  row('mangaTone', 'no', 'yes'),
+  row('mangaThumbs', 'no', 'yes'),
   /* ── 笔记：读完怎么存回笔记库 ──
    * 双向链接整条是高级版能力（copylink 走 requireCap('bilink')）。
    * 引用页签 2026-11-12 有独立能力位，点它被拦时点亮的是它自己那一行。 */
   row('bilink', 'no', 'yes', 'bilink'),
   row('cites', 'no', 'yes', 'cites'),
-  row('export', 'no', 'yes', 'export'),
+  /* 导出整本摘录 2026-11-22 下放基础版。但「从双链点回原书」仍由 bilink
+     管着（openFromTarget 带定位参数时拦）：导出免费，跳回原文付费。 */
+  row('export', 'yes', 'yes'),
   /* ── 复习（2026-11-21 独立成段） ──
    * Reader 负责「挑内容」，复习本身由 bz Review 承接：页签嵌入、按划线挑、
    * 按章生成卡片、已在复习状态。五件事都不设门——复习入口全在基础版，
@@ -1040,7 +1184,11 @@ export const PLAN_TABLE: PlanRow[] = [
    * 追问浮框、划词会话留痕、侧栏问答历史与等待态、依据按章跳转、连接笔记
    * 浮层、书架对话页）原来全被埋在四行旧行名下面，看不出贵在哪儿。
    * 现在拆成五行，一行只说一件事，「对话留档」与「伴读」各挂自己的能力位。 */
-  row('aiSel', 'no', 'yes', 'aiSel'),
+  /* 2026-11-22：解释 / 翻译 / 摘要下放基础版；追问单独一行、仍是高级版。
+     追问要带上下文、要多轮，和「让 AI 解释一下」是两件事；共用一个勾，
+     用户看不出买了能多出哪一下。 */
+  row('aiSel', 'yes', 'yes'),
+  row('aiFollow', 'no', 'yes', 'aiAsk'),
   row('aiBook', 'no', 'yes', 'ai'),
   /* 对话留档 2026-11-16 从 aiChat 拆出来：点「导出到笔记」被拦时，
      弹层要亮的是这一行，不是「AI 伴读」。 */
@@ -1069,11 +1217,11 @@ export const PLAN_TABLE: PlanRow[] = [
      再给它一个能力位只是摆样子。 */
   row('ttsOffline', 'no', 'yes'),
   /* ── 路线图（2026-11-11 起叫「探索中」，2026-11-21 改叫「路线图」） ──
-   * 五项都还没实现：两版都不打勾、不挂能力位，状态由段名说。
+   * 四项都还没实现：两版都不打勾、不挂能力位，状态由段名说。
    * 它们不进合计——图上的基础版与高级版项数只数打勾的行。
-   * 「复习」2026-11-21 已上线，搬去上面的「复习」段，不再留在这里。 */
+   * 「复习」2026-11-21 已上线、「漫画」2026-11-22 从路线图转正，
+   * 两条都搬去上面的正式段，不再留在这里。 */
   row('pdfReflow', 'no', 'no'),
-  row('manga', 'no', 'no'),
   row('transChapter', 'no', 'no'),
   row('eink', 'no', 'no'),
   row('motion', 'no', 'no'),
@@ -1126,12 +1274,13 @@ export function unlockModeFor(format: BookFormat): 'pdf' | 'fullFormats' {
  *   · 排版：字怎么放（单双栏免费，竖排 / 并排 / 鸟瞰）；
  *   · 导入：书从哪儿来（更多格式 + 剪藏成书）；
  *   · PDF 阅读：PDF 怎么读、怎么拿出来；
+ *   · 漫画：CBZ 怎么打开、怎么翻、怎么逐格看（2026-11-22 独立成段，九行）；
  *   · 笔记：读完怎么存回笔记库；
  *   · 复习：挑内容、制卡、复习（2026-11-21 独立，五项全免费）；
  *   · 数据：回看读了多少、找回某句话；
  *   · AI：划词、全书问答、伴读、知识库；
  *   · 听书：朗读、三台引擎、音色、语速、预生成与离线书；
- *   · 路线图：还没实现的五项，两版都不打勾，只作为收尾。 */
+ *   · 路线图：还没实现的四项，两版都不打勾，只作为收尾。 */
 export interface PlanGroup {
   key: PlanGroupKey;
   /** 这一段包含哪些行，按表里的顺序 */
@@ -1155,6 +1304,22 @@ export const PLAN_GROUPS: PlanGroup[] = [
     key: 'pdf',
     rows: ['pdfView', 'pdfThumbs', 'pdfLink', 'pdfBacklink', 'pdfAnnots', 'pdfExport', 'pdfOcr'],
   },
+  /* 漫画（2026-11-22）：从「排版」里拆出来单独一段，排在 PDF 之后——
+     两者都是「按格式的阅读段」，紧挨着读下来顺。 */
+  {
+    key: 'manga',
+    rows: [
+      'mangaOpen',
+      'mangaInfo',
+      'mangaDir',
+      'mangaSpread',
+      'mangaFlow',
+      'mangaPanels',
+      'mangaFit',
+      'mangaTone',
+      'mangaThumbs',
+    ],
+  },
   {
     key: 'notes',
     rows: ['bilink', 'cites', 'export'],
@@ -1170,8 +1335,9 @@ export const PLAN_GROUPS: PlanGroup[] = [
   {
     key: 'ai',
     /* 2026-11-16：五行。对话留档排在伴读之前——它是「问完之后」的去处，
-       与上一行「问的时候带什么」顺着读下来。 */
-    rows: ['aiSel', 'aiBook', 'aiLog', 'aiChat', 'kb'],
+       与上一行「问的时候带什么」顺着读下来。
+       2026-11-22：追问从划词那一行拆出来，六行。 */
+    rows: ['aiSel', 'aiFollow', 'aiBook', 'aiLog', 'aiChat', 'kb'],
   },
   {
     key: 'voice',
@@ -1181,6 +1347,6 @@ export const PLAN_GROUPS: PlanGroup[] = [
      「被拦时高亮」那一套。 */
   {
     key: 'roadmap',
-    rows: ['pdfReflow', 'manga', 'transChapter', 'eink', 'motion'],
+    rows: ['pdfReflow', 'transChapter', 'eink', 'motion'],
   },
 ];

@@ -2,14 +2,20 @@ node_modules/
 dist/
 release/
 *.log
+*.err
 *.map
 .DS_Store
 
 # 构建产物（src/styles.css 是源文件，别误伤，所以用根锚定）
 /main.js
 /styles.css
-.scratch/
+# 一次性临时物：只准放仓库外，见 AGENTS.md「不要做」
+.scratch*
 tmp/
+_video_tmp/
+bili-config-*.json
+heybox-config-*.json
+social-config-*.json
 
 # CDP 截图与一次性诊断脚本（每次调试随手生成，不进仓库）
 .shots/

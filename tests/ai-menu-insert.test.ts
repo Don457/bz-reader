@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dispatchAction } from '../src/shell/actions';
 import { DEFAULT_SHELL_STATE, getState, setState } from '../src/shell/state';
 import { setShellSource, type ShellSource } from '../src/shell/source';
@@ -13,7 +13,16 @@ import { installDomStub } from './helpers/dom-stub';
  * 这一条曾经是断的：菜单只往 `RT.aiPendingInsert` 塞一条，侧栏那边没人取，
  * 点下去只有一句 toast，输入条上什么都不会出现。合并两条分支之后改成直接
  * 调 `attachAiContext`，这里锁住「真的挂进上下文 + 切到 AI 页签」。
+ *
+ * 2026-11-22：解释 / 翻译 / 摘要下放基础版，追问仍要高级版——这组用例
+ * 走「已解锁」的路径，追问那一档另在 ai-menu-toggle 里锁两版行为。
  */
+
+const ent = vi.hoisted(() => ({ on: true }));
+vi.mock('../src/data/entitlement', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/data/entitlement')>();
+  return { ...actual, can: () => ent.on };
+});
 
 let undoDom: (() => void) | null = null;
 
@@ -23,6 +32,7 @@ afterEach(async () => {
   await new Promise((resolve) => setTimeout(resolve, 5));
   undoDom?.();
   undoDom = null;
+  ent.on = true;
   setShellSource(null);
   setState({ ...DEFAULT_SHELL_STATE });
   RT.aiCtx = [];

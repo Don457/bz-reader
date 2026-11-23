@@ -29,69 +29,21 @@
 Convierte Obsidian en un lugar donde leer. Escritorio + móvil, varios formatos (incluidos PDF y cómics), multilingüe, IA: preguntas ancladas / sobre todo el libro / búsqueda semántica / base de conocimientos, audiolibros sin conexión, wikilinks, estadísticas; datos completamente locales.
 
 <p align="center">
-  <img src="docs/images/shelf-desktop-light.webp" alt="Estantería: seguir leyendo, filtros, grupos y mural de portadas (claro a la izquierda, oscuro a la derecha)">
+  <img src="docs/images/en/shelf-desktop-light.webp" alt="Estantería: seguir leyendo, filtros, grupos y mural de portadas">
 </p>
 
 <p align="center"><b>Lectura · Notas · Colores · Barra de selección · Notas al pie</b></p>
 
 <p align="center">
-  <img src="docs/images/read-desktop-light.webp" alt="Lectura: índice, texto, selección y ventana de nota al pie (claro a la izquierda, oscuro a la derecha)">
+  <img src="docs/images/en/read-desktop-light.webp" alt="Lectura: índice, texto, selección y ventana de nota al pie">
 </p>
 
 <p align="center"><b>Móvil · Estantería · Lectura</b></p>
 
 <p align="center">
-  <img src="docs/images/shelf-mobile-light.webp" width="288" alt="Estantería en móvil, claro">
+  <img src="docs/images/en/shelf-mobile-light.webp" width="288" alt="Estantería en móvil, claro">
   &nbsp;&nbsp;
-  <img src="docs/images/read-mobile-dark.webp" width="288" alt="Lectura en móvil, oscuro">
-</p>
-
-<p align="center"><b>IA · Continuación anclada · Preguntas sobre todo el libro</b></p>
-
-<p align="center">
-  <img src="docs/images/ai-desktop-light.png" alt="IA: barra de selección, continuación anclada y preguntas sobre todo el libro">
-</p>
-
-<p align="center"><b>PDF · Citas</b></p>
-
-<p align="center">
-  <img src="docs/images/pdf-desktop-light.png" alt="PDF: ventana de cita tras seleccionar, cuatro formatos, recitar / guardar nota / copiar imagen">
-</p>
-
-<p align="center"><b>Lectura en voz alta · Resaltado por frase · Preparación por capítulo / libro</b></p>
-
-<p align="center">
-  <img src="docs/images/read-aloud-desktop-light.png" alt="Lectura en voz alta: resaltado frase por frase, controles de anterior / siguiente, velocidad, exportación y ajustes">
-</p>
-
-<p align="center"><b>Notas · Repaso diario</b></p>
-
-<p align="center">
-  <img src="docs/images/notes-desktop-light.png" alt="Notas: repaso diario, filtros por color y palabra clave, subrayados agrupados por libro">
-</p>
-
-<p align="center"><b>Chats · Por libro</b></p>
-
-<p align="center">
-  <img src="docs/images/chat-desktop-light.png" alt="Chats: contadores de nuevos y archivados, filtros por modo, conversaciones agrupadas por libro">
-</p>
-
-<p align="center"><b>Búsqueda · Literal / por significado · Progreso · Por libro · Capítulos</b></p>
-
-<p align="center">
-  <img src="docs/images/search-desktop-light.png" alt="Búsqueda: literal y semántica, progreso por libro, resultados agrupados con ubicación en capítulos">
-</p>
-
-<p align="center"><b>Estadísticas · Hoy · Comparación · Tiempo diario · Ritmo</b></p>
-
-<p align="center">
-  <img src="docs/images/stats-desktop-light.png" alt="Estadísticas: tiempo total y racha, comparación semanal, barras diarias y ritmo de lectura">
-</p>
-
-<p align="center"><b>Barra lateral · Índice · Marcadores · Subrayados · Citas · IA</b></p>
-
-<p align="center">
-  <img src="docs/images/sidebar-desktop-light.png" alt="Cinco pestañas de la barra lateral: índice, marcadores, subrayados, citas e IA sobre todo el libro">
+  <img src="docs/images/en/read-mobile-dark.webp" width="288" alt="Lectura en móvil, oscuro">
 </p>
 
 ### Instalación
@@ -138,8 +90,8 @@ Mientras la revisión esté pendiente, o si la búsqueda no lo encuentra, añade
 |  | Lectura en voz alta: EPUB, TXT y PDF, pasa de página sola | — | ✓ |
 |  | Leer dos libros en paralelo | — | ✓ |
 |  | Vista general del libro | — | ✓ |
+|  | Modo manga: viñetas, derecha a izquierda, dobles páginas | — | ✓ |
 |  | PDF reflow: fixed layouts read as flowing text | — | — |
-|  | Manga mode: panels, right-to-left, spreads | — | — |
 |  | Chapter translation: source and translation side by side | — | — |
 |  | Review: reread in full, with AI flashcards and quizzes | — | — |
 |  | E Ink optimization: crisper black and white, no page-turn flashing | — | — |

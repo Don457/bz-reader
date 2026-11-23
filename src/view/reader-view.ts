@@ -110,6 +110,7 @@ import {
 import { planHeaderVisibility, roleOf } from './header-layout';
 import { pdfActionRun, type PanelAnchor } from './pdf-actions';
 import { faultHtml, loadingHtml, type FaultDiagLine } from './reader-fault';
+import { formatOf } from '../data/book-repo';
 import { REGION_ACTS, SELECTION_ACTS, planToolbarHit, toggleMoreMenu, toolbarHtml } from '../shell/text-toolbar';
 import { markReviewNextDate, markReviewPlanned, refreshBookReviewMarks, reviewDueState } from '../shell/review-marks';
 import { hydrateToolbarIcons } from '../shell/toolbar-icons';
@@ -1133,8 +1134,11 @@ export class ReaderView extends ItemView {
     const s = (state ?? {}) as { bookId?: string; cfi?: string; file?: string; subpath?: string; query?: string };
     if (typeof s.bookId === 'string') this.bookId = s.bookId;
     else if (typeof s.file === 'string' && s.file) {
-      /* 从 `[[书.epub]]` 点进来：Obsidian 给的是文件路径，不是 bookId */
-      const book = this.api.repo.byPath(s.file);
+      /* 从 `[[书.epub]]` 点进来、或在文件浏览器里双击一本书：Obsidian 给的是
+         文件路径，不是 bookId。不在书架上就当场登记——以前这里静默跳过，
+         表现为「双击一本漫画，阅读页全白、连一句提示都没有」。
+         登记只写书架记录、不动文件，和导入面板走同一个 ensure。 */
+      const book = this.api.repo.byPath(s.file) ?? this.adoptFile(s.file);
       if (book) this.bookId = book.id;
     }
     /* 带子路径进来（Live Preview 里点双链）：能解出 CFI 就顺手定位一次，
@@ -1147,6 +1151,15 @@ export class ReaderView extends ItemView {
     if (typeof s.query === 'string' && s.query.trim()) this.pendingQuery = s.query.trim();
     await super.setState(state, result);
     await this.maybeMount();
+  }
+
+  /** 打开一个还没进书架的文件：按扩展名登记一条记录，文件留在原地 */
+  private adoptFile(path: string): ReaderBook | undefined {
+    const format = formatOf(path);
+    if (!format) return undefined;
+    const res = this.api.repo.ensure(path, format, 0);
+    if (res.created) this.api.store.touch();
+    return res.book;
   }
 
   /** 已经开着这本书时从外面（跨书搜索）再点一条结果：只补标词 */
@@ -1631,15 +1644,20 @@ export class ReaderView extends ItemView {
     const prefs = pickPrefs(this.api.store.get(), mobile);
 
     /* PDF 的「排版」不是字号行距，而是旋转 / 单双页 / 翻页——点同一颗图标，
-       换成贴按钮下沿的那张小卡（外观与 EPUB 的排版浮层一致）。
-       `pdfActionRun` 收的是「现取」函数：按钮比 PDF 引擎早建好，且复用时
-       不重挂监听，闭包里存当时的 pdfUi 会让这五颗永远点不动。
+       换成贴按钮下沿的那张小卡（外观与 EPUB 的排版浮层一致）。漫画同理，
+       换成它自己的缩放 / 适配 / 方向 / 翻页面板。
+       `pdfActionRun` 收的是「现取」函数：按钮比引擎早建好，且复用时
+       不重挂监听，闭包里存当时的 pdfUi 会让这几颗永远点不动。
        浮层贴按钮：点了哪颗就把它的矩形带过去，命令面板 / ⋮ 菜单没有坐标。 */
     const typography = (anchor?: PanelAnchor): void => {
       if (anchor) openOverlay({ kind: 'typography', anchor });
       else dispatchAction('typography', this.rootEl ?? document.body);
     };
-    const pdfRun = pdfActionRun(() => this.host.pdfUi, typography);
+    const pdfRun = pdfActionRun(
+      () => this.host.pdfUi,
+      typography,
+      () => this.host.mangaUi,
+    );
     /* 触发按钮的视口矩形；菜单 / 命令面板没有 currentTarget 时返回 null */
     const anchorOf = (ev?: MouseEvent): PanelAnchor => {
       const target = ev?.currentTarget ?? ev?.target;
@@ -1683,6 +1701,8 @@ export class ReaderView extends ItemView {
       isMobileShell(),
       /* 剪藏本：四颗只在剪藏书里出现（手机不占那 3 个名额，走 ⋮） */
       !!this.clipSnap,
+      /* 漫画：前三颗换成 排版 / 缩略图 / 书签；搜索、朗读这些不出现 */
+      !!this.host.isManga,
     ).map((id) => ({
       ...headerActionSpec(id),
       run: run[id],
@@ -2116,9 +2136,14 @@ export class ReaderView extends ItemView {
         break;
       case 'typography': {
         /* PDF 的「排版」是旋转 / 单双页 / 翻页，不是字号行距（那些来自原文件）。
-           内置键 t 与头栏那颗图标走同一个面板，别再弹「PDF 不可调」的提示。 */
+           内置键 t 与头栏那颗图标走同一个面板，别再弹「PDF 不可调」的提示。
+           漫画同理：它有自己的缩放 / 适配 / 方向 / 翻页面板。 */
         if (this.host.isPdf) {
           this.host.pdfUi?.toggleLayout();
+          break;
+        }
+        if (this.host.isManga) {
+          this.host.mangaUi?.toggleLayout();
           break;
         }
         const host = this.rootEl;
@@ -2177,6 +2202,7 @@ export class ReaderView extends ItemView {
       () => this.host.pdfUi,
       /* ⋮ 菜单没有能对齐的按钮：选完排版项浮层回到默认位置 */
       (anchor) => (anchor ? openOverlay({ kind: 'typography', anchor }) : dispatchAction('typography', root)),
+      () => this.host.mangaUi,
     );
     /* 头栏与 ⋮ 共用同一张动作表。以前这里手写十项，加一颗图标要记得改两处，
        漏了就是「头栏有、⋮ 里没有」——手机端尤其致命，⋮ 是唯一入口。
@@ -2219,7 +2245,12 @@ export class ReaderView extends ItemView {
        桌面 force-mobile 验收时，菜单也要和真机一致。 */
     const clipCh = this.clipSnap ? this.currentClipChapter() : null;
     let clipSepDone = false;
-    for (const id of availableActions(isMobileShell(), this.host.isPdf, !!this.clipSnap)) {
+    for (const id of availableActions(
+      isMobileShell(),
+      this.host.isPdf,
+      !!this.clipSnap,
+      !!this.host.isManga,
+    )) {
       /* 剪藏三颗按「这一章能不能用」再筛一遍：底条时代它们按需显隐，
          搬进菜单后不筛的话「剪藏笔记」会在没有笔记的章节里常驻、
          「存为剪藏」在已剪藏的章节里还能点到（点了只会 alreadySaved）。 */
@@ -2284,14 +2315,13 @@ export class ReaderView extends ItemView {
   /* ─────────────────── 并排对照 ─────────────────── */
 
   private async toggleParallel(): Promise<void> {
-    // 关闭永远放行；只有「开启」才要高级版
+    // 关闭永远放行；开启 2026-11-22 起也放行（并排对照已下放基础版）
     if (this.parallelOn) {
       await this.closeParallel();
       return;
     }
     /* 对照卷：PDF 也能并排（每边各自一套引擎，互不认识对方的排版）。
        EPUB 那套 grid 两栏对 canvas 同样成立，不需要特判格式。 */
-    if (!requireCap('parallel')) return;
     /* 开一次要 mount + start 整本副卷，几百毫秒起。这段时间里再点一次
        （双击、头栏与命令面板同时来）会建出第二个副卷：第一个的 host2 被
        覆盖，iframe 与监听全漏，界面上还会并排出现两本书。 */
@@ -5341,9 +5371,13 @@ export class ReaderView extends ItemView {
         return;
       }
     }
-    /* PDF 走另一套引擎：切书时连同实例一起换。EPUB/TXT/CBZ 复用同一个
-       EngineHost（它自己会在 mount 时 destroy 上一本）。 */
-    if ((book.fileRef.format === 'pdf') !== this.host.isPdf) {
+    /* 三套引擎：PDF 一套、漫画一套、其余复用 EngineHost。
+       判定按「引擎种类」而不是只看 isPdf——否则从 EPUB 切到 CBZ 会
+       复用上一个 foliate 实例，漫画视图根本挂不上来。 */
+    const wantKind = book.fileRef.format === 'pdf' ? 'pdf'
+      : book.fileRef.format === 'cbz' ? 'manga' : 'book';
+    const curKind = this.host.isPdf ? 'pdf' : this.host.isManga ? 'manga' : 'book';
+    if (wantKind !== curKind) {
       await this.host.destroy();
       this.host = createEngine(book.fileRef.format, this.api.app);
     }
@@ -5439,9 +5473,12 @@ export class ReaderView extends ItemView {
         onPdfFlow: (mode) => getShellSource()?.setPrefs({ pdfFlow: mode }),
         /* 排版面板里的「识别本页」（扫描件）：识别编排在壳层 */
         onPdfOcr: (page) => this.recognizePage(page),
-        /* 跳转历史条数变了：头栏那颗「回到上一处」跟着亮 / 灰。两个引擎都报 */
+        /* 跳转历史条数变了：头栏那颗「回到上一处」跟着亮 / 灰。三个引擎都报 */
         onHistoryChange: (count) =>
           this.headerEls.get('history')?.classList.toggle('is-off', count === 0),
+        /* 漫画：按书还原视角，视角变了按书落盘（不进全局 prefs） */
+        mangaView: book.mangaView,
+        onMangaViewState: (state) => this.saveMangaView(state),
         /* 脚注：默认在注释号上方开一小块浮窗，读完接着读。
            设置里选「跳到章末」就退回 foliate 的老行为——我们在同一条链路上
            自己调 goTo，保证两种模式只有一处判断。 */
@@ -5490,6 +5527,8 @@ export class ReaderView extends ItemView {
          只在同一章才出现——跨章继续要跳章，那是另一件事，不混在这里做。
          放在 mount 之后：章节名与章序都要等引擎挂好才准。 */
       this.maybeShowTtsResume();
+      /* 漫画同理：先按书还原方向 / 单双页 / 缩放，再套全局偏好 */
+      this.host.restoreMangaView?.(book.mangaView);
       if (this.host.isPdf) {
         this.host.applyPrefs(this.prefs);
         /* 识别结果随书一起进来。顺序要在 start() 之前：晚一步的话，先渲染
@@ -5501,6 +5540,8 @@ export class ReaderView extends ItemView {
           .load()
           .then(() => this.noticeScanned())
           .catch(() => undefined);
+      } else if (this.host.isManga) {
+        this.host.applyPrefs(this.prefs);
       }
       /* 点按分区要用「可见宽度」当分母：分页器的文档宽度比屏幕大一个量级 */
       this.host.setViewportWidth(
@@ -5575,12 +5616,22 @@ export class ReaderView extends ItemView {
          「开书已取消」让人以为出故障（P2-14）。取消与真失败现在是两种
          错误类型：OpenCancelledError 静默，其余照常报。 */
       if (this.closed || e instanceof OpenCancelledError) return;
-      const why = (e as Error)?.message || t('notice.open.unsupported');
+      const why = this.openFailureText((e as Error)?.message || '');
       this.renderFault(t('fault.openFailed'), why);
       notify(why, 'error');
       return;
     }
     this.mounting = false;
+  }
+
+  /**
+   * 引擎抛上来的错误原文是英文（有些是 zip 解析器给的），直接摆给用户
+   * 等于没提示。常见的两类转成人话，别的原样保留。
+   */
+  private openFailureText(raw: string): string {
+    if (/not a zip archive/i.test(raw)) return t('manga.err.notZip');
+    if (/no images in comic (archive|folder)/i.test(raw)) return t('manga.err.noImages');
+    return raw || t('notice.open.unsupported');
   }
 
   /**
@@ -5921,6 +5972,14 @@ export class ReaderView extends ItemView {
     const cur = book.pdfView;
     if (cur && cur.rotation === rotation && cur.spread === spread) return;
     book.pdfView = { rotation, spread };
+    this.api.store.touch();
+  }
+
+  /** 漫画视角按书记住：只在真的变了时落盘，避免每翻一页都 touch 一次存储 */
+  private saveMangaView(state: import('../engine/manga/settings').MangaViewState): void {
+    const book = this.book;
+    if (!book) return;
+    book.mangaView = { ...(book.mangaView ?? {}), ...state };
     this.api.store.touch();
   }
 

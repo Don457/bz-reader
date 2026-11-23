@@ -2013,3 +2013,207 @@ body.is-mobile .bzr-pdf-toolbar {
 }
 .bzr-imgview-btn:hover { background: var(--interactive-hover); }
 .bzr-imgview-btn.is-close { color: var(--text-error, var(--text-muted)); }
+
+/* ── 漫画阅读（2026-11-22 重做尺寸与工具条） ──
+   cell 的宽高由 JS 按 fit 算好后写死，img 填满 cell；film 只负责
+   zoom / pan。旧版把 fit 乘进 film 的 transform、img 却按容器宽铺满，
+   两者各算各的，整页永远只剩四成大小。
+   工具条悬浮在右上角：桌面端把整块阅读区让给图片，手机上折行也不压底部。 */
+.bzr-manga {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--background-primary, #1b1b1f);
+  color: var(--text-normal);
+  user-select: none;
+}
+
+.bzr-manga-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.bzr-manga-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.bzr-manga[data-flow="paged"] .bzr-manga-stage {
+  overflow: hidden;
+}
+
+.bzr-manga[data-flow="horizontal"] .bzr-manga-stage {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.bzr-manga-film {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.bzr-manga-film.is-paged {
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+}
+
+.bzr-manga-film.is-column {
+  flex-direction: column;
+  width: 100%;
+}
+
+.bzr-manga-film.is-row {
+  flex-direction: row;
+  width: max-content;
+  height: 100%;
+}
+
+.bzr-manga-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bzr-manga-film.is-column > .bzr-manga-screen {
+  flex-direction: column;
+  width: 100%;
+}
+
+.bzr-manga-film.is-row > .bzr-manga-screen {
+  flex-direction: row;
+  height: 100%;
+}
+
+.bzr-manga-cell {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.bzr-manga-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  max-width: none;
+  max-height: none;
+}
+
+/* 跨页拆半：同一张图画成两倍宽，由 cell 裁掉另一半 */
+.bzr-manga-cell[data-half="right"] .bzr-manga-img {
+  margin-left: -100%;
+}
+
+.bzr-manga-cell.is-broken {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.bzr-manga-panels {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.bzr-manga-shade {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.bzr-manga-frame {
+  position: absolute;
+  border: 2px solid var(--interactive-accent, var(--copper));
+}
+
+/* 排版面板：贴着头栏「排版」按钮弹出的小卡，外观沿用壳层的 .bzs-float。
+   2026-11-22 二轮真机反馈：画面里不再有工具条，缩放 / 适配 / 方向 /
+   单双页 / 翻页全在这张卡里。桌面宽 300px；手机上不写宽度——容器查询
+   （@container bzs（max-width:640px））会把它变成贴底的一整条。 */
+.bzr-manga-layout {
+  width: 320px;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* 分段控件按列数固化：手机端 .bzs-seg 给按钮 54px 下限，六档适配会被
+   折成三行、缩放三颗会把「＋」挤到下一行。grid 之后行高稳定，卡片更矮。 */
+.bzr-manga-layout .bzr-manga-seg3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* 四档（翻页方式）用两列：桌面上四颗并排时每颗只剩 40px，「连续横向」
+   会溢出按钮边框（2026-11-22 桌面截图）。 */
+.bzr-manga-layout .bzr-manga-seg2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 卡片比设置页矮一档：八行设置行按设置页的间距堆起来要 640px（手机上
+   62vh 只有 520，最后两行必须滚才看得见）。这里把行距与按钮内边距各收
+   2px，整张卡回到 340 上下，一屏能看全，不用滚。 */
+.bzr-manga-layout .bzs-setrow {
+  padding: 4px 0;
+  gap: 8px;
+}
+
+.bzr-manga-layout .bzs-seg button {
+  padding: 5px 4px;
+}
+/* 缩略图带：底部，只在开了缩略图时占位 */
+.bzr-manga-thumbs {
+  display: none;
+}
+
+.bzr-manga-thumbs.is-on {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.bzr-manga-thumb {
+  flex: none;
+  width: 44px;
+  height: 60px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  cursor: pointer;
+}
+
+.bzr-manga-thumb.is-cur {
+  border-color: var(--interactive-accent, var(--copper));
+  box-shadow: 0 0 0 1px var(--interactive-accent, var(--copper));
+}
+
+.bzr-manga-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+

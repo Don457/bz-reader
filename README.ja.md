@@ -29,69 +29,21 @@
 Obsidian を「本を読む場所」に。デスクトップ + モバイル、複数形式（PDF とマンガを含む）、多言語、AI アンカー追質問 / 全書 Q&A / セマンティック検索 / ナレッジベース、オフライン音声読み上げ、双方向リンク、統計、データはすべてローカル。
 
 <p align="center">
-  <img src="docs/images/shelf-desktop-light.webp" alt="書棚：続きから読む、フィルター、分類、表紙ウォール（左が明るいテーマ、右が暗いテーマ）">
+  <img src="docs/images/en/shelf-desktop-light.webp" alt="書棚：続きから読む、フィルター、分類、表紙ウォール">
 </p>
 
 <p align="center"><b>読書 · メモ · 色分け · 選択ツールバー · 脚注</b></p>
 
 <p align="center">
-  <img src="docs/images/read-desktop-light.webp" alt="読書：目次、本文、選択メニュー、脚注のポップオーバー（左が明るいテーマ、右が暗いテーマ）">
+  <img src="docs/images/en/read-desktop-light.webp" alt="読書：目次、本文、選択メニュー、脚注のポップオーバー">
 </p>
 
 <p align="center"><b>モバイル · 書棚 · 読書</b></p>
 
 <p align="center">
-  <img src="docs/images/shelf-mobile-light.webp" width="288" alt="書棚 · モバイル · 明るいテーマ">
+  <img src="docs/images/en/shelf-mobile-light.webp" width="288" alt="書棚 · モバイル · 明るいテーマ">
   &nbsp;&nbsp;
-  <img src="docs/images/read-mobile-dark.webp" width="288" alt="読書 · モバイル · 暗いテーマ">
-</p>
-
-<p align="center"><b>AI · 固定された追加質問 · 全書 Q&A</b></p>
-
-<p align="center">
-  <img src="docs/images/ai-desktop-light.png" alt="AI：選択ツールバー、固定された追加質問、右側は全書 Q&A">
-</p>
-
-<p align="center"><b>PDF · 書摘</b></p>
-
-<p align="center">
-  <img src="docs/images/pdf-desktop-light.png" alt="PDF：選択後に書摘ポップオーバー、四種の切り出し方、引用し直し・ノート保存・画像コピー">
-</p>
-
-<p align="center"><b>読み上げ · 文単位ハイライト · 章 / 全冊の事前生成</b></p>
-
-<p align="center">
-  <img src="docs/images/read-aloud-desktop-light.png" alt="読み上げ：文ごとのハイライト、前の文 / 次の文、速度、書き出し、設定">
-</p>
-
-<p align="center"><b>ノート · 毎日の見直し</b></p>
-
-<p align="center">
-  <img src="docs/images/notes-desktop-light.png" alt="ノート：毎日の見直し、色とキーワードで絞り込み、本ごとのハイライトとメモ">
-</p>
-
-<p align="center"><b>チャット · 本ごとにまとめる</b></p>
-
-<p align="center">
-  <img src="docs/images/chat-desktop-light.png" alt="チャット：今月の追加 / アーカイブ、種類で絞り込み、本ごとの会話カード">
-</p>
-
-<p align="center"><b>検索 · 字面 / 意味 · スキャン進捗 · 本ごと · 章の位置</b></p>
-
-<p align="center">
-  <img src="docs/images/search-desktop-light.png" alt="検索：字面と意味の二通り、本ごとのスキャン進捗、結果を本ごとに章位置付きで表示">
-</p>
-
-<p align="center"><b>統計 · 今日 · 前週比 · 每日の時間 · 読書リズム</b></p>
-
-<p align="center">
-  <img src="docs/images/stats-desktop-light.png" alt="統計：合計時間と連続日数、週間比較、每日の読書時間とリズム">
-</p>
-
-<p align="center"><b>読書サイドバー · 目次 · しおり · ハイライト · 引用 · AI 全書 Q&A</b></p>
-
-<p align="center">
-  <img src="docs/images/sidebar-desktop-light.png" alt="五つのタブを並べて表示：目次、しおり、ハイライト、引用、AI 全書 Q&A">
+  <img src="docs/images/en/read-mobile-dark.webp" width="288" alt="読書 · モバイル · 暗いテーマ">
 </p>
 
 ### インストール
@@ -138,8 +90,8 @@ Obsidian を「本を読む場所」に。デスクトップ + モバイル、�
 |  | 読み上げ：EPUB・TXT・PDF、読み終えたら自動で次のページ | — | ✓ |
 |  | 別の本と並べて対照 | — | ✓ |
 |  | 全体マップ | — | ✓ |
+|  | マンガモード：コマ割り・右から左・見開き | — | ✓ |
 |  | PDF reflow: fixed layouts read as flowing text | — | — |
-|  | Manga mode: panels, right-to-left, spreads | — | — |
 |  | Chapter translation: source and translation side by side | — | — |
 |  | Review: reread in full, with AI flashcards and quizzes | — | — |
 |  | E Ink optimization: crisper black and white, no page-turn flashing | — | — |

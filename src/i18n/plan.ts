@@ -70,8 +70,10 @@ export type PlanKey =
    * 锚定追问浮框、划词会话留痕、侧栏问答历史、依据按章跳转、连接笔记
    * 浮层、书架对话页），表里原来四行装不下，拆成五行、一行只说一件事。
    * 「对话留档」与「伴读」以前同挤在 aiChat 一行，现在各占一行、
-   * 各挂一个能力位（aiLog / aiChat），被拦时才亮得对。 */
+   * 各挂一个能力位（aiLog / aiChat），被拦时才亮得对。
+   * 2026-11-22：解释 / 翻译 / 摘要下放基础版，追问单独成行（aiFollow）。 */
   | 'aiSel'
+  | 'aiFollow'
   | 'aiBook'
   | 'aiLog'
   | 'aiChat'
@@ -85,9 +87,21 @@ export type PlanKey =
   | 'ttsChapter'
   | 'ttsWhole'
   | 'ttsOffline'
+  /* ── 漫画（2026-11-22 独立成段）──
+   * 原来是「排版」组里的一行「漫画模式：分格、右到左、跨页」。漫画能做的事
+   * 远不止三件，一行塞不下也说不清「买了能多出哪几件事」。现在按
+   * 打开 → 翻页 → 画面 → 逐格的顺序摊成九行，全部是高级版。 */
+  | 'mangaOpen'
+  | 'mangaInfo'
+  | 'mangaDir'
+  | 'mangaSpread'
+  | 'mangaFlow'
+  | 'mangaPanels'
+  | 'mangaFit'
+  | 'mangaTone'
+  | 'mangaThumbs'
   /* ── 路线图 ── */
   | 'pdfReflow'
-  | 'manga'
   | 'transChapter'
   | 'eink'
   | 'motion';
@@ -102,6 +116,7 @@ export type PlanGroupKey =
   | 'layout'
   | 'import'
   | 'pdf'
+  | 'manga'
   | 'notes'
   | 'review'
   | 'data'
@@ -353,16 +368,29 @@ const PLAN_TEXT: Record<PlanKey, Record<Locale, string>> = {
     es: 'Búsqueda semántica: por significado, este libro o el estante',
     pt: 'Busca semântica: por significado, neste livro ou na estante',
   },
-  /* ── AI ── */
+  /* ── AI ──
+     2026-11-22：解释 / 翻译 / 摘要下放基础版（不再设门），「追问」单独
+     成行、仍是高级版。行名里不再写「与追问」——那是另一行的事。 */
   aiSel: {
-    zh: 'AI 解释、翻译、摘要与追问：即划即用',
-    'zh-TW': 'AI 解釋、翻譯、摘要與追問：即劃即用',
-    en: 'AI explain, translate, summarize and follow up: select and go',
-    ja: 'AI 解説・翻訳・要約・追加質問：選択するだけ',
-    de: 'KI: erklären, übersetzen, zusammenfassen, nachfragen — direkt zur Auswahl',
-    fr: 'IA : expliquer, traduire, résumer, relancer — sur une sélection',
-    es: 'IA: explicar, traducir, resumir y repreguntar — sobre una selección',
-    pt: 'IA: explicar, traduzir, resumir e perguntar de novo — numa seleção',
+    zh: 'AI 解释、翻译、摘要：即划即用',
+    'zh-TW': 'AI 解釋、翻譯、摘要：即劃即用',
+    en: 'AI explain, translate and summarize: select and go',
+    ja: 'AI 解説・翻訳・要約：選択するだけ',
+    de: 'KI: erklären, übersetzen, zusammenfassen — direkt zur Auswahl',
+    fr: 'IA : expliquer, traduire, résumer — sur une sélection',
+    es: 'IA: explicar, traducir y resumir — sobre una selección',
+    pt: 'IA: explicar, traduzir e resumir — numa seleção',
+  },
+  aiFollow: {
+    zh: 'AI 追问：就这段接着问',
+    'zh-TW': 'AI 追問：就這段接著問',
+    en: 'AI follow-up: keep asking about this passage',
+    /* 日德法西葡按仓库规矩先留英文占位，上架前统一翻 */
+    ja: 'AI follow-up: keep asking about this passage',
+    de: 'AI follow-up: keep asking about this passage',
+    fr: 'AI follow-up: keep asking about this passage',
+    es: 'AI follow-up: keep asking about this passage',
+    pt: 'AI follow-up: keep asking about this passage',
   },
   /* 2026-11-16：行名从「先建索引，再问整本」改成「四种依据都可添加进去」。
      索引仍然是内部步骤（建索引的入口没变），但卖点不是它——用户关心的是
@@ -539,15 +567,99 @@ const PLAN_TEXT: Record<PlanKey, Record<Locale, string>> = {
     es: 'Reflujo de PDF: los diseños fijos pasan a texto fluido',
     pt: 'Reflow de PDF: layouts fixos viram texto fluido',
   },
-  manga: {
-    zh: '漫画模式：分格、右到左、跨页',
-    'zh-TW': '漫畫模式：分格、右到左、跨頁',
-    en: 'Manga mode: panels, right-to-left, spreads',
-    ja: 'マンガモード：コマ割り・右から左・見開き',
-    de: 'Manga-Modus: Panels, rechts nach links, Doppelseiten',
-    fr: 'Mode manga : cases, droite à gauche, doubles pages',
-    es: 'Modo manga: viñetas, derecha a izquierda, dobles páginas',
-    pt: 'Modo mangá: quadros, direita para esquerda, páginas duplas',
+  /* ── 漫画（2026-11-22 独立成段，九行）──
+   * 顺序就是对照表的阅读顺序：怎么打开 → 方向 → 单双页 → 翻法 → 逐格 →
+   * 画面 → 缩略图。简中 / 繁中 / 英三种先写实；日德法西葡沿用英文占位，
+   * 按仓库规矩留到发版前统一翻（与上面的 cites 同一处理）。 */
+  mangaOpen: {
+    zh: 'CBZ / 文件夹打开即读',
+    'zh-TW': 'CBZ / 資料夾開啟即讀',
+    en: 'CBZ and folders, open and read',
+    ja: 'CBZ and folders, open and read',
+    de: 'CBZ and folders, open and read',
+    fr: 'CBZ and folders, open and read',
+    es: 'CBZ and folders, open and read',
+    pt: 'CBZ and folders, open and read',
+  },
+  mangaInfo: {
+    zh: 'ComicInfo 方向自动跟随',
+    'zh-TW': 'ComicInfo 方向自動跟隨',
+    en: 'Follows the reading direction in ComicInfo',
+    ja: 'Follows the reading direction in ComicInfo',
+    de: 'Follows the reading direction in ComicInfo',
+    fr: 'Follows the reading direction in ComicInfo',
+    es: 'Follows the reading direction in ComicInfo',
+    pt: 'Follows the reading direction in ComicInfo',
+  },
+  mangaDir: {
+    zh: '右到左 / 左到右',
+    'zh-TW': '右到左 / 左到右',
+    en: 'Right-to-left / left-to-right',
+    ja: 'Right-to-left / left-to-right',
+    de: 'Right-to-left / left-to-right',
+    fr: 'Right-to-left / left-to-right',
+    es: 'Right-to-left / left-to-right',
+    pt: 'Right-to-left / left-to-right',
+  },
+  mangaSpread: {
+    zh: '单页 / 双页，跨页自动拆合',
+    'zh-TW': '單頁 / 雙頁，跨頁自動拆合',
+    en: 'Single / double page, spreads split and rejoined',
+    ja: 'Single / double page, spreads split and rejoined',
+    de: 'Single / double page, spreads split and rejoined',
+    fr: 'Single / double page, spreads split and rejoined',
+    es: 'Single / double page, spreads split and rejoined',
+    pt: 'Single / double page, spreads split and rejoined',
+  },
+  mangaFlow: {
+    zh: '一屏一页 / 连续 / 条漫',
+    'zh-TW': '一屏一頁 / 連續 / 條漫',
+    en: 'One page / continuous / long strip',
+    ja: 'One page / continuous / long strip',
+    de: 'One page / continuous / long strip',
+    fr: 'One page / continuous / long strip',
+    es: 'One page / continuous / long strip',
+    pt: 'One page / continuous / long strip',
+  },
+  mangaPanels: {
+    zh: '逐格读：自动分格、防剧透',
+    'zh-TW': '逐格讀：自動分格、防劇透',
+    en: 'Panel by panel: auto panels, spoiler-free',
+    ja: 'Panel by panel: auto panels, spoiler-free',
+    de: 'Panel by panel: auto panels, spoiler-free',
+    fr: 'Panel by panel: auto panels, spoiler-free',
+    es: 'Panel by panel: auto panels, spoiler-free',
+    pt: 'Panel by panel: auto panels, spoiler-free',
+  },
+  mangaFit: {
+    zh: '六档适配 + 缩放拖动',
+    'zh-TW': '六檔適配 + 縮放拖動',
+    en: 'Six fit modes, zoom and pan',
+    ja: 'Six fit modes, zoom and pan',
+    de: 'Six fit modes, zoom and pan',
+    fr: 'Six fit modes, zoom and pan',
+    es: 'Six fit modes, zoom and pan',
+    pt: 'Six fit modes, zoom and pan',
+  },
+  mangaTone: {
+    zh: '裁白边、一键调色',
+    'zh-TW': '裁白邊、一鍵調色',
+    en: 'Trim margins, one-tap tone fix',
+    ja: 'Trim margins, one-tap tone fix',
+    de: 'Trim margins, one-tap tone fix',
+    fr: 'Trim margins, one-tap tone fix',
+    es: 'Trim margins, one-tap tone fix',
+    pt: 'Trim margins, one-tap tone fix',
+  },
+  mangaThumbs: {
+    zh: '页缩略图、读到哪记住',
+    'zh-TW': '頁縮圖、讀到哪記住',
+    en: 'Page thumbnails, resume where you left',
+    ja: 'Page thumbnails, resume where you left',
+    de: 'Page thumbnails, resume where you left',
+    fr: 'Page thumbnails, resume where you left',
+    es: 'Page thumbnails, resume where you left',
+    pt: 'Page thumbnails, resume where you left',
   },
   transChapter: {
     zh: '整章翻译：原文译文对照',
@@ -691,6 +803,18 @@ const PLAN_GROUP_TEXT: Record<PlanGroupKey, Record<Locale, string>> = {
     fr: 'Lecture PDF',
     es: 'Lectura de PDF',
     pt: 'Leitura de PDF',
+  },
+  /* 漫画（2026-11-22 独立成段）：段名就「漫画」两个字。
+     别写成「漫画模式」——每一行都是漫画，组名再带「模式」只是重复。 */
+  manga: {
+    zh: '漫画',
+    'zh-TW': '漫畫',
+    en: 'Manga',
+    ja: 'マンガ',
+    de: 'Manga',
+    fr: 'Manga',
+    es: 'Manga',
+    pt: 'Mangá',
   },
   /* 段名不能只写「笔记」：PDF 段里有一行「本页反链：笔记引了这页就画出来」，
      组名与行名撞字会被当成那一行的一部分（渲染定位也会错位）。

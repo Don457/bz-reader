@@ -655,6 +655,7 @@ bz 组 2026-11-13 从 AI 组里抽出来，紧跟在 AI 之后、授权之前；
       '标注',
       '数据',
       'PDF',
+      '漫画',
       '朗读',
       'AI 助手',
       'bz',
@@ -1120,7 +1121,29 @@ describe('设置页 · 2026-11-17 重排', () => {
 
   it('语言与强调色这两行标签独占一行（9 档 / 8 档）', () => {
     const src = out();
-    expect((src.match(/class="bzs-setrow is-stack"/g) ?? []).length).toBe(2);
+    /* 2026-11-23 +6：导出与复制各三行（选模板 / 自定义框 / 预览）
+       都走 is-stack 整宽排——计数从 2 抬到 8，原来的语言与强调色两行仍在。 */
+    expect((src.match(/class="bzs-setrow is-stack"/g) ?? []).length).toBe(8);
+  });
+
+  it('标注组里有两套对称的双链模板 UI：导出四档 + 复制四档 + 各自的变量与预览', () => {
+    const src = out();
+    expect(src).toContain('data-act="setlinktpl" data-v="simple"');
+    expect(src).toContain('data-act="setlinktpl" data-v="quote"');
+    expect(src).toContain('data-act="setlinktpl" data-v="detail"');
+    expect(src).toContain('data-act="setlinktpl" data-v="custom"');
+    expect(src).toContain('data-linktpl-preview');
+    expect(src).toContain('data-role="setting" data-k="exportTemplateCustom"');
+    expect(src).toContain('data-act="setcopytpl" data-v="simple"');
+    expect(src).toContain('data-act="setcopytpl" data-v="quote"');
+    expect(src).toContain('data-act="setcopytpl" data-v="detail"');
+    expect(src).toContain('data-act="setcopytpl" data-v="custom"');
+    expect(src).toContain('data-copytpl-preview');
+    expect(src).toContain('data-role="setting" data-k="copyTemplateCustom"');
+    expect(src).not.toContain('data-k="aliasTemplate"');
+    /* 复制也能多行、能写 callout，变量按钮与导出一样要有 {双链} */
+    expect(src).toContain('data-target="copyTemplateCustom" data-v="{双链}"');
+    expect(src).toContain('data-act="insertvar"');
   });
 });
 

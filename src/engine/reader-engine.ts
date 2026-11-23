@@ -18,6 +18,7 @@ import type { OcrPage } from './pdf/ocr';
 import { EngineHost } from './host';
 import type { Anchor } from '../core/tts-anchor';
 import { PdfEngineHost } from './pdf/host';
+import { MangaEngineHost } from './manga/host';
 
 /**
  * 跳转历史（「回到上一处」）。
@@ -71,6 +72,28 @@ export interface PdfUi {
 }
 
 /**
+ * 漫画独有的那套动作（2026-11-22 二轮）。
+ *
+ * 和 `PdfUi` 同一个理由单独成接口：EPUB 上没有「页图」「适配档」这些东西。
+ * 约定也一样：**现取，不缓存**——换书后旧对象作废。
+ *
+ * 第一版把这些控件做成画面里的悬浮工具条，作者否掉了：排版要像 PDF / EPUB
+ * 那样收进头栏「排版」图标弹出的面板，缩略图收进头栏那颗图标。所以这里
+ * 只剩两个入口，不再有 `zoomIn` / `goToPage` 之类给工具条用的方法。
+ */
+export interface MangaUi {
+  /**
+   * 排版面板：缩放 / 适配 / 逐格 / 裁边 / 调色 / 方向 / 单双页 / 翻页。
+   *
+   * `anchor` 是那颗头栏图标的视口矩形，给了就贴着它弹；命令面板 / 快捷键
+   * / ⋮ 菜单没有坐标，传 null 回 CSS 兜底位。
+   */
+  toggleLayout(anchor?: { left: number; top: number; width: number; height: number } | null): void;
+  /** 页缩略图带开关（默认关，开了才占底部一条） */
+  toggleThumbs(): void;
+}
+
+/**
  * PDF 扫描页识别（OCR）的能力面。EPUB/TXT/CBZ 没有——它们天生有文字层。
  *
  * 和 `PdfUi` 同一条约定：**现取，不缓存**。壳层的识别编排只认这个形状，
@@ -112,6 +135,8 @@ export interface AiShotSource {
 export interface ReaderEngine {
   /** PDF 走另一套渲染；视图层据此隐藏排版面板、改页码文案 */
   readonly isPdf: boolean;
+  /** 漫画走第三套渲染（图片页，没有文字层） */
+  readonly isManga?: boolean;
   /**
    * PDF 是不是纯扫描件（首页没有文字层）。
    * 宿主拿它决定要不要先提醒一句「划词和搜索取不到文字」。
@@ -256,8 +281,12 @@ export interface ReaderEngine {
   contentLeftInset?(): number;
   /** PDF 专用：还原上次的旋转角与双页排法。别的引擎不实现 */
   restorePdfView?(state: { rotation?: number; spread?: boolean } | null | undefined): void;
+  /** 漫画专用：还原方向 / 单双页 / 缩放等按书记住的视角 */
+  restoreMangaView?(state: import('./manga/settings').MangaViewState | null | undefined): void;
   /** PDF 专用动作集；EPUB/TXT/CBZ 没有 */
   readonly pdfUi?: PdfUi;
+  /** 漫画专用动作集（排版面板 + 缩略图）；别的引擎没有 */
+  readonly mangaUi?: MangaUi;
   /** PDF 专用：扫描页识别。别的引擎没有 */
   readonly ocrUi?: PdfOcrUi;
   /** 跳转历史。两个引擎都实现（EPUB 2026-11-10 补上） */
@@ -272,5 +301,7 @@ export interface ReaderEngine {
  * PDF 宿主的薄壳带进来，EPUB 用户不会付 800KB 的解析钱。
  */
 export function createEngine(format: BookFormat, app: App): ReaderEngine {
-  return format === 'pdf' ? new PdfEngineHost(app) : new EngineHost(app);
+  if (format === 'pdf') return new PdfEngineHost(app);
+  if (format === 'cbz') return new MangaEngineHost(app);
+  return new EngineHost(app);
 }
