@@ -10,7 +10,7 @@
  * 它的背景被覆盖成透明，所以不会给整屏染色。
  * ============================================================ */
 import { isIosEnv, isMobileEnv, isMobileShell } from '../core/mobile';
-import { t } from '../i18n';
+import { t, isChineseUI } from '../i18n';
 import { planGroupLabel, planLabel, type PlanKey } from '../i18n/plan';
 import {
   AI_CHAT_TUTORIAL_URL,
@@ -1215,7 +1215,7 @@ export function overlayUnlock(mode?: string): string {  const v = entitlement();
        组行缺格就会把整列切断成几截。格子是空的，不带勾叉。 */
     const groupVideo = PLAN_GROUP_VIDEO[g.key];
     const groupTut = groupVideo
-      ? ` <a class="bzs-plan-video" data-act="openvid" data-url="${esc(groupVideo)}">${esc(t('unlock.watchVideo'))}</a>`
+      ? (isChineseUI() ? ` <a class="bzs-plan-video" data-act="openvid" data-url="${esc(groupVideo)}">${esc(t('unlock.watchVideo'))}</a>` : '')
       : '';
     const group = `<div class="bzs-plan-row is-group"><span>${esc(planGroupLabel(g.key))}${groupTut}</span><i class="c"></i><i class="c pro"></i></div>`;
     const body = g.rows
@@ -1225,7 +1225,7 @@ export function overlayUnlock(mode?: string): string {  const v = entitlement();
         const hot = !paid && !!cap && r.cap === cap;
         const video = PLAN_VIDEO[r.key];
         const videoLink = video
-          ? ` <a class="bzs-plan-video" data-act="openvid" data-url="${esc(video)}">${esc(t('unlock.watchVideo'))}</a>`
+          ? (isChineseUI() ? ` <a class="bzs-plan-video" data-act="openvid" data-url="${esc(video)}">${esc(t('unlock.watchVideo'))}</a>` : '')
           : '';
         return `<div class="bzs-plan-row${hot ? ' is-cap' : ''}">
         <span>${esc(planLabel(r.key))}${r.note ? `<em>${esc(r.note)}</em>` : ''}${videoLink}</span>
@@ -1275,7 +1275,8 @@ export function overlayUnlock(mode?: string): string {  const v = entitlement();
     ? `<span class="sp"></span>${groupButtonHtml()}`
     : `<div class="bzs-unlock-foot">
         <div class="bzs-unlock-buy">
-          <button class="bzs-btn pri" data-act="buy">${t('unlock.buy')}</button>
+          <button class="bzs-btn pri" data-act="buy">${t('unlock.buy.cn')}</button>
+          <button class="bzs-btn" data-act="buy-intl">${t('unlock.buy.intl')}</button>
           ${groupButtonHtml()}
         </div>
       </div>`;

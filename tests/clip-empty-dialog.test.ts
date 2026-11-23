@@ -45,12 +45,13 @@ describe('正文', () => {
     expect(html).toMatch(/class="bzr-btn" type="button" data-role="clipempty-tutorial"/);
   });
 
-  it('文案跟语言包走，不写死中文', () => {
+  it('文案跟语言包走，不写死中文；教程入口在非简中隐藏', () => {
     setLocale('en');
     const html = clipEmptyHtml();
     expect(html).toContain('Open settings');
-    expect(html).toContain('Watch tutorial');
     expect(html).not.toContain('去设置');
+    /* 2026-11-23 差异化：B 站教程是简体讲解，非简体中文不显示教程入口 */
+    expect(html).not.toContain('data-role="clipempty-tutorial"');
   });
 });
 

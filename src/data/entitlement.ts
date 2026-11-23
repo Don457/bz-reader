@@ -1063,6 +1063,12 @@ export function capLabel(cap: Cap): string {
  * 购买链接指向在售店铺页，不是店铺首页或聚合页：少一跳，
  * 手机端就不会停在商品列表里找不到下单入口。 */
 export const PURCHASE_URL = 'https://wzyp.cn/shop/IFCEI5I3';
+/**
+ * 海外购买地址：Creem 商店（2026-11-23 起）。
+ * 解锁弹层给两颗按钮，中国大陆走 PURCHASE_URL、其他地区走这里，
+ * 让用户自己选——界面语言不等于国籍，自动跳反而会跳错。
+ */
+export const PURCHASE_URL_INTL = 'https://www.creem.io/stores/baizai';
 /** 交流群群号：UI 直接显示、点击复制。短链（qm.qq.com/q/…）实测 404，不再用。 */
 export const GROUP_ID = '1130883117';
 /** 仓库地址：关于条与更新日志弹窗共用一份，改这里就够 */

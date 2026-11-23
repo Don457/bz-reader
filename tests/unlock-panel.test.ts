@@ -64,11 +64,13 @@ describe('解锁弹层 · 交流群入口', () => {
     expect(groupButtonHtml()).toContain('data-act="copygroup"');
   });
 
-  it('换界面语言后按钮还在，群号不随语言漂移', () => {
+  it('非简体中文不显示 QQ 群入口', () => {
+    /* 2026-11-23 差异化：海外没有 QQ，繁体人群也不常用；群按钮整颗收掉，
+       不再有「换语言后群号漂移」的问题——因为压根不渲染。 */
     setLocale('en');
     const html = overlayUnlock();
-    expect(html).toContain(GROUP_ID);
-    expect(html).toContain('QQ');
+    expect(html).not.toContain(GROUP_ID);
+    expect(html).not.toContain('QQ');
   });
 
   it('不再带输入框，也就不再挂 has-input', () => {

@@ -20,7 +20,7 @@ import { uiModal } from '../core/ui/modal';
 import { escManager } from '../core/esc-manager';
 import { allocZAbove } from '../core/z-order';
 import { VIDEO_TUTORIAL_URL, openExternalUrl } from '../core/links';
-import { changelogLang } from '../i18n';
+import { changelogLang, isChineseUI } from '../i18n';
 import { setHtml } from '../ui/dom';
 import { esc, githubIcon } from './render/html';
 import { GROUP_ID, REPO_URL } from '../data/entitlement';
@@ -29,6 +29,7 @@ import {
   currentBzrData,
   feedbackCommitUrl,
   onBzrDataChange,
+  purchaseUrlFor,
   refreshBzrData,
   safeFeedbackUrl,
   type BzrData,
@@ -529,11 +530,18 @@ function issueLinkHtml(n?: number): string {
   return `<a class="bzs-chgn-issue" href="${esc(REPO_URL)}/issues/${n}" target="_blank" rel="noopener">#${n} ↗</a>`;
 }
 
-/** 条目尾部的 QQ 频道帖子链接：白名单校验通过才渲染成可点链接 */
+/**
+ * 条目尾部的 QQ 频道帖子链接。
+ *
+ * 非简体中文不渲染——QQ 频道是中文生态，海外/繁体用户打不开也不关心；
+ * 标签走 copy().fbSrcQqChannel，不再写死中文（英文包早有正式翻译）。
+ * 白名单校验保留：链接不可信时宁可不渲染。
+ */
 function qqLinkHtml(raw?: string): string {
+  if (!isChineseUI()) return '';
   const href = safeFeedbackUrl(raw ?? '');
   if (!href) return '';
-  return `<a class="bzs-chgn-qq" href="${esc(href)}" target="_blank" rel="noopener">QQ 频道 ↗</a>`;
+  return `<a class="bzs-chgn-qq" href="${esc(href)}" target="_blank" rel="noopener">${esc(copy().fbSrcQqChannel)} ↗</a>`;
 }
 
 function rowsHtml(list: readonly ChangelogEntry[]): string {
@@ -623,11 +631,14 @@ function mobReleaseHtml(release: ChangelogRelease, newest: boolean): string {
 /* ── 外链入口（桌面页脚 / 手机浮条共用） ───── */
 
 /**
- * 三个纯图标入口，顺序与图标都照 bz：GitHub → QQ 群 → B 站。
+ * 纯图标入口，顺序与图标都照 bz：GitHub → QQ 群 → B 站。
  *
  * 只给图标是因为这一行最后还要放一枚带文字的「支持作者」胶囊；三段文字
  * 并排会压成字墙。可发现性交给悬停提示与读屏（`title` / `aria-label`），
  * 交流群那枚还要说清点下去是**复制群号**——它不开链接。
+ *
+ * QQ 群与 B 站教程都是中文生态，非简体中文一律不渲染，只留 GitHub；
+ * 这与点击处的 `isChineseUI()` 拦截是两道闸（后者挡旧 DOM / 脚本注入）。
  *
  * 行为键带 `chgn` 前缀：这个弹窗不在壳层里，但同一套 `data-act` 口径
  * 容易被全局动作表误认，前缀是给自己留的隔离带。
@@ -636,8 +647,12 @@ function linksHtml(): string {
   const c = copy();
   const items = [
     { act: 'chgnrepo', label: c.github, icon: githubIcon(15) },
-    { act: 'chgnqq', label: c.qqHint(GROUP_ID), icon: QQ_SVG },
-    { act: 'chgnvideo', label: c.video, icon: BILI_SVG },
+    ...(isChineseUI()
+      ? [
+          { act: 'chgnqq', label: c.qqHint(GROUP_ID), icon: QQ_SVG },
+          { act: 'chgnvideo', label: c.video, icon: BILI_SVG },
+        ]
+      : []),
   ];
   return items
     .map(
@@ -883,6 +898,18 @@ function unmountConfirmDialog(): void {
   confirmTarget = '';
 }
 
+/**
+ * 更新日志「统计卡 → 二次确认」的跳转目标（纯函数，便于测试）。
+ *
+ * 购买（pro 卡）按界面语言取 buyCn / buyIntl，远程优先、内置兜底——和解锁
+ * 弹层两颗购买按钮同一套机制，作者在远程换渠道这边自动跟着换。
+ * 打赏（patrons 卡）走 support 老字段（解析时已过独立校验），兜底国内赞助店。
+ */
+export function resolveConfirmTarget(kind: 'buy' | 'support', d: BzrData | null): string {
+  if (kind === 'buy') return purchaseUrlFor(isChineseUI(), d);
+  return d?.links.support || SPONSOR_URL;
+}
+
 function openConfirm(kind: 'buy' | 'support'): void {
   const el = confirmEl;
   if (!el) return;
@@ -891,7 +918,7 @@ function openConfirm(kind: 'buy' | 'support'): void {
   const isBuy = kind === 'buy';
   /* 兜底一定给得出地址：数据里 links 缺失 / 没白名单时退回店铺主页，
      绝不出现「点了没反应」——那一类最伤信任（2026-11-18 真机）。 */
-  confirmTarget = safeFeedbackUrl(isBuy ? (d?.links.buy ?? '') : (d?.links.support ?? '')) || SPONSOR_URL;
+  confirmTarget = resolveConfirmTarget(kind, d);
   setHtml(el.querySelector<HTMLElement>('[data-confirm-icon]')!, isBuy ? '★' : '♥');
   const title = el.querySelector<HTMLElement>('[data-confirm-title]');
   const desc = el.querySelector<HTMLElement>('[data-confirm-desc]');
@@ -1098,8 +1125,10 @@ export function openChangelogNote(
     if (target.closest('[data-role="chgnsupport"]')) { openSupportDialog(); return; }
     const act = target.closest<HTMLElement>('[data-act]')?.dataset.act;
     if (act === 'chgnrepo') window.open(REPO_URL, '_blank', 'noopener,noreferrer');
-    else if (act === 'chgnvideo') window.open(VIDEO_TUTORIAL_URL, '_blank', 'noopener,noreferrer');
-    else if (act === 'chgnqq') void copyGroupId();
+    /* 非简体中文：视频教程与 QQ 群都属于中文生态，按钮已不渲染；
+       这里再拦一层，避免缓存的旧 DOM 或被脚本塞进来的节点把人送走。 */
+    else if (act === 'chgnvideo' && isChineseUI()) window.open(VIDEO_TUTORIAL_URL, '_blank', 'noopener,noreferrer');
+    else if (act === 'chgnqq' && isChineseUI()) void copyGroupId();
   });
 
   body?.addEventListener('scroll', syncFade, { passive: true });

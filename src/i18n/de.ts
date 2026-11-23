@@ -656,6 +656,8 @@ export const DE: Record<MsgKey, string> = {
   'unlock.total': 'Gesamt',
   'unlock.unit': 'Funktionen',
   'unlock.buy': 'Pro kaufen',
+  'unlock.buy.cn': '[TODO] unlock.buy.cn',
+  'unlock.buy.intl': '[TODO] unlock.buy.intl',
   'unlock.group': 'QQ-Gruppe {id}',
 
   /* ── Einstellungen: Daten ───────────────────────────────── */

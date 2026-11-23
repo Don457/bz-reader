@@ -23,8 +23,9 @@
  * ============================================================ */
 import { uiModal } from '../core/ui/modal';
 import { openExternalUrl } from '../core/links';
-import { t } from '../i18n';
+import { t, isChineseUI } from '../i18n';
 import { SPONSOR_URL, formatRewardDate, type RewardName } from '../data/reward';
+import { currentBzrData, purchaseUrlFor } from '../data/bzr-data';
 import {
   currentPatrons,
   onPatronsChange,
@@ -107,6 +108,18 @@ export function supportDialogHtml(
   status: PatronsStatus = patronsStatus(),
 ): string {
   const close = t('support.close');
+  const zh = isChineseUI();
+  /* 两颗出口共用：简中是「成为赞助人 + 给个 Star」，非简中是合并后的
+     「支持作者（打赏或成为赞助人）+ 给个 Star」。按钮文案用 support.title，
+     它八种语言都有正式翻译——新 key 按规矩开发期只有中文、外语会是 [TODO]，
+     不能让海外用户看到占位。 */
+  const exits =
+    '<div class="bzs-sup-exits">' +
+    `<button class="bzs-sup-sponsor" type="button" data-role="supsponsor">${esc(t(zh ? 'support.sponsor' : 'support.title'))}</button>` +
+    /* 分隔点：不可点，只把两条支持路径隔开；读屏跳过（否则会念出一个「点」）。 */
+    '<span class="bzs-sup-exit-sep" aria-hidden="true">·</span>' +
+    `<button class="bzs-sup-star" type="button" data-role="supstar">${esc(t('support.star'))}</button>` +
+    '</div>';
   return (
     '<div class="bzs-sup">' +
     `<button class="bzs-sup-close" type="button" data-role="supclose"><span class="bzs-sr-only">${esc(close)}</span>${CLOSE_SVG}</button>` +
@@ -115,14 +128,11 @@ export function supportDialogHtml(
     `<p class="bzs-sup-lead">${esc(t('support.lead'))}</p>` +
     '</header>' +
     '<div class="bzs-sup-code">' +
-    `<div class="bzs-sup-code-box"><img src="${esc(codeUrl)}" alt="${esc(t('support.codeAlt'))}" /></div>` +
-    `<p class="bzs-sup-ways">${esc(t('support.ways'))}</p>` +
-    '<div class="bzs-sup-exits">' +
-    `<button class="bzs-sup-sponsor" type="button" data-role="supsponsor">${esc(t('support.sponsor'))}</button>` +
-    /* 分隔点：不可点，只把两条支持路径隔开；读屏跳过（否则会念出一个「点」）。 */
-    '<span class="bzs-sup-exit-sep" aria-hidden="true">·</span>' +
-    `<button class="bzs-sup-star" type="button" data-role="supstar">${esc(t('support.star'))}</button>` +
-    '</div>' +
+    (zh
+      ? `<div class="bzs-sup-code-box"><img src="${esc(codeUrl)}" alt="${esc(t('support.codeAlt'))}" /></div>` +
+        `<p class="bzs-sup-ways">${esc(t('support.ways'))}</p>` +
+        exits
+      : exits) +
     '</div>' +
     '<div class="bzs-sup-list">' +
     '<div class="bzs-sup-list-hd">' +
@@ -205,7 +215,9 @@ export function openSupportDialog(): SupportDialogHandle {
       return;
     }
     if (target.closest('[data-role="supsponsor"]')) {
-      openExternalUrl(SPONSOR_URL);
+      /* 简中打赏走国内赞助店；非简中的「支持作者」走远程 buyIntl，
+         远程换渠道自动同步，和购买按钮一致。 */
+      openExternalUrl(isChineseUI() ? SPONSOR_URL : purchaseUrlFor(false, currentBzrData()));
       return;
     }
     if (target.closest('[data-role="supstar"]')) {

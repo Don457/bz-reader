@@ -658,6 +658,8 @@ export const PT: Record<MsgKey, string> = {
   'unlock.total': 'Total',
   'unlock.unit': 'recursos',
   'unlock.buy': 'Comprar Pro',
+  'unlock.buy.cn': '[TODO] unlock.buy.cn',
+  'unlock.buy.intl': '[TODO] unlock.buy.intl',
   'unlock.group': 'Grupo QQ {id}',
 
   /* ── Configurações: dados ───────────────────────────────── */

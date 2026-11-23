@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, beforeAll, describe, expect, it } from 'vitest';
 import { installDomStub } from './helpers/dom-stub';
 import { CHANGELOG_RELEASES } from '../src/shell/changelog';
+import { setLocale } from '../src/i18n';
 import { changelogNoteHtml, openChangelogNote } from '../src/shell/changelog-note';
 import type { RewardName } from '../src/data/reward';
 
@@ -18,6 +19,8 @@ const NAMES: readonly RewardName[] = [
  * ============================================================ */
 
 let uninstall = () => undefined as void;
+
+beforeEach(() => setLocale('zh'));
 
 beforeAll(() => {
   uninstall = installDomStub();
@@ -163,5 +166,12 @@ describe('更新日志 · QQ 频道帖子链接', () => {
 
   it('桌面与移动端各渲染一份链接', () => {
     expect([...html(QQ_URL).matchAll(/bzs-chgn-qq/g)]).toHaveLength(2);
+  });
+
+  it('非简体中文不渲染 QQ 频道入口（中文生态）', () => {
+    for (const lang of ['en', 'zh-TW'] as const) {
+      setLocale(lang);
+      expect(html(QQ_URL), `${lang} 不应有 QQ 频道链接`).not.toContain('bzs-chgn-qq');
+    }
   });
 });

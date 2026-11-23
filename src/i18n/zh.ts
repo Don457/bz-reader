@@ -1207,6 +1207,8 @@ export const ZH = {
   'unlock.total': '合计',
   'unlock.unit': '项',
   'unlock.buy': '去购买',
+  'unlock.buy.cn': '中国大陆',
+  'unlock.buy.intl': '其他地区',
   'unlock.group': 'QQ交流群 {id} 进群领试用',
 
   /* ── 设置页：数据 ────────────────────────────────────────── */

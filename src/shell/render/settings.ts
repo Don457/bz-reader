@@ -27,7 +27,7 @@
  *     成套的东西拆进八份语言包，漏翻一条不会让 tsc 报错——只会让某个语言的
  *     用户在某一个档位上看到中文。集中表用 `Record<Locale, string>` 锁八种齐。
  * ============================================================ */
-import { t, LOCALES, LOCALE_NAMES, type MsgKey } from '../../i18n';
+import { t, isChineseUI, LOCALES, LOCALE_NAMES, type MsgKey } from '../../i18n';
 import { ACCENT_OPTIONS, accentLabel, FONT_FAMILIES, fontLabel, FONT_SIZE_RANGE, LINE_HEIGHT_RANGE, MARGIN_RANGE, TTS_CACHE_RANGE, TTS_RATE_RANGE, type ReaderPrefs } from '../../data/prefs';
 import { ttsEngineReady, type TtsEngine } from '../../core/tts-engine';
 import { HIGHLIGHT_COLORS, colorLabel } from '../../data/notes';
@@ -264,14 +264,14 @@ function aboutBar(version: string, paid: boolean, patron: boolean, name?: string
         ${githubIcon(15)}<b>GitHub</b>
       </button>
       <span class="dot"></span>
-      <button class="bzs-about-link" data-act="aboutvideo"><span class="bzs-sr-only">${t('settings.about.videoTip')}</span>
+      ${isChineseUI() ? `<button class="bzs-about-link" data-act="aboutvideo"><span class="bzs-sr-only">${t('settings.about.videoTip')}</span>
         ${ico('video')}<b>${t('settings.about.video')}</b>
       </button>
       <span class="dot"></span>
       <button class="bzs-about-link" data-act="copygroup"><span class="bzs-sr-only">${t('settings.about.groupTip')}</span>
         ${ico('group')}<b>${t('settings.about.group')}</b><i>${esc(GROUP_ID)}</i>
       </button>
-      <span class="dot"></span>
+      <span class="dot"></span>` : ''}
       <button class="bzs-about-link" data-act="support"><span class="bzs-sr-only">${t('settings.about.supportTip')}</span>
         ${ico('heart')}<b>${t('settings.about.support')}</b>
       </button>
@@ -294,7 +294,9 @@ export function viewSettings(v: SettingsView): string {
      2026-11-14 提到朗读组之前——朗读组在页面上出现得更早，定义留在后面
      会「使用前未声明」。 */
   const tutBtn = (act: string, key: MsgKey): string =>
-    `<button class="bzs-bztut" data-act="${act}">${ico('video')}<span>${t(key)}</span></button>`;
+    isChineseUI()
+      ? `<button class="bzs-bztut" data-act="${act}">${ico('video')}<span>${t(key)}</span></button>`
+      : '';
 
   /* 界面语言：放最前，因为它是「其他设置长什么样」的前提。
      auto = 跟随 Obsidian；手动选了之后不再看宿主——用户特意选中文，

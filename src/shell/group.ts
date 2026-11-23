@@ -10,7 +10,7 @@
  * ============================================================ */
 
 import { notify } from '../core/notice';
-import { t } from '../i18n';
+import { t, isChineseUI } from '../i18n';
 import { GROUP_ID } from '../data/entitlement';
 
 /**
@@ -22,7 +22,11 @@ import { GROUP_ID } from '../data/entitlement';
  * 两处点下去说同一句话。
  */
 export function groupButtonHtml(): string {
-  return `<button class="bzs-btn" data-act="copygroup">${t('unlock.group', { id: GROUP_ID })}</button>`;
+  /* 非简体中文没有 QQ 生态：海外用户没 QQ，繁体人群也不常用；
+     这颗「进群领试用」对他们既看不懂也用不了，整颗收掉。 */
+  return isChineseUI()
+    ? `<button class="bzs-btn" data-act="copygroup">${t('unlock.group', { id: GROUP_ID })}</button>`
+    : '';
 }
 
 /**
