@@ -93,10 +93,10 @@ export interface ReaderSettings {
   /** 导出时带上想法 */
   exportComments: boolean;
   /**
-   * 双链模板（2026-11-23）：两套对称的四档配置，设备本地偏好，不跟库走。
-   *   exportTemplate / exportTemplateCustom：整本导出，正文可多行、可 callout；
-   *   copyTemplate / copyTemplateCustom：复制划线，正文是单行 wikilink 别名。
-   * 老版本的 aliasTemplate（单行别名）由 normalizeSettings 迁到复制档的自定义。
+   * 双链模板（2026-11-23）：两套完全相同的四档配置，设备本地偏好，不跟库走。
+   *   exportTemplate / exportTemplateCustom：整本导出；
+   *   copyTemplate / copyTemplateCustom：复制划线到剪贴板。
+   * 两边都支持多行 Markdown / callout，只有配置分开；老 aliasTemplate 迁到复制自定义。
    */
   exportTemplate: ExportTemplateId;
   exportTemplateCustom: string;
@@ -496,9 +496,9 @@ function normalizePdfOcr(raw: unknown, ai: AiSettings, legacy: Record<string, un
 export function normalizeSettings(raw: unknown): ReaderSettings {
   const s = (raw ?? {}) as Partial<ReaderSettings> & { aliasTemplate?: unknown };
   const ai = normalizeAi(s.ai);
-  /* 老版本把复制别名存在一个字段里。它只存单行字符串，现在复制也升成四档，
-     老值迁到复制档的「自定义」——以前填过别名的人升级后显示文字不变。 */
-  const legacyAlias = str(s.aliasTemplate, '').replace(/\s*\n\s*/g, ' ').trim();
+  /* 老版本把复制别名存在一个字段里。现在复制也支持完整的多行模板，
+     老值原样迁到复制档的「自定义」——以前填过的人升级后内容一字不丢。 */
+  const legacyAlias = str(s.aliasTemplate, '').trim();
   const copyTemplateCustom = typeof s.copyTemplateCustom === 'string'
     ? s.copyTemplateCustom.trim()
     : legacyAlias;

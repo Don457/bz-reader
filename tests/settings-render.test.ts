@@ -1135,14 +1135,14 @@ describe('设置页 · 2026-11-17 重排', () => {
     expect(src).toContain('data-linktpl-preview');
     expect(src).toContain('data-role="setting" data-k="exportTemplateCustom"');
     expect(src).toContain('data-act="setcopytpl" data-v="simple"');
-    expect(src).toContain('data-act="setcopytpl" data-v="brief"');
+    expect(src).toContain('data-act="setcopytpl" data-v="quote"');
     expect(src).toContain('data-act="setcopytpl" data-v="detail"');
     expect(src).toContain('data-act="setcopytpl" data-v="custom"');
     expect(src).toContain('data-copytpl-preview');
     expect(src).toContain('data-role="setting" data-k="copyTemplateCustom"');
     expect(src).not.toContain('data-k="aliasTemplate"');
-    /* 复制的别名嵌在双链里，变量按钮不该给会套娃的 {双链} */
-    expect(src).not.toContain('data-target="copyTemplateCustom" data-v="{双链}"');
+    /* 复制也能多行、能写 callout，变量按钮与导出一样要有 {双链} */
+    expect(src).toContain('data-target="copyTemplateCustom" data-v="{双链}"');
     expect(src).toContain('data-act="insertvar"');
   });
 });

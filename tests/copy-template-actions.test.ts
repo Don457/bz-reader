@@ -89,60 +89,66 @@ function stubClipboard(): string[] {
 }
 
 describe('复制划线四档模板：走剪贴板', () => {
-  it('默认简洁档：别名仍是摘录原文，链接定位段原样保留', async () => {
+  it('默认简洁档：剪贴板拿到与导出同款的两行引用，含可点双链', async () => {
     const { markId } = setup();
     const writes = stubClipboard();
 
     dispatchAction('copylink', el({ id: markId, book: 'b1' }));
 
     await vi.waitFor(() => expect(writes).toHaveLength(1));
-    expect(writes[0]).toContain('[[书/b1.epub#bzr-cfi=');
-    expect(writes[0]).toContain('|划线原文一段]]');
+    expect(writes[0]).toContain('> [[');
+    expect(writes[0]).toContain('书/b1.epub#bzr-cfi=');
+    expect(writes[0].split('\n')).toHaveLength(2);
   });
 
-  it('书名章节档：别名换成书名·章节，仍是可点的双链', async () => {
-    const { markId } = setup({ copyTemplate: 'brief' });
+  it('callout 引文档：整段多行 Markdown 进剪贴板，不再压成一行别名', async () => {
+    const { markId } = setup({ copyTemplate: 'quote' });
     const writes = stubClipboard();
 
     dispatchAction('copylink', el({ id: markId, book: 'b1' }));
 
     await vi.waitFor(() => expect(writes).toHaveLength(1));
-    expect(writes[0]).toContain('[[书/b1.epub#bzr-cfi=');
-    expect(writes[0]).toContain('|《测试书》· 第一章]]');
+    expect(writes[0]).toContain('> [!quote] 测试书 · 第一章');
+    expect(writes[0]).toContain('> [[');
+    expect(writes[0].split('\n').length).toBeGreaterThan(2);
   });
 
-  it('自定义档里写 {双链} 也不会套娃', async () => {
-    const { markId } = setup({ copyTemplate: 'custom', copyTemplateCustom: '{双链} {摘录}' });
+  it('自定义档多行模板：{双链} 替换成可点链接，方括号照常保留', async () => {
+    const { markId } = setup({
+      copyTemplate: 'custom',
+      copyTemplateCustom: '> [!note] {书名}\n> {双链}\n> {摘录}',
+    });
     const writes = stubClipboard();
 
     dispatchAction('copylink', el({ id: markId, book: 'b1' }));
 
     await vi.waitFor(() => expect(writes).toHaveLength(1));
-    expect(writes[0]).not.toContain('[[[');
-    expect(writes[0]).toContain('|划线原文一段]]');
+    expect(writes[0]).toContain('> [!note] 测试书');
+    expect(writes[0]).toContain('> [[书/b1.epub#bzr-cfi=');
+    expect(writes[0]).toContain('> 划线原文一段');
   });
 });
 
 describe('复制模板配置：与整本导出独立', () => {
   it('切档只写 copyTemplate，不动 exportTemplate', () => {
     setup();
-    dispatchAction('setcopytpl', el({ v: 'brief' }));
-    expect(patches).toContainEqual({ copyTemplate: 'brief' });
+    dispatchAction('setcopytpl', el({ v: 'quote' }));
+    expect(patches).toContainEqual({ copyTemplate: 'quote' });
     expect(patches.some((p) => 'exportTemplate' in p)).toBe(false);
   });
 
-  it('非法 id（导出的 quote）不写任何设置', () => {
+  it('非法 id（旧档 brief）不写任何设置', () => {
     setup();
-    dispatchAction('setcopytpl', el({ v: 'quote' }));
+    dispatchAction('setcopytpl', el({ v: 'brief' }));
     expect(patches).toEqual([]);
   });
 
   it('自定义正文：input 不落盘，change 才写 copyTemplateCustom', () => {
     setup();
-    const f = field('copyTemplateCustom', '《{书名}》');
+    const f = field('copyTemplateCustom', '> [!note] {书名}\n> {双链}');
     dispatchInput(f, { type: 'input' } as Event);
     expect(patches).toEqual([]);
     dispatchInput(f, { type: 'change' } as Event);
-    expect(patches).toContainEqual({ copyTemplateCustom: '《{书名}》' });
+    expect(patches).toContainEqual({ copyTemplateCustom: '> [!note] {书名}\n> {双链}' });
   });
 });

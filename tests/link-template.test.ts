@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ALIAS_SIMPLE,
-  COPY_SIMPLE,
   EXPORT_SIMPLE,
-  aliasForCopy,
   builtinCopyTemplate,
   builtinTemplate,
   copyTemplateText,
   isBuiltinTemplate,
   isCopyTemplate,
   previewVars,
-  renderAlias,
   renderCopyItem,
   renderExportItem,
   templateVarsOf,
@@ -55,8 +51,8 @@ describe('内置模板登记', () => {
     expect(isBuiltinTemplate('quote')).toBe(true);
     expect(isBuiltinTemplate('detail')).toBe(true);
     expect(isBuiltinTemplate('custom')).toBe(true);
-    /* 别名是「一行链接显示文字」，不该塞进多行 callout */
-    expect(ALIAS_SIMPLE).not.toContain('\n');
+    /* 复制侧认同一组四档，不再有「单行别名」这种特殊档 */
+    expect(isCopyTemplate('quote')).toBe(true);
   });
 });
 
@@ -138,108 +134,53 @@ describe('导出模板渲染', () => {
   });
 });
 
-describe('别名模板渲染（单条复制划线）', () => {
-  it('默认别名 = 摘录原文，与现在完全一样', () => {
-    expect(renderAlias(ALIAS_SIMPLE, vars())).toBe('这是原文摘录');
-  });
+describe('复制划线双链模板：与导出完全一致的四档', () => {
+  const ids = ['simple', 'quote', 'detail', 'custom'] as const;
 
-  it('自定义别名把书名/章节/位置/时间拼进一行，且仍是一行', () => {
-    const out = renderAlias('《{书名}》· {章节} · {位置} · {时间}', vars());
-    expect(out).toBe('《测试书》· 第一章 · 第 12 页 · 2026-11-23 14:05');
-    expect(out).not.toContain('\n');
-  });
-
-  it('别名里不会出现双链占位符——别名本身嵌在双链里，不能再套一层', () => {
-    const out = renderAlias('{双链} {摘录}', vars());
-    expect(out).not.toContain('[[');
-    expect(out).toContain('这是原文摘录');
-  });
-
-  it('别名压平换行、去掉会破坏 wikilink 语法的方括号', () => {
-    const out = renderAlias('{摘录}', vars({ quote: '上一行\n[[下一行]]' }));
-    expect(out).not.toContain('\n');
-    expect(out).not.toContain('[[');
-  });
-
-  it('空别名回退到摘录原文', () => {
-    expect(renderAlias('', vars())).toBe('这是原文摘录');
-  });
-
-  it('aliasForCopy：模板为空时返回空串（让 wikilink 走原来的摘录别名），不覆盖默认', () => {
-    expect(aliasForCopy('', book(), { chapter: '第一章', quote: '划线文字', createdAt: 0 })).toBe('');
-  });
-
-  it('aliasForCopy：有模板时给出渲染好的一行别名，作为 display 传给 wikilink', () => {
-    const out = aliasForCopy('《{书名}》· {章节}', book(), {
-      chapter: '第一章', quote: '划线文字', createdAt: Date.UTC(2026, 10, 23, 6, 5), page: 12,
-    });
-    expect(out).toBe('《测试书》· 第一章');
-  });
-
-  it('aliasForCopy：未落标注的选区无时间，别名含 {时间} 也不出现 1970', () => {
-    const out = aliasForCopy('{章节} · {时间}', book(), {
-      chapter: '第一章', quote: '划线文字', createdAt: 0,
-    });
-    expect(out).toBe('第一章 ·');
-    expect(out).not.toContain('1970');
-  });
-});
-
-describe('复制划线双链模板：与导出对称的四档', () => {
-  it('四档都是单行别名，不带 callout 块，也不含会套娃的 {双链}', () => {
-    expect(builtinCopyTemplate('simple')).toBe(COPY_SIMPLE);
-    expect(builtinCopyTemplate('brief')).toContain('{书名}');
-    expect(builtinCopyTemplate('detail')).toContain('{时间}');
-    expect(builtinCopyTemplate('custom')).toBe('');
-    for (const id of ['simple', 'brief', 'detail', 'custom'] as const) {
-      expect(builtinCopyTemplate(id)).not.toContain('\n');
-      expect(builtinCopyTemplate(id)).not.toContain('{双链}');
+  it('四档正文与导出逐字相同：简洁是两行引用，两种 callout 可多行，自定义空串', () => {
+    for (const id of ids) {
+      expect(builtinCopyTemplate(id)).toBe(builtinTemplate(id));
     }
+    expect(builtinCopyTemplate('simple')).toBe(EXPORT_SIMPLE);
+    expect(builtinCopyTemplate('quote')).toContain('\n');
+    expect(builtinCopyTemplate('quote')).toContain('[!quote]');
+    expect(builtinCopyTemplate('detail')).toContain('\n');
+    expect(builtinCopyTemplate('custom')).toBe('');
   });
 
-  it('复制档只认四个 id，导出的 quote 不能混进来', () => {
-    expect(isCopyTemplate('simple')).toBe(true);
-    expect(isCopyTemplate('brief')).toBe(true);
-    expect(isCopyTemplate('detail')).toBe(true);
-    expect(isCopyTemplate('custom')).toBe(true);
-    expect(isCopyTemplate('quote')).toBe(false);
+  it('复制档认同一组 id：quote 合法，旧的 brief 档不存在', () => {
+    for (const id of ids) expect(isCopyTemplate(id)).toBe(true);
+    expect(isCopyTemplate('brief')).toBe(false);
     expect(isCopyTemplate(42)).toBe(false);
   });
 
-  it('copyTemplateText：内置取模板正文，自定义取用户字符串', () => {
-    expect(copyTemplateText('brief', '被忽略')).toBe(builtinCopyTemplate('brief'));
-    expect(copyTemplateText('custom', '《{书名}》')).toBe('《{书名}》');
+  it('copyTemplateText：内置取模板，自定义取用户字符串（可多行）', () => {
+    expect(copyTemplateText('quote', '被忽略')).toBe(builtinTemplate('quote'));
+    expect(copyTemplateText('custom', '> [!note] {书名}\n> {双链}')).toBe('> [!note] {书名}\n> {双链}');
   });
 
-  it('简洁档 = 摘录原文，与升级前逐字一致', () => {
-    expect(renderCopyItem(copyTemplateText('simple', ''), vars())).toBe('这是原文摘录');
+  it('同样的数据下，复制渲染与导出渲染逐字一致（含双链、多行、callout）', () => {
+    for (const id of ['simple', 'quote', 'detail'] as const) {
+      const tpl = copyTemplateText(id, '');
+      expect(renderCopyItem(tpl, vars())).toBe(renderExportItem(tpl, vars()));
+    }
   });
 
-  it('书名章节档 / 详细档：书名·章节·位置·时间拼成一行', () => {
-    expect(renderCopyItem(copyTemplateText('brief', ''), vars())).toBe('《测试书》· 第一章');
-    expect(renderCopyItem(copyTemplateText('detail', ''), vars())).toBe(
-      '《测试书》· 第一章 · 第 12 页 · 2026-11-23 14:05',
-    );
+  it('自定义档里的 {双链} 原样替换成可点链接，不再清方括号', () => {
+    const out = renderCopyItem('> [!quote] {书名}\n> {双链}\n> {摘录}', vars());
+    expect(out).toBe('> [!quote] 测试书\n> ' + vars().link + '\n> 这是原文摘录');
+    expect(out).not.toContain('{双链}');
   });
 
-  it('用户自定义档含 {双链} 也不套娃，方括号被清掉', () => {
-    expect(renderCopyItem('{双链} {摘录}', vars())).toBe('这是原文摘录');
-    expect(renderCopyItem('{摘录}', vars({ quote: '上一行 [[下一行]]' }))).toBe('上一行 下一行');
+  it('空模板回退到与导出相同的简洁档', () => {
+    expect(renderCopyItem('', vars())).toBe(renderExportItem(EXPORT_SIMPLE, vars()));
   });
 
-  it('空模板回退到简洁档，不让链接显示文字变空', () => {
-    expect(renderCopyItem('', vars())).toBe(renderCopyItem(COPY_SIMPLE, vars()));
-  });
-
-  it('无时间的划线配详细档，也不出现 1970-01-01', () => {
-    const out = renderCopyItem(copyTemplateText('detail', ''), vars({ time: '' }));
-    expect(out).toBe('《测试书》· 第一章 · 第 12 页 ·');
+  it('无时间不编 1970；EPUB 位置退化成章节名也照导出口径，两边不出现分歧', () => {
+    const v = vars({ time: '', location: '第一章' });
+    const tpl = copyTemplateText('detail', '');
+    const out = renderCopyItem(tpl, v);
+    expect(out).toBe(renderExportItem(tpl, v));
     expect(out).not.toContain('1970');
-  });
-
-  it('EPUB 没有页码、位置退化为章节名时，详细档不重复写两遍「第一章」', () => {
-    const out = renderCopyItem(copyTemplateText('detail', ''), vars({ location: '第一章' }));
-    expect(out).toBe('《测试书》· 第一章 · 2026-11-23 14:05');
-    expect(out).not.toContain('第一章 · 第一章');
   });
 });

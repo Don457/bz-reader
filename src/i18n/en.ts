@@ -1787,10 +1787,10 @@ export const EN: Record<MsgKey, string> = {
   'settings.copyTpl': '[TODO] settings.copyTpl',
   'settings.copyTpl.hint': '[TODO] settings.copyTpl.hint',
   'settings.copyTpl.simple': '[TODO] settings.copyTpl.simple',
-  'settings.copyTpl.brief': '[TODO] settings.copyTpl.brief',
   'settings.copyTpl.detail': '[TODO] settings.copyTpl.detail',
   'settings.copyTpl.custom': '[TODO] settings.copyTpl.custom',
   'settings.copyTpl.custom.ph': '[TODO] settings.copyTpl.custom.ph',
   'settings.copyTpl.vars': '[TODO] settings.copyTpl.vars',
   'settings.copyTpl.preview': '[TODO] settings.copyTpl.preview',
+  'settings.copyTpl.quote': '[TODO] settings.copyTpl.quote',
 };

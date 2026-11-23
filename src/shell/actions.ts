@@ -90,13 +90,12 @@ import { moveHeaderAction } from './header-order';
 import type { ReaderPrefs } from '../data/prefs';
 import { wikilinkOf, wikilinkOfMark } from '../data/wikilink';
 import {
-  aliasForCopy,
   copyTemplateText,
   isBuiltinTemplate,
   isCopyTemplate,
   previewVars,
-  renderCopyItem,
   renderExportItem,
+  templateVarsOf,
 } from '../data/link-template';
 import { isPdfLocator, pdfLocatorPage } from '../engine/pdf/locator';
 import { buildNotesBody, ensureDir, exportBookNotes, safeName } from '../data/export';
@@ -2366,15 +2365,19 @@ export function dispatchAction(
         notify(t('notice.mark.notFound'), 'error');
         break;
       }
-      /* 复制模板（2026-11-23）：与整本导出对称的四档配置，独立存 copyTemplate。
-         只换链接显示文字，定位那一段仍由 wikilink 原样拼——点下去照旧跳回原文。 */
+      /* 复制模板与整本导出是同一套四档：产出整段 Markdown（可多行 / callout），
+         其中 {双链} 就是能点回原文的 wikilink。配置独立存 copyTemplate。 */
       const s = shellSettings();
-      const tpl = copyTemplateText(s.copyTemplate, s.copyTemplateCustom);
       const page = h.cfiRange && isPdfLocator(h.cfiRange) ? pdfLocatorPage(h.cfiRange) ?? undefined : undefined;
-      const display = aliasForCopy(tpl, b, {
-        chapter: h.chapterTitle || '', quote: h.text, createdAt: h.createdAt, page,
+      const vars = templateVarsOf({
+        book: b,
+        chapter: h.chapterTitle || '',
+        quote: h.text,
+        link: wikilinkOfMark(b, h),
+        createdAt: h.createdAt,
+        page,
       });
-      void copyText(wikilinkOfMark(b, h, { display }));
+      void copyText(renderExportItem(copyTemplateText(s.copyTemplate, s.copyTemplateCustom), vars));
       /* 与「复制」同一条规矩：拿到东西就把浮层收掉 */
       closeOverlay();
       break;
@@ -3430,23 +3433,25 @@ export function dispatchAction(
         break;
       }
       autoMarkSelection('selbilink');
-      /* 与「复制划线」同一套复制模板配置；简洁档就是摘录原文。 */
+      /* 与「复制划线」同一套模板配置，产出原样多行 Markdown。 */
       const s = shellSettings();
-      const tpl = copyTemplateText(s.copyTemplate, s.copyTemplateCustom);
       const page = sel.cfiRange && isPdfLocator(sel.cfiRange) ? pdfLocatorPage(sel.cfiRange) ?? undefined : undefined;
-      const display = aliasForCopy(tpl, book, {
-        chapter: sel.chapterTitle || '', quote: sel.text, createdAt: 0, page,
+      const link = wikilinkOf(book, {
+        text: sel.text,
+        cfiRange: sel.cfiRange,
+        chapterTitle: sel.chapterTitle,
+        pdfSelection: sel.pdfSelection,
+        pdfRect: sel.pdfRect,
       });
-      void copyText(
-        wikilinkOf(book, {
-          text: sel.text,
-          cfiRange: sel.cfiRange,
-          chapterTitle: sel.chapterTitle,
-          pdfSelection: sel.pdfSelection,
-          pdfRect: sel.pdfRect,
-          display,
-        }),
-      );
+      const vars = templateVarsOf({
+        book,
+        chapter: sel.chapterTitle || '',
+        quote: sel.text,
+        link,
+        createdAt: 0,
+        page,
+      });
+      void copyText(renderExportItem(copyTemplateText(s.copyTemplate, s.copyTemplateCustom), vars));
       finishSelection('selbilink');
       break;
     }
@@ -5418,9 +5423,7 @@ function updateTplPreview(template: string, kind: 'export' | 'copy'): void {
     kind === 'export' ? '[data-linktpl-preview]' : '[data-copytpl-preview]',
   );
   if (!box) return;
-  box.textContent = kind === 'export'
-    ? renderExportItem(template, previewVars())
-    : renderCopyItem(template, previewVars());
+  box.textContent = renderExportItem(template, previewVars());
 }
 
 export function dispatchInput(

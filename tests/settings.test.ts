@@ -145,11 +145,12 @@ describe('双链模板设置', () => {
     expect(normalizeSettings({ exportTemplate: '乱写' }).exportTemplate).toBe('simple');
   });
 
-  it('复制模板只认四个 id，导出的 quote 不能混进来', () => {
-    expect(normalizeSettings({ copyTemplate: 'brief' }).copyTemplate).toBe('brief');
+  it('复制与导出是同一组 id：quote 合法，旧的 brief 写坏了退回 simple', () => {
+    expect(normalizeSettings({ copyTemplate: 'simple' }).copyTemplate).toBe('simple');
+    expect(normalizeSettings({ copyTemplate: 'quote' }).copyTemplate).toBe('quote');
     expect(normalizeSettings({ copyTemplate: 'detail' }).copyTemplate).toBe('detail');
     expect(normalizeSettings({ copyTemplate: 'custom' }).copyTemplate).toBe('custom');
-    expect(normalizeSettings({ copyTemplate: 'quote' }).copyTemplate).toBe('simple');
+    expect(normalizeSettings({ copyTemplate: 'brief' }).copyTemplate).toBe('simple');
   });
 
   it('自定义模板保留原文（含换行），仅去掉首尾空白', () => {
@@ -158,10 +159,10 @@ describe('双链模板设置', () => {
     expect(normalizeSettings({ copyTemplateCustom: '《{书名}》\n· {章节}' }).copyTemplateCustom).toBe('《{书名}》\n· {章节}');
   });
 
-  it('老 aliasTemplate 有内容 → 迁移到复制档的自定义档，用户填过的别名不丢', () => {
+  it('老 aliasTemplate 有内容 → 迁移到复制档的自定义档，原文与换行都不丢', () => {
     const s = normalizeSettings({ aliasTemplate: '《{书名}》\n· {章节}' });
     expect(s.copyTemplate).toBe('custom');
-    expect(s.copyTemplateCustom).toBe('《{书名}》 · {章节}');
+    expect(s.copyTemplateCustom).toBe('《{书名}》\n· {章节}');
   });
 
   it('老 aliasTemplate 为空 → 不迁移，复制保持简洁档', () => {
