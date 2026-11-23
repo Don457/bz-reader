@@ -116,7 +116,11 @@ function substitute(tpl: string, vars: TemplateVars, opts: { keepLink: boolean }
     '{书名}': oneLine(vars.title),
     '{作者}': oneLine(vars.author),
     '{章节}': oneLine(vars.chapter),
-    '{位置}': oneLine(vars.location),
+    /* EPUB 没有页码，位置退化成章节名。复制模板里 {章节} 已经写过一遍，
+       再写一遍就成了「第一章 · 第一章」；导出模板没有 {章节}，保持原样。 */
+    '{位置}': opts.keepLink || oneLine(vars.location) !== oneLine(vars.chapter)
+      ? oneLine(vars.location)
+      : '',
     '{时间}': oneLine(vars.time),
     '{摘录}': oneLine(vars.quote),
     /* 别名本身嵌在 wikilink 里，不能再套一层 `[[...]]`：
@@ -153,6 +157,10 @@ export function renderCopyItem(template: string, vars: TemplateVars): string {
     .replace(/\[/g, '')
     .replace(/\]/g, '')
     .replace(/\s*\n\s*/g, ' ')
+    /* 某个占位符取空值（EPUB 的 {位置}、未落标注的 {时间}）时，
+       别在别名里留下两个紧挨着的间隔点。 */
+    .replace(/(\s*·\s*){2,}/g, ' · ')
+    .replace(/^·\s*/, '')
     .trim();
   return out || oneLine(vars.quote) || '摘录';
 }

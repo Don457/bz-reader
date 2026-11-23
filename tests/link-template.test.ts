@@ -236,4 +236,10 @@ describe('复制划线双链模板：与导出对称的四档', () => {
     expect(out).toBe('《测试书》· 第一章 · 第 12 页 ·');
     expect(out).not.toContain('1970');
   });
+
+  it('EPUB 没有页码、位置退化为章节名时，详细档不重复写两遍「第一章」', () => {
+    const out = renderCopyItem(copyTemplateText('detail', ''), vars({ location: '第一章' }));
+    expect(out).toBe('《测试书》· 第一章 · 2026-11-23 14:05');
+    expect(out).not.toContain('第一章 · 第一章');
+  });
 });
