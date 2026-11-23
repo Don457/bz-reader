@@ -35,8 +35,10 @@ import { DEFAULT_SETTINGS, ocrEngineChoices, type ReaderSettings } from '../../d
 import {
   ALIAS_PLACEHOLDERS,
   PLACEHOLDERS,
+  builtinCopyTemplate,
   builtinTemplate,
   previewVars,
+  renderCopyItem,
   renderExportItem,
 } from '../../data/link-template';
 import {
@@ -435,40 +437,52 @@ export function viewSettings(v: SettingsView): string {
      任何控件，讲的双链能力在复制书摘时本来就有，2026-11-05 整行去掉。
      笔色五档走 bzs-seg-wrap：与语言、强调色同一套格子下限，窄窗不会叠字。
      2026-11-17：说明行去掉（用户定稿），色点本身就是「上次用的那个」。 */
-  /* 双链模板（2026-11-23）：四个 chip 选模板，自定义框可多行 + 变量按钮，
-     下面一块是「导出后长什么样」的预览（固定示例数据，不随时间变）。 */
-  const tplId = s.exportTemplate ?? 'simple';
-  const tplText = tplId === 'custom' ? s.exportTemplateCustom : builtinTemplate(tplId);
-  const previewText = renderExportItem(tplText, previewVars());
-  const tplChip = (id: string, label: string) =>
-    `<button class="${tplId === id ? 'on' : ''}" data-act="setlinktpl" data-v="${id}">${label}</button>`;
-  const tplBlock = `
-    <div class="bzs-setrow is-stack"><label>${t('settings.linkTpl')}</label>
-      <div class="hint">${t('settings.linkTpl.hint')}</div>
-      <div class="bzs-seg bzs-seg-wrap">
-        ${tplChip('simple', t('settings.linkTpl.simple'))}
-        ${tplChip('quote', t('settings.linkTpl.quote'))}
-        ${tplChip('detail', t('settings.linkTpl.detail'))}
-        ${tplChip('custom', t('settings.linkTpl.custom'))}
+  /* 双链模板（2026-11-23）：导出与复制各一套四档模板，配置独立、UI 对称。
+     复制产出的是 wikilink 的单行别名——四档都是单行，不是 callout 块。
+     预览用固定示例数据，不随时间变；切换档位 / 输入正文时局部刷新。 */
+  const templateBlock = (kind: 'export' | 'copy'): string => {
+    const isExport = kind === 'export';
+    const id: string = isExport ? s.exportTemplate ?? 'simple' : s.copyTemplate ?? 'simple';
+    const custom = isExport ? s.exportTemplateCustom : s.copyTemplateCustom;
+    const act = isExport ? 'setlinktpl' : 'setcopytpl';
+    const key = isExport ? 'exportTemplateCustom' : 'copyTemplateCustom';
+    const opts: readonly (readonly [string, string])[] = isExport
+      ? [
+          ['simple', t('settings.linkTpl.simple')],
+          ['quote', t('settings.linkTpl.quote')],
+          ['detail', t('settings.linkTpl.detail')],
+          ['custom', t('settings.linkTpl.custom')],
+        ]
+      : [
+          ['simple', t('settings.copyTpl.simple')],
+          ['brief', t('settings.copyTpl.brief')],
+          ['detail', t('settings.copyTpl.detail')],
+          ['custom', t('settings.copyTpl.custom')],
+        ];
+    const tplText = isExport
+      ? (s.exportTemplate === 'custom' ? s.exportTemplateCustom : builtinTemplate(s.exportTemplate ?? 'simple'))
+      : (s.copyTemplate === 'custom' ? s.copyTemplateCustom : builtinCopyTemplate(s.copyTemplate ?? 'simple'));
+    const previewText = isExport ? renderExportItem(tplText, previewVars()) : renderCopyItem(tplText, previewVars());
+    const vars = isExport ? PLACEHOLDERS : ALIAS_PLACEHOLDERS;
+    return `
+      <div class="bzs-setrow is-stack"><label>${t(isExport ? 'settings.linkTpl' : 'settings.copyTpl')}</label>
+        <div class="hint">${t(isExport ? 'settings.linkTpl.hint' : 'settings.copyTpl.hint')}</div>
+        <div class="bzs-seg bzs-seg-wrap">
+          ${opts.map(([oid, olabel]) => `<button class="${id === oid ? 'on' : ''}" data-act="${act}" data-v="${oid}">${olabel}</button>`).join('')}
+        </div>
       </div>
-    </div>
-    <div class="bzs-setrow is-stack" data-linktpl-custom${tplId === 'custom' ? '' : ' hidden'}>
-      <textarea class="bzs-tpl-custom" data-role="setting" data-k="exportTemplateCustom" rows="4" placeholder="${t('settings.linkTpl.custom.ph')}">${esc(s.exportTemplateCustom)}</textarea>
-      <div class="hint">${t('settings.linkTpl.vars')}</div>
-      <div class="bzs-tpl-vars">${PLACEHOLDERS.map(
-        (p) => `<button type="button" data-act="insertvar" data-target="exportTemplateCustom" data-v="${p}">${p}</button>`,
-      ).join('')}</div>
-    </div>
-    <div class="bzs-setrow is-stack"><label>${t('settings.linkTpl.preview')}</label>
-      <pre class="bzs-tpl-preview" data-linktpl-preview>${esc(previewText)}</pre>
-    </div>
-    <div class="bzs-setrow is-stack"><label>${t('settings.aliasTpl')}</label>
-      <div class="hint">${t('settings.aliasTpl.hint')}</div>
-      <input class="bzs-alias-tpl" type="text" data-role="setting" data-k="aliasTemplate" placeholder="${t('settings.aliasTpl.ph')}" value="${esc(s.aliasTemplate)}">
-      <div class="bzs-tpl-vars">${ALIAS_PLACEHOLDERS.map(
-        (p) => `<button type="button" data-act="insertvar" data-target="aliasTemplate" data-v="${p}">${p}</button>`,
-      ).join('')}</div>
-    </div>`;
+      <div class="bzs-setrow is-stack" ${isExport ? 'data-linktpl-custom' : 'data-copytpl-custom'}${id === 'custom' ? '' : ' hidden'}>
+        <textarea class="bzs-tpl-custom" data-role="setting" data-k="${key}" rows="${isExport ? 4 : 2}" placeholder="${t(isExport ? 'settings.linkTpl.custom.ph' : 'settings.copyTpl.custom.ph')}">${esc(custom)}</textarea>
+        <div class="hint">${t(isExport ? 'settings.linkTpl.vars' : 'settings.copyTpl.vars')}</div>
+        <div class="bzs-tpl-vars">${vars.map(
+          (p) => `<button type="button" data-act="insertvar" data-target="${key}" data-v="${p}">${p}</button>`,
+        ).join('')}</div>
+      </div>
+      <div class="bzs-setrow is-stack"><label>${t(isExport ? 'settings.linkTpl.preview' : 'settings.copyTpl.preview')}</label>
+        <pre class="bzs-tpl-preview" ${isExport ? 'data-linktpl-preview' : 'data-copytpl-preview'}>${esc(previewText)}</pre>
+      </div>`;
+  };
+  const tplBlock = templateBlock('export') + templateBlock('copy');
 
   const marksGrp = grp(
     'marks',

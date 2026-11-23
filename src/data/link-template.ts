@@ -3,11 +3,14 @@
  *
  * 一条划线落到笔记里，有两种形态：
  *   · 导出（整本 / 单条存笔记）：多行 Markdown，可以套 callout 块；
- *   · 别名（单条复制划线）：`[[书#定位|别名]]` 里那一行显示文字，
+ *   · 复制（单条双链）：`[[书#定位|别名]]` 里那一行显示文字，
  *     只能是一行纯文本——callout 塞不进去，塞进去会把 wikilink 语法撑坏。
  *
+ * 两边各有一套**对称的四档模板**（简洁 / 预设 / 预设 / 自定义）：
+ *   exportTemplate / exportTemplateCustom 管整本导出，
+ *   copyTemplate / copyTemplateCustom 管复制划线；配置独立，互不影响。
  * 模板是**展示层**的枚举与替换，不碰定位、不碰数据：
- * 占位符替换完就交给导出/别名各自的调用方，链接照旧由 wikilink 那层拼。
+ * 占位符替换完就交给导出/复制各自的调用方，链接照旧由 wikilink 那层拼。
  * 这样「换模板」和「链接能点回原文」两件事互不牵连。
  * ============================================================ */
 
@@ -36,6 +39,40 @@ export function builtinTemplate(id: ExportTemplateId): string {
 
 /** 别名默认 = 摘录原文，与现在逐字一致 */
 export const ALIAS_SIMPLE = '{摘录}';
+
+/**
+ * 复制划线的模板 id，存 settings。与导出一样是四档，但内容是单行别名：
+ *   simple  摘录原文（= 升级前的行为）
+ *   brief   书名 + 章节
+ *   detail  书名 + 章节 + 位置 + 时间
+ *   custom  用户自定义一行字符串
+ */
+export type CopyTemplateId = 'simple' | 'brief' | 'detail' | 'custom';
+
+const COPY_IDS: readonly CopyTemplateId[] = ['simple', 'brief', 'detail', 'custom'];
+
+export function isCopyTemplate(v: unknown): v is CopyTemplateId {
+  return typeof v === 'string' && (COPY_IDS as readonly string[]).includes(v);
+}
+
+/** 复制的简洁档：摘录原文，与升级前逐字一致 */
+export const COPY_SIMPLE = ALIAS_SIMPLE;
+
+const COPY_TEMPLATES: Record<Exclude<CopyTemplateId, 'custom'>, string> = {
+  simple: COPY_SIMPLE,
+  brief: '《{书名}》· {章节}',
+  detail: '《{书名}》· {章节} · {位置} · {时间}',
+};
+
+/** 内置复制模板正文；custom 返回空串，由调用方读 copyTemplateCustom */
+export function builtinCopyTemplate(id: CopyTemplateId): string {
+  return id === 'custom' ? '' : COPY_TEMPLATES[id];
+}
+
+/** 当前复制模板正文：内置档取模板，自定义档取用户字符串 */
+export function copyTemplateText(id: CopyTemplateId, custom: string): string {
+  return id === 'custom' ? String(custom ?? '') : builtinCopyTemplate(id);
+}
 
 /** 占位符名集中一处，过滤时按名字排，不用记它在数组里的下标 */
 const LINK_PLACEHOLDER = '{双链}';
@@ -105,17 +142,24 @@ export function renderExportItem(template: string, vars: TemplateVars): string {
 }
 
 /**
- * 渲染别名。`{双链}` 被丢弃（不能嵌），并把会破坏 wikilink 语法的方括号清掉：
+ * 渲染一条复制模板（四档里当前那一档的正文字串）。
+ * `{双链}` 被丢弃（不能嵌），并把会破坏 wikilink 语法的方括号清掉：
  * `[[书#定位|A|B]]` 里的别名带 `]` 会提前闭合，带换行会断成两段。
+ * 空模板回退简洁档——链接显示文字不能是空的。
  */
-export function renderAlias(template: string, vars: TemplateVars): string {
-  const tpl = String(template ?? '').trim() ? String(template) : ALIAS_SIMPLE;
+export function renderCopyItem(template: string, vars: TemplateVars): string {
+  const tpl = String(template ?? '').trim() ? String(template) : COPY_SIMPLE;
   const out = substitute(tpl, vars, { keepLink: false })
     .replace(/\[/g, '')
     .replace(/\]/g, '')
     .replace(/\s*\n\s*/g, ' ')
     .trim();
   return out || oneLine(vars.quote) || '摘录';
+}
+
+/** 旧调用名沿用：复制别名就是当前复制模板渲染出来的那一行 */
+export function renderAlias(template: string, vars: TemplateVars): string {
+  return renderCopyItem(template, vars);
 }
 
 /**

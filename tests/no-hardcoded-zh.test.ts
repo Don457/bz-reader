@@ -105,8 +105,9 @@ const BASELINE: Record<string, number> = {  'src/core/app.ts': 1,
   /* 2026-11-23：双链模板的占位符名（{书名}/{章节}/{双链}…）、内置模板正文与
      设置页预览的固定示例值。这些是写进用户笔记的模板内容（同 export.ts 口径），
      不是界面按钮/提示文案——后者一律走 t()。
-     28 → 29：自审后补「无时间划线只写双链一行」的回退模板串。 */
-  'src/data/link-template.ts': 29,
+     28 → 29：自审后补「无时间划线只写双链一行」的回退模板串；
+     29 → 30：复制划线新增「书名章节」档模板串，同属写进笔记的内容。 */
+  'src/data/link-template.ts': 30,
   'src/data/importer.ts': 1,
   'src/data/license.ts': 16,
   'src/data/notes.ts': 13,

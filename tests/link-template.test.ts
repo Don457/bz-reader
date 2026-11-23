@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALIAS_SIMPLE,
+  COPY_SIMPLE,
   EXPORT_SIMPLE,
   aliasForCopy,
+  builtinCopyTemplate,
   builtinTemplate,
+  copyTemplateText,
   isBuiltinTemplate,
+  isCopyTemplate,
   previewVars,
   renderAlias,
+  renderCopyItem,
   renderExportItem,
   templateVarsOf,
 } from '../src/data/link-template';
@@ -176,6 +181,59 @@ describe('别名模板渲染（单条复制划线）', () => {
       chapter: '第一章', quote: '划线文字', createdAt: 0,
     });
     expect(out).toBe('第一章 ·');
+    expect(out).not.toContain('1970');
+  });
+});
+
+describe('复制划线双链模板：与导出对称的四档', () => {
+  it('四档都是单行别名，不带 callout 块，也不含会套娃的 {双链}', () => {
+    expect(builtinCopyTemplate('simple')).toBe(COPY_SIMPLE);
+    expect(builtinCopyTemplate('brief')).toContain('{书名}');
+    expect(builtinCopyTemplate('detail')).toContain('{时间}');
+    expect(builtinCopyTemplate('custom')).toBe('');
+    for (const id of ['simple', 'brief', 'detail', 'custom'] as const) {
+      expect(builtinCopyTemplate(id)).not.toContain('\n');
+      expect(builtinCopyTemplate(id)).not.toContain('{双链}');
+    }
+  });
+
+  it('复制档只认四个 id，导出的 quote 不能混进来', () => {
+    expect(isCopyTemplate('simple')).toBe(true);
+    expect(isCopyTemplate('brief')).toBe(true);
+    expect(isCopyTemplate('detail')).toBe(true);
+    expect(isCopyTemplate('custom')).toBe(true);
+    expect(isCopyTemplate('quote')).toBe(false);
+    expect(isCopyTemplate(42)).toBe(false);
+  });
+
+  it('copyTemplateText：内置取模板正文，自定义取用户字符串', () => {
+    expect(copyTemplateText('brief', '被忽略')).toBe(builtinCopyTemplate('brief'));
+    expect(copyTemplateText('custom', '《{书名}》')).toBe('《{书名}》');
+  });
+
+  it('简洁档 = 摘录原文，与升级前逐字一致', () => {
+    expect(renderCopyItem(copyTemplateText('simple', ''), vars())).toBe('这是原文摘录');
+  });
+
+  it('书名章节档 / 详细档：书名·章节·位置·时间拼成一行', () => {
+    expect(renderCopyItem(copyTemplateText('brief', ''), vars())).toBe('《测试书》· 第一章');
+    expect(renderCopyItem(copyTemplateText('detail', ''), vars())).toBe(
+      '《测试书》· 第一章 · 第 12 页 · 2026-11-23 14:05',
+    );
+  });
+
+  it('用户自定义档含 {双链} 也不套娃，方括号被清掉', () => {
+    expect(renderCopyItem('{双链} {摘录}', vars())).toBe('这是原文摘录');
+    expect(renderCopyItem('{摘录}', vars({ quote: '上一行 [[下一行]]' }))).toBe('上一行 下一行');
+  });
+
+  it('空模板回退到简洁档，不让链接显示文字变空', () => {
+    expect(renderCopyItem('', vars())).toBe(renderCopyItem(COPY_SIMPLE, vars()));
+  });
+
+  it('无时间的划线配详细档，也不出现 1970-01-01', () => {
+    const out = renderCopyItem(copyTemplateText('detail', ''), vars({ time: '' }));
+    expect(out).toBe('《测试书》· 第一章 · 第 12 页 ·');
     expect(out).not.toContain('1970');
   });
 });

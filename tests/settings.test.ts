@@ -128,13 +128,14 @@ describe('扫描页识别设置', () => {
   });
 });
 
-/** 双链模板设置：老数据没有这三个字段 → 全部退回默认（导出格式不变） */
+/** 双链模板设置：两套独立配置（整本导出 / 复制划线），老数据没有 → 退回默认 */
 describe('双链模板设置', () => {
-  it('老数据缺省 → 简洁模板 + 空自定义，导出格式与升级前一致', () => {
+  it('老数据缺省 → 两套都是简洁档 + 空自定义，导出格式与升级前一致', () => {
     const s = normalizeSettings({});
     expect(s.exportTemplate).toBe('simple');
     expect(s.exportTemplateCustom).toBe('');
-    expect(s.aliasTemplate).toBe('');
+    expect(s.copyTemplate).toBe('simple');
+    expect(s.copyTemplateCustom).toBe('');
   });
 
   it('导出模板只认四个 id，写坏了退回 simple', () => {
@@ -144,12 +145,32 @@ describe('双链模板设置', () => {
     expect(normalizeSettings({ exportTemplate: '乱写' }).exportTemplate).toBe('simple');
   });
 
+  it('复制模板只认四个 id，导出的 quote 不能混进来', () => {
+    expect(normalizeSettings({ copyTemplate: 'brief' }).copyTemplate).toBe('brief');
+    expect(normalizeSettings({ copyTemplate: 'detail' }).copyTemplate).toBe('detail');
+    expect(normalizeSettings({ copyTemplate: 'custom' }).copyTemplate).toBe('custom');
+    expect(normalizeSettings({ copyTemplate: 'quote' }).copyTemplate).toBe('simple');
+  });
+
   it('自定义模板保留原文（含换行），仅去掉首尾空白', () => {
     const tpl = '\n> [!note] {书名}\n> {双链}\n  ';
     expect(normalizeSettings({ exportTemplateCustom: tpl }).exportTemplateCustom).toBe('> [!note] {书名}\n> {双链}');
+    expect(normalizeSettings({ copyTemplateCustom: '《{书名}》\n· {章节}' }).copyTemplateCustom).toBe('《{书名}》\n· {章节}');
   });
 
-  it('别名模板是单行，压平换行', () => {
-    expect(normalizeSettings({ aliasTemplate: '《{书名}》\n· {章节}' }).aliasTemplate).toBe('《{书名}》 · {章节}');
+  it('老 aliasTemplate 有内容 → 迁移到复制档的自定义档，用户填过的别名不丢', () => {
+    const s = normalizeSettings({ aliasTemplate: '《{书名}》\n· {章节}' });
+    expect(s.copyTemplate).toBe('custom');
+    expect(s.copyTemplateCustom).toBe('《{书名}》 · {章节}');
+  });
+
+  it('老 aliasTemplate 为空 → 不迁移，复制保持简洁档', () => {
+    expect(normalizeSettings({ aliasTemplate: '  ' }).copyTemplate).toBe('simple');
+  });
+
+  it('两套配置互不影响', () => {
+    const s = normalizeSettings({ exportTemplate: 'quote', copyTemplate: 'detail' });
+    expect(s.exportTemplate).toBe('quote');
+    expect(s.copyTemplate).toBe('detail');
   });
 });

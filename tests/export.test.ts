@@ -362,4 +362,14 @@ describe('导出模板接入', () => {
     const md = buildNotesBody(book, { ...DEFAULT_SETTINGS, exportTemplate: 'custom', exportTemplateCustom: '  ' });
     expect(md).toBe(fallback);
   });
+
+  it('复制模板的配置不碰整本导出：两套配置独立', () => {
+    const { book } = bookWithNotes();
+    const withCopyTpl = buildNotesBody(book, {
+      ...DEFAULT_SETTINGS,
+      copyTemplate: 'detail',
+      copyTemplateCustom: '《{书名}》',
+    });
+    expect(withCopyTpl).toBe(buildNotesBody(book, DEFAULT_SETTINGS));
+  });
 });

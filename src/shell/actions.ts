@@ -89,7 +89,15 @@ import { userFacingActionIds, isMobileHiddenAction, type HeaderActionId } from '
 import { moveHeaderAction } from './header-order';
 import type { ReaderPrefs } from '../data/prefs';
 import { wikilinkOf, wikilinkOfMark } from '../data/wikilink';
-import { aliasForCopy, isBuiltinTemplate, previewVars, renderExportItem } from '../data/link-template';
+import {
+  aliasForCopy,
+  copyTemplateText,
+  isBuiltinTemplate,
+  isCopyTemplate,
+  previewVars,
+  renderCopyItem,
+  renderExportItem,
+} from '../data/link-template';
 import { isPdfLocator, pdfLocatorPage } from '../engine/pdf/locator';
 import { buildNotesBody, ensureDir, exportBookNotes, safeName } from '../data/export';
 import {
@@ -2358,12 +2366,12 @@ export function dispatchAction(
         notify(t('notice.mark.notFound'), 'error');
         break;
       }
-      /* 别名模板（2026-11-23）：用户设了就当 display 传进去，只换链接的
-         显示文字，定位那一段仍由 wikilink 原样拼——点下去照旧跳回原文。
-         模板为空返回空串，wikilink 就用摘录原文，升级前后逐字一致。 */
-      const aliasTpl = shellSettings().aliasTemplate;
+      /* 复制模板（2026-11-23）：与整本导出对称的四档配置，独立存 copyTemplate。
+         只换链接显示文字，定位那一段仍由 wikilink 原样拼——点下去照旧跳回原文。 */
+      const s = shellSettings();
+      const tpl = copyTemplateText(s.copyTemplate, s.copyTemplateCustom);
       const page = h.cfiRange && isPdfLocator(h.cfiRange) ? pdfLocatorPage(h.cfiRange) ?? undefined : undefined;
-      const display = aliasForCopy(aliasTpl, b, {
+      const display = aliasForCopy(tpl, b, {
         chapter: h.chapterTitle || '', quote: h.text, createdAt: h.createdAt, page,
       });
       void copyText(wikilinkOfMark(b, h, { display }));
@@ -2581,6 +2589,16 @@ export function dispatchAction(
       const src = getShellSource();
       if (!src || !isBuiltinTemplate(d.v)) break;
       src.setSettings({ exportTemplate: d.v });
+      repaint();
+      break;
+    }
+    /**
+     * 复制划线模板：四档独立配置，与导出的 setlinktpl 同一套交互。
+     */
+    case 'setcopytpl': {
+      const src = getShellSource();
+      if (!src || !isCopyTemplate(d.v)) break;
+      src.setSettings({ copyTemplate: d.v });
       repaint();
       break;
     }
@@ -3412,10 +3430,11 @@ export function dispatchAction(
         break;
       }
       autoMarkSelection('selbilink');
-      /* 与「复制划线」同一套别名模板；没设就是空串，wikilink 仍用摘录原文。 */
-      const aliasTpl = shellSettings().aliasTemplate;
+      /* 与「复制划线」同一套复制模板配置；简洁档就是摘录原文。 */
+      const s = shellSettings();
+      const tpl = copyTemplateText(s.copyTemplate, s.copyTemplateCustom);
       const page = sel.cfiRange && isPdfLocator(sel.cfiRange) ? pdfLocatorPage(sel.cfiRange) ?? undefined : undefined;
-      const display = aliasForCopy(aliasTpl, book, {
+      const display = aliasForCopy(tpl, book, {
         chapter: sel.chapterTitle || '', quote: sel.text, createdAt: 0, page,
       });
       void copyText(
@@ -5394,10 +5413,14 @@ async function archiveAiFloat(): Promise<void> {
 /* ─────────── 输入与快捷键 ─────────── */
 
 /** 自定义模板输入时局部刷新预览，不重绘整页（否则光标/软键盘会被打断） */
-function updateLinkTplPreview(template: string): void {
-  const box = document.querySelector<HTMLElement>('[data-linktpl-preview]');
+function updateTplPreview(template: string, kind: 'export' | 'copy'): void {
+  const box = document.querySelector<HTMLElement>(
+    kind === 'export' ? '[data-linktpl-preview]' : '[data-copytpl-preview]',
+  );
   if (!box) return;
-  box.textContent = renderExportItem(template, previewVars());
+  box.textContent = kind === 'export'
+    ? renderExportItem(template, previewVars())
+    : renderCopyItem(template, previewVars());
 }
 
 export function dispatchInput(
@@ -5467,21 +5490,22 @@ export function dispatchInput(
        软键盘照样收起、光标照样跳走。 */
     if (dragging) {
       /* 双链模板：输入途中只更新预览（不落盘、不重绘），落盘留到 change。 */
-      if (k === 'exportTemplateCustom') updateLinkTplPreview(value);
+      if (k === 'exportTemplateCustom') updateTplPreview(value, 'export');
+      if (k === 'copyTemplateCustom') updateTplPreview(value, 'copy');
       return;
     }
     const src = getShellSource();
     if (!src) return;
-    /* 双链模板：自定义正文 / 别名，松手才落盘（normalize 会压平别名换行）。 */
-    if (k === 'exportTemplateCustom' || k === 'aliasTemplate') {
+    /* 双链模板：两套自定义正文，松手才落盘，避免软键盘逐字收起。 */
+    if (k === 'exportTemplateCustom' || k === 'copyTemplateCustom') {
       if (k === 'exportTemplateCustom') {
         if (value === String(shellSettings().exportTemplateCustom ?? '')) return;
         src.setSettings({ exportTemplateCustom: value });
-        updateLinkTplPreview(value);
+        updateTplPreview(value, 'export');
       } else {
-        const flat = value.replace(/\s*\n\s*/g, ' ').trim();
-        if (flat === String(shellSettings().aliasTemplate ?? '')) return;
-        src.setSettings({ aliasTemplate: flat });
+        if (value === String(shellSettings().copyTemplateCustom ?? '')) return;
+        src.setSettings({ copyTemplateCustom: value });
+        updateTplPreview(value, 'copy');
       }
       return;
     }

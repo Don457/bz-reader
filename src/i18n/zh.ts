@@ -1095,8 +1095,8 @@ export const ZH = {
   'settings.exportComments': '导出时带上想法',
 
   /* ── 设置页：双链模板（2026-11-23） ─────────────────────── */
-  'settings.linkTpl': '双链导出模板',
-  'settings.linkTpl.hint': '整本导出每条摘录的格式；复制划线另用下面的别名模板。',
+  'settings.linkTpl': '整本导出的双链模板',
+  'settings.linkTpl.hint': '整本导出时每条摘录的格式，可多行、可 callout。',
   'settings.linkTpl.simple': '简洁',
   'settings.linkTpl.quote': 'callout 引文',
   'settings.linkTpl.detail': 'callout 详细',
@@ -1104,9 +1104,15 @@ export const ZH = {
   'settings.linkTpl.custom.ph': '用占位符拼模板，支持多行与 Obsidian callout',
   'settings.linkTpl.vars': '点一下插入变量：',
   'settings.linkTpl.preview': '效果预览：',
-  'settings.aliasTpl': '复制划线的别名',
-  'settings.aliasTpl.hint': '单条复制双链时的显示文字；留空则用摘录原文。',
-  'settings.aliasTpl.ph': '例：《{书名}》· {章节} · {时间}',
+  'settings.copyTpl': '复制划线的双链模板',
+  'settings.copyTpl.hint': '单条复制时的链接显示文字；四档与导出对称，配置各自独立。',
+  'settings.copyTpl.simple': '摘录原文',
+  'settings.copyTpl.brief': '书名章节',
+  'settings.copyTpl.detail': '详细信息',
+  'settings.copyTpl.custom': '自定义',
+  'settings.copyTpl.custom.ph': '例：《{书名}》· {章节} · {时间}（一行，不能套双链）',
+  'settings.copyTpl.vars': '点一下插入变量：',
+  'settings.copyTpl.preview': '效果预览：',
 
   /* ── 设置页：AI ──────────────────────────────────────────── */
   'settings.ai.baseUrl': '接口地址',
