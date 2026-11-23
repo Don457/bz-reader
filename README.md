@@ -287,69 +287,21 @@ AI、支持者名单与激活码停用名单之外完全离线。AI 请求走你
 ## English
 
 <p align="center">
-  <img src="docs/images/shelf-desktop-light.webp" alt="Shelf: continue reading, filter bar, categories and cover wall (light left, dark right)">
+  <img src="docs/images/en/shelf-desktop-light.webp" alt="Shelf: continue reading, search and filters, categories, cover wall">
 </p>
 
 <p align="center"><b>Reading · Notes · Highlight colours · Selection toolbar · Footnotes</b></p>
 
 <p align="center">
-  <img src="docs/images/read-desktop-light.webp" alt="Reading: contents, single-column text, selection capsule and footnote popover (light left, dark right)">
+  <img src="docs/images/en/read-desktop-light.webp" alt="Reading: contents in the sidebar, single-column text, selection toolbar and a footnote popover">
 </p>
 
 <p align="center"><b>Mobile · Shelf · Reading</b></p>
 
 <p align="center">
-  <img src="docs/images/shelf-mobile-light.webp" width="288" alt="Shelf on mobile, light">
+  <img src="docs/images/en/shelf-mobile-light.webp" width="288" alt="Shelf on mobile, light">
   &nbsp;&nbsp;
-  <img src="docs/images/read-mobile-dark.webp" width="288" alt="Reader on mobile, dark">
-</p>
-
-<p align="center"><b>AI · Anchored follow-up · Whole-book Q&A</b></p>
-
-<p align="center">
-  <img src="docs/images/ai-desktop-light.png" alt="AI: selection toolbar with explain / translate / summarize / follow up / ask the whole book, anchored follow-up popover and whole-book Q&A">
-</p>
-
-<p align="center"><b>PDF · Quote cards</b></p>
-
-<p align="center">
-  <img src="docs/images/pdf-desktop-light.png" alt="PDF: quote-card popover after selecting text, four layouts, re-cite / save to note / copy image, chapters grouped in the sidebar">
-</p>
-
-<p align="center"><b>Read aloud · Sentence highlighting · Chapter / whole-book pre-generation</b></p>
-
-<p align="center">
-  <img src="docs/images/read-aloud-desktop-light.png" alt="Read aloud: sentence-by-sentence highlighting, playback bar with previous / next, speed, export and settings">
-</p>
-
-<p align="center"><b>Notes · Daily review</b></p>
-
-<p align="center">
-  <img src="docs/images/notes-desktop-light.png" alt="Notes: daily review, colour and keyword filters, highlights grouped by book with comments">
-</p>
-
-<p align="center"><b>Chats · Grouped by book</b></p>
-
-<p align="center">
-  <img src="docs/images/chat-desktop-light.png" alt="Chats: monthly / archived counts, filters by mode, conversation cards grouped by book">
-</p>
-
-<p align="center"><b>Search · Literal / by meaning · Scanning progress · Grouped by book · Chapter locations</b></p>
-
-<p align="center">
-  <img src="docs/images/search-desktop-light.png" alt="Search: literal and semantic search over highlights, per-book scan progress, results grouped by book with chapter locations">
-</p>
-
-<p align="center"><b>Stats · Today · Comparison · Daily time · Reading rhythm</b></p>
-
-<p align="center">
-  <img src="docs/images/stats-desktop-light.png" alt="Stats: total time and streak, week comparison, daily bar chart and reading rhythm">
-</p>
-
-<p align="center"><b>Reading sidebar · Contents · Bookmarks · Highlights · Citations · AI whole-book Q&A</b></p>
-
-<p align="center">
-  <img src="docs/images/sidebar-desktop-light.png" alt="Five reading sidebar tabs side by side: contents, bookmarks, highlights, citations and AI whole-book Q&A">
+  <img src="docs/images/en/read-mobile-dark.webp" width="288" alt="Reader on mobile, dark">
 </p>
 
 ### Installation

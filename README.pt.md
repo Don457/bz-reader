@@ -29,69 +29,21 @@
 Transforme o Obsidian num lugar para ler. Desktop + celular, vários formatos (incluindo PDF e quadrinhos), multilíngue, IA: perguntas ancoradas / sobre todo o livro / busca semântica / base de conhecimento, audiolivros offline, wikilinks, estatísticas; dados totalmente locais.
 
 <p align="center">
-  <img src="docs/images/shelf-desktop-light.webp" alt="Estante: continuar lendo, filtros, grupos e parede de capas (claro à esquerda, escuro à direita)">
+  <img src="docs/images/en/shelf-desktop-light.webp" alt="Estante: continuar lendo, filtros, grupos e parede de capas">
 </p>
 
 <p align="center"><b>Leitura · Notas · Cores · Barra de seleção · Notas de rodapé</b></p>
 
 <p align="center">
-  <img src="docs/images/read-desktop-light.webp" alt="Leitura: sumário, texto, seleção e janela de nota de rodapé (claro à esquerda, escuro à direita)">
+  <img src="docs/images/en/read-desktop-light.webp" alt="Leitura: sumário, texto, seleção e janela de nota de rodapé">
 </p>
 
 <p align="center"><b>Mobile · Estante · Leitura</b></p>
 
 <p align="center">
-  <img src="docs/images/shelf-mobile-light.webp" width="288" alt="Estante no celular, claro">
+  <img src="docs/images/en/shelf-mobile-light.webp" width="288" alt="Estante no celular, claro">
   &nbsp;&nbsp;
-  <img src="docs/images/read-mobile-dark.webp" width="288" alt="Leitura no celular, escuro">
-</p>
-
-<p align="center"><b>IA · Pergunta ancorada · Perguntas sobre todo o livro</b></p>
-
-<p align="center">
-  <img src="docs/images/ai-desktop-light.png" alt="IA: barra de seleção, pergunta ancorada e perguntas sobre todo o livro">
-</p>
-
-<p align="center"><b>PDF · Citações</b></p>
-
-<p align="center">
-  <img src="docs/images/pdf-desktop-light.png" alt="PDF: janela de citação após selecionar, quatro formatos, recitar / salvar nota / copiar imagem">
-</p>
-
-<p align="center"><b>Leitura em voz alta · Destaque por frase · Pré-geração</b></p>
-
-<p align="center">
-  <img src="docs/images/read-aloud-desktop-light.png" alt="Leitura em voz alta: destaque frase a frase, controles de anterior / seguinte, velocidade, exportação e ajustes">
-</p>
-
-<p align="center"><b>Notas · Revisão diária</b></p>
-
-<p align="center">
-  <img src="docs/images/notes-desktop-light.png" alt="Notas: revisão diária, filtros por cor e palavra-chave, destaques agrupados por livro">
-</p>
-
-<p align="center"><b>Conversas · Por livro</b></p>
-
-<p align="center">
-  <img src="docs/images/chat-desktop-light.png" alt="Conversas: contadores de novas e arquivadas, filtros por modo, conversas agrupadas por livro">
-</p>
-
-<p align="center"><b>Busca · Literal / por significado · Progresso · Por livro · Capítulos</b></p>
-
-<p align="center">
-  <img src="docs/images/search-desktop-light.png" alt="Busca: literal e semântica, progresso por livro, resultados agrupados com localização nos capítulos">
-</p>
-
-<p align="center"><b>Estatísticas · Hoje · Comparação · Tempo diário · Ritmo</b></p>
-
-<p align="center">
-  <img src="docs/images/stats-desktop-light.png" alt="Estatísticas: tempo total e sequência, comparação semanal, barras diárias e ritmo de leitura">
-</p>
-
-<p align="center"><b>Barra lateral · Sumário · Marcadores · Destaques · Citações · IA</b></p>
-
-<p align="center">
-  <img src="docs/images/sidebar-desktop-light.png" alt="Cinco abas da barra lateral: sumário, marcadores, destaques, citações e IA sobre todo o livro">
+  <img src="docs/images/en/read-mobile-dark.webp" width="288" alt="Leitura no celular, escuro">
 </p>
 
 ### Instalação

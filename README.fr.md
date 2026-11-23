@@ -29,69 +29,21 @@
 Faites d'Obsidian un endroit où lire. Bureau + mobile, plusieurs formats (dont PDF et bandes dessinées), multilingue, IA : questions ancrées / sur tout le livre / recherche sémantique / base de connaissances, livres audio hors ligne, wikilinks, statistiques ; données entièrement locales.
 
 <p align="center">
-  <img src="docs/images/shelf-desktop-light.webp" alt="Bibliothèque : reprise de lecture, filtres, groupes et mur de couvertures (clair à gauche, sombre à droite)">
+  <img src="docs/images/en/shelf-desktop-light.webp" alt="Bibliothèque : reprise de lecture, filtres, groupes et mur de couvertures">
 </p>
 
 <p align="center"><b>Lecture · Notes · Couleurs · Barre de sélection · Notes de bas de page</b></p>
 
 <p align="center">
-  <img src="docs/images/read-desktop-light.webp" alt="Lecture : sommaire, texte, sélection et popover de note de bas de page (clair à gauche, sombre à droite)">
+  <img src="docs/images/en/read-desktop-light.webp" alt="Lecture : sommaire, texte, sélection et popover de note de bas de page">
 </p>
 
 <p align="center"><b>Mobile · Bibliothèque · Lecture</b></p>
 
 <p align="center">
-  <img src="docs/images/shelf-mobile-light.webp" width="288" alt="Bibliothèque sur mobile, clair">
+  <img src="docs/images/en/shelf-mobile-light.webp" width="288" alt="Bibliothèque sur mobile, clair">
   &nbsp;&nbsp;
-  <img src="docs/images/read-mobile-dark.webp" width="288" alt="Lecture sur mobile, sombre">
-</p>
-
-<p align="center"><b>IA · Suite ancrée · Questions sur tout le livre</b></p>
-
-<p align="center">
-  <img src="docs/images/ai-desktop-light.png" alt="IA : barre de sélection, suite ancrée et questions sur tout le livre">
-</p>
-
-<p align="center"><b>PDF · Citations</b></p>
-
-<p align="center">
-  <img src="docs/images/pdf-desktop-light.png" alt="PDF : popover de citation après sélection, quatre mises en page, reciter / enregistrer / copier">
-</p>
-
-<p align="center"><b>Lecture à voix haute · Surlignage phrase par phrase · Pré-génération</b></p>
-
-<p align="center">
-  <img src="docs/images/read-aloud-desktop-light.png" alt="Lecture à voix haute : surlignage phrase par phrase, barre de lecture avec précédent / suivant, vitesse, export et réglages">
-</p>
-
-<p align="center"><b>Notes · Révision du jour</b></p>
-
-<p align="center">
-  <img src="docs/images/notes-desktop-light.png" alt="Notes : révision du jour, filtres par couleur et mot-clé, surlignages regroupés par livre">
-</p>
-
-<p align="center"><b>Conversations · Par livre</b></p>
-
-<p align="center">
-  <img src="docs/images/chat-desktop-light.png" alt="Conversations : compteurs nouveau / archivé, filtres par mode, cartes regroupées par livre">
-</p>
-
-<p align="center"><b>Recherche · Littérale / sémantique · Progression · Par livre · Chapitres</b></p>
-
-<p align="center">
-  <img src="docs/images/search-desktop-light.png" alt="Recherche : littérale et sémantique, progression par livre, résultats groupés avec emplacement dans les chapitres">
-</p>
-
-<p align="center"><b>Statistiques · Aujourd’hui · Comparaison · Temps quotidien · Rythme</b></p>
-
-<p align="center">
-  <img src="docs/images/stats-desktop-light.png" alt="Statistiques : temps total et série, comparaison hebdomadaire, barres quotidiennes et rythme de lecture">
-</p>
-
-<p align="center"><b>Barre latérale · Sommaire · Favoris · Surlignages · Citations · IA</b></p>
-
-<p align="center">
-  <img src="docs/images/sidebar-desktop-light.png" alt="Cinq onglets de la barre latérale : sommaire, favoris, surlignages, citations et IA sur tout le livre">
+  <img src="docs/images/en/read-mobile-dark.webp" width="288" alt="Lecture sur mobile, sombre">
 </p>
 
 ### Installation

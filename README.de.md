@@ -29,69 +29,21 @@
 Mach aus Obsidian einen Ort zum Lesen. Desktop + Mobil, mehrere Formate (inkl. PDF und Comics), mehrere Sprachen, KI-Rückfragen mit Anker / Fragen zum ganzen Buch / semantische Suche / Wissensdatenbank, Offline-Hörbücher, Wikilinks, Statistik – alle Daten bleiben lokal.
 
 <p align="center">
-  <img src="docs/images/shelf-desktop-light.webp" alt="Regal: Weiterlesen, Filterleiste, Kategorien und Coverübersicht (links hell, rechts dunkel)">
+  <img src="docs/images/en/shelf-desktop-light.webp" alt="Regal: Weiterlesen, Filter, Kategorien und Coverübersicht">
 </p>
 
 <p align="center"><b>Lesen · Notizen · Farben · Auswahlleiste · Fußnoten</b></p>
 
 <p align="center">
-  <img src="docs/images/read-desktop-light.webp" alt="Lesen: Inhaltsverzeichnis, Text, Auswahlmenü und Fußnoten-Popover (links hell, rechts dunkel)">
+  <img src="docs/images/en/read-desktop-light.webp" alt="Lesen: Inhaltsverzeichnis, Text, Auswahlmenü und Fußnoten-Popover">
 </p>
 
 <p align="center"><b>Mobil · Regal · Lesen</b></p>
 
 <p align="center">
-  <img src="docs/images/shelf-mobile-light.webp" width="288" alt="Regal auf Mobil, hell">
+  <img src="docs/images/en/shelf-mobile-light.webp" width="288" alt="Regal auf Mobil, hell">
   &nbsp;&nbsp;
-  <img src="docs/images/read-mobile-dark.webp" width="288" alt="Leser auf Mobil, dunkel">
-</p>
-
-<p align="center"><b>KI · Verankerte Rückfragen · Fragen zum ganzen Buch</b></p>
-
-<p align="center">
-  <img src="docs/images/ai-desktop-light.png" alt="KI: Auswahlleiste, verankerte Rückfragen und Q&A zum ganzen Buch">
-</p>
-
-<p align="center"><b>PDF · Zitate</b></p>
-
-<p align="center">
-  <img src="docs/images/pdf-desktop-light.png" alt="PDF: Zitat-Popover nach der Auswahl, vier Layouts, erneut zitieren / Notiz speichern / Bild kopieren">
-</p>
-
-<p align="center"><b>Vorlesen · Satzweise Hervorhebung · Kapitel- / Buchvorbereitung</b></p>
-
-<p align="center">
-  <img src="docs/images/read-aloud-desktop-light.png" alt="Vorlesen: satzweise Hervorhebung, Wiedergabeleiste mit Vor / Zurück, Tempo, Export und Einstellungen">
-</p>
-
-<p align="center"><b>Notizen · Tägliche Wiederholung</b></p>
-
-<p align="center">
-  <img src="docs/images/notes-desktop-light.png" alt="Notizen: tägliche Wiederholung, Filter nach Farbe und Stichwort, Markierungen pro Buch">
-</p>
-
-<p align="center"><b>Chats · Nach Buch gruppiert</b></p>
-
-<p align="center">
-  <img src="docs/images/chat-desktop-light.png" alt="Chats: Zähler für neue und archivierte Gespräche, Modusfilter, Gesprächskarten pro Buch">
-</p>
-
-<p align="center"><b>Suche · Wörtlich / nach Bedeutung · Scan-Fortschritt · Nach Buch · Kapitelstellen</b></p>
-
-<p align="center">
-  <img src="docs/images/search-desktop-light.png" alt="Suche: wörtlich und semantisch, Fortschritt pro Buch, Ergebnisse nach Buch mit Kapitelangabe">
-</p>
-
-<p align="center"><b>Statistik · Heute · Vergleich · Tägliche Zeit · Leserhythmus</b></p>
-
-<p align="center">
-  <img src="docs/images/stats-desktop-light.png" alt="Statistik: Gesamtzeit und Serie, Wochenvergleich, tägliche Balken und Leserhythmus">
-</p>
-
-<p align="center"><b>Lese-Seitenleiste · Inhalt · Lesezeichen · Markierungen · Zitate · KI zum ganzen Buch</b></p>
-
-<p align="center">
-  <img src="docs/images/sidebar-desktop-light.png" alt="Fünf Register der Lese-Seitenleiste nebeneinander: Inhalt, Lesezeichen, Markierungen, Zitate, KI">
+  <img src="docs/images/en/read-mobile-dark.webp" width="288" alt="Leser auf Mobil, dunkel">
 </p>
 
 ### Installation
