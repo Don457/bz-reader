@@ -108,6 +108,8 @@ const BASELINE: Record<string, number> = {  'src/core/app.ts': 1,
      28 → 29：自审后补「无时间划线只写双链一行」的回退模板串；
      29 → 30：复制划线新增「书名章节」档模板串，同属写进笔记的内容。 */
   'src/data/link-template.ts': 30, // 复制与导出已合并为同一组模板，预算留 30 不回收
+  /* 迁移老 aliasTemplate 时补的 `> {双链}` 模板串，占位符名本身是中文 */
+  'src/data/settings.ts': 1,
   'src/data/importer.ts': 1,
   'src/data/license.ts': 16,
   'src/data/notes.ts': 13,

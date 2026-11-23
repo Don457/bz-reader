@@ -107,14 +107,6 @@ export function renderExportItem(template: string, vars: TemplateVars): string {
 }
 
 /**
- * 复制到剪贴板的渲染：与整本导出共用同一个函数、同一套四档。
- * 不再把结果压成一行别名，也不再清方括号——粘出来就是模板原样的 Markdown。
- */
-export function renderCopyItem(template: string, vars: TemplateVars): string {
-  return renderExportItem(template, vars);
-}
-
-/**
  * 从书 + 划线上下文算出模板变量。
  *
  * 「位置」这一格：PDF 有真实页码，由调用方传 page；EPUB 没有页码，

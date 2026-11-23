@@ -159,10 +159,12 @@ describe('双链模板设置', () => {
     expect(normalizeSettings({ copyTemplateCustom: '《{书名}》\n· {章节}' }).copyTemplateCustom).toBe('《{书名}》\n· {章节}');
   });
 
-  it('老 aliasTemplate 有内容 → 迁移到复制档的自定义档，原文与换行都不丢', () => {
+  it('老 aliasTemplate 有内容 → 迁到复制自定义档，老别名保留且必须带上可点双链', () => {
     const s = normalizeSettings({ aliasTemplate: '《{书名}》\n· {章节}' });
     expect(s.copyTemplate).toBe('custom');
-    expect(s.copyTemplateCustom).toBe('《{书名}》\n· {章节}');
+    /* 老别名只是链接显示文字，不带 {双链}；直接当模板用会复制出纯文本，
+       所以迁移时要补上双链那一行，保住「复制双链到剪贴板」这个核心行为。 */
+    expect(s.copyTemplateCustom).toBe('> {双链}\n> ↳ 《{书名}》\n· {章节}');
   });
 
   it('老 aliasTemplate 为空 → 不迁移，复制保持简洁档', () => {

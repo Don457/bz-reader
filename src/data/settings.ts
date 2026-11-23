@@ -496,20 +496,22 @@ function normalizePdfOcr(raw: unknown, ai: AiSettings, legacy: Record<string, un
 export function normalizeSettings(raw: unknown): ReaderSettings {
   const s = (raw ?? {}) as Partial<ReaderSettings> & { aliasTemplate?: unknown };
   const ai = normalizeAi(s.ai);
-  /* 老版本把复制别名存在一个字段里。现在复制也支持完整的多行模板，
-     老值原样迁到复制档的「自定义」——以前填过的人升级后内容一字不丢。 */
+  /* 老版本把复制别名存在一个字段里——那只是 wikilink 的显示文字，本身不带
+     {双链}。现在复制档是完整 Markdown 模板，直接拿老别名当模板会复制出纯文本，
+     所以迁到自定义档时补上双链那一行，老别名降为紧随其后的说明，双链不丢。 */
   const legacyAlias = str(s.aliasTemplate, '').trim();
   const copyTemplateCustom = typeof s.copyTemplateCustom === 'string'
     ? s.copyTemplateCustom.trim()
-    : legacyAlias;
+    : (legacyAlias ? `> {双链}\n> ↳ ${legacyAlias}` : '');
   return {
     exportDir: cleanDir(str(s.exportDir, DEFAULT_SETTINGS.exportDir)),
     exportComments: s.exportComments !== false,
     exportTemplate: isBuiltinTemplate(s.exportTemplate) ? s.exportTemplate : DEFAULT_SETTINGS.exportTemplate,
     exportTemplateCustom: str(s.exportTemplateCustom, '').trim(),
-    copyTemplate: isCopyTemplate(s.copyTemplate)
-      ? s.copyTemplate
-      : (legacyAlias ? 'custom' : DEFAULT_SETTINGS.copyTemplate),
+    /* 有老别名就必须走自定义档——否则默认的 simple 会把刚补好双链的模板吞掉 */
+    copyTemplate: legacyAlias
+      ? 'custom'
+      : (isCopyTemplate(s.copyTemplate) ? s.copyTemplate : DEFAULT_SETTINGS.copyTemplate),
     copyTemplateCustom,
     importDir: cleanDir(str(s.importDir, DEFAULT_SETTINGS.importDir), DEFAULT_SETTINGS.importDir),
     /* 只认八种语言 + auto：手改坏的 JSON、旧版本没有这个字段、写了别的语言，

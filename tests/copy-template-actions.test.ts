@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dispatchAction, dispatchInput } from '../src/shell/actions';
 import { DEFAULT_SHELL_STATE, setState } from '../src/shell/state';
 import { setShellSource, type ShellSource } from '../src/shell/source';
-import { DEFAULT_SETTINGS, type ReaderSettings } from '../src/data/settings';
+import { DEFAULT_SETTINGS, normalizeSettings, type ReaderSettings } from '../src/data/settings';
 import { addHighlight } from '../src/data/notes';
 import { makeApp, makeStore, testBook } from './helpers/plugin-harness';
 
@@ -126,6 +126,21 @@ describe('复制划线四档模板：走剪贴板', () => {
     expect(writes[0]).toContain('> [!note] 测试书');
     expect(writes[0]).toContain('> [[书/b1.epub#bzr-cfi=');
     expect(writes[0]).toContain('> 划线原文一段');
+  });
+  it('老 aliasTemplate 迁移后，复制结果仍含可点双链', async () => {
+    const { markId } = setup();
+    settings = normalizeSettings({
+      ...settings,
+      copyTemplateCustom: undefined,
+      aliasTemplate: '《{书名}》· {章节}',
+    });
+    const writes = stubClipboard();
+
+    dispatchAction('copylink', el({ id: markId, book: 'b1' }));
+
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0]).toContain('[[');
+    expect(writes[0]).toContain('《测试书》· 第一章');
   });
 });
 

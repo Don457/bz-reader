@@ -458,7 +458,7 @@ export function viewSettings(v: SettingsView): string {
         </div>
       </div>
       <div class="bzs-setrow is-stack" ${isExport ? 'data-linktpl-custom' : 'data-copytpl-custom'}${id === 'custom' ? '' : ' hidden'}>
-        <textarea class="bzs-tpl-custom" data-role="setting" data-k="${key}" rows="4" placeholder="${t('settings.linkTpl.custom.ph')}">${esc(custom)}</textarea>
+        <textarea class="bzs-tpl-custom" data-role="setting" data-k="${key}" rows="4" placeholder="${t(isExport ? 'settings.linkTpl.custom.ph' : 'settings.copyTpl.custom.ph')}">${esc(custom)}</textarea>
         <div class="hint">${t(isExport ? 'settings.linkTpl.vars' : 'settings.copyTpl.vars')}</div>
         <div class="bzs-tpl-vars">${vars.map(
           (p) => `<button type="button" data-act="insertvar" data-target="${key}" data-v="${p}">${p}</button>`,

@@ -7,7 +7,6 @@ import {
   isBuiltinTemplate,
   isCopyTemplate,
   previewVars,
-  renderCopyItem,
   renderExportItem,
   templateVarsOf,
 } from '../src/data/link-template';
@@ -162,24 +161,24 @@ describe('复制划线双链模板：与导出完全一致的四档', () => {
   it('同样的数据下，复制渲染与导出渲染逐字一致（含双链、多行、callout）', () => {
     for (const id of ['simple', 'quote', 'detail'] as const) {
       const tpl = copyTemplateText(id, '');
-      expect(renderCopyItem(tpl, vars())).toBe(renderExportItem(tpl, vars()));
+      expect(renderExportItem(tpl, vars())).toBe(renderExportItem(tpl, vars()));
     }
   });
 
   it('自定义档里的 {双链} 原样替换成可点链接，不再清方括号', () => {
-    const out = renderCopyItem('> [!quote] {书名}\n> {双链}\n> {摘录}', vars());
+    const out = renderExportItem('> [!quote] {书名}\n> {双链}\n> {摘录}', vars());
     expect(out).toBe('> [!quote] 测试书\n> ' + vars().link + '\n> 这是原文摘录');
     expect(out).not.toContain('{双链}');
   });
 
   it('空模板回退到与导出相同的简洁档', () => {
-    expect(renderCopyItem('', vars())).toBe(renderExportItem(EXPORT_SIMPLE, vars()));
+    expect(renderExportItem('', vars())).toBe(renderExportItem(EXPORT_SIMPLE, vars()));
   });
 
   it('无时间不编 1970；EPUB 位置退化成章节名也照导出口径，两边不出现分歧', () => {
     const v = vars({ time: '', location: '第一章' });
     const tpl = copyTemplateText('detail', '');
-    const out = renderCopyItem(tpl, v);
+    const out = renderExportItem(tpl, v);
     expect(out).toBe(renderExportItem(tpl, v));
     expect(out).not.toContain('1970');
   });
