@@ -181,14 +181,15 @@ describe('设置页渲染', () => {
     }
   });
 
-  it('基础版：AI 组整组灰化，点击弹高级功能说明', () => {
+  it('基础版：AI 配置区开放，用户能填自己的密钥', () => {
     entState.unlocked = false;
     const out = html();
-    expect(out).toMatch(/class="bzs-setgrp is-locked"[^>]*data-act="unlock" data-mode="ai"/);
-    /* 基础版整组禁用：下拉与密钥框都不可改，问答测试按钮不出现 */
-    expect(out).toMatch(/data-k="ai\.provider"[^>]*disabled/);
-    expect(out).toMatch(/data-k="ai\.apiKeys\.deepseek"[^>]*readonly/);
-    expect(out).not.toContain('data-act="aiprobe"');
+    /* 2026-11-23：解释/翻译/摘要下放基础版，必须能填密钥才用得上。
+       配置区不再整组灰化，下拉与密钥框都可改，连接测试按钮也在。 */
+    expect(out).not.toMatch(/class="bzs-setgrp is-locked"[^>]*data-act="unlock" data-mode="ai"/);
+    expect(out).not.toMatch(/data-k="ai\.provider"[^>]*disabled/);
+    expect(out).not.toMatch(/data-k="ai\.apiKeys\.deepseek"[^>]*readonly/);
+    expect(out).toContain('data-act="aiprobe"');
   });
 
   it('placeholder 说人话：自定义地址、模型名、密钥都有', () => {
@@ -353,18 +354,17 @@ describe('设置页渲染', () => {
     expect(out).toContain('data-act="activate"');
   });
 
-  /* 入口平权：基础版也看得见 AI 组。但没解锁时配置只能看不能改——
-     让基础版改一个用不了的配置只会制造「我填了为什么不行」的困惑。
-     AI 组里不放「查看功能对照」这类提示：要解锁去授权组，别在配置区塞推销。 */
-  it('基础版：AI 组仍在，服务商与各输入框只读 / 禁用', () => {
+  /* 2026-11-23：解释/翻译/摘要下放基础版，AI 配置区向基础版开放填写，
+     否则用户填不了密钥、下放的功能用不上。高级功能仍在各自入口拦截。 */
+  it('基础版：AI 组可填，服务商与各输入框都不再只读 / 禁用', () => {
     entState.unlocked = false;
     const out = html(false, { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: 'custom' } });
     expect(out).toContain('<h3>AI 助手</h3>');
-    expect(out).toMatch(/data-k="ai\.provider"[^>]*disabled/);
+    expect(out).not.toMatch(/data-k="ai\.provider"[^>]*disabled/);
     for (const k of ['ai.baseUrl', 'ai.model', 'ai.apiKey']) {
-      expect(out, k).toMatch(new RegExp(`data-k="${k.replace('.', '\\.')}"[^>]*readonly`));
+      expect(out, k).not.toMatch(new RegExp(`data-k="${k.replace('.', '\\.')}"[^>]*readonly`));
     }
-    expect(out).toContain('data-act="aifetchmodels" disabled');
+    expect(out).not.toContain('data-act="aifetchmodels" disabled');
     expect(out).not.toContain('data-act="setai"');
     expect(out).not.toContain('data-act="aimodels"');
   });

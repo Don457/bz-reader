@@ -1,4 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+/* 这组测的是「追问能用时长什么样」——布局、轮次、输入框都在。
+   2026-11-23 起追问对基础版锁定（点它弹对比表），所以这里把 can 固定为真，
+   让测试仍聚焦 UI 呈现；锁定态本身由 tests/ai-followup-lock.test.ts 覆盖。 */
+vi.mock('../src/data/entitlement', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/data/entitlement')>();
+  return { ...real, can: () => true };
+});
+
 import { overlayHtml } from '../src/shell/overlay';
 import { DEFAULT_SHELL_STATE, setState } from '../src/shell/state';
 import { setShellSource, type ShellSource } from '../src/shell/source';
