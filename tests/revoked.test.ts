@@ -1,10 +1,11 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { createSign, generateKeyPairSync } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   REVOKED_STATE_KEY,
+  REVOKED_URLS,
   _resetRevokedForTests,
   _setRevokedHttpForTests,
   checkRevoked,
@@ -14,10 +15,12 @@ import {
   parseRevoked,
   refreshRevoked,
   revokedCode,
+  revokedOrder,
   revokedSeenAt,
   revokedSignText,
   verifyRevoked,
 } from '../src/data/revoked';
+import { setLocale } from '../src/i18n';
 
 /* ============================================================
  * 停用名单（tests/revoked.test.ts）
@@ -127,6 +130,86 @@ function setHttp(fn: (url: string) => string | null | Promise<string | null>): v
 beforeEach(() => {
   storage.clear();
   _resetRevokedForTests();
+});
+
+/* ------------------------------------------------------------
+ * 加速（2026-11-23）：两源一起抓、谁先回用谁，不再等齐挑最新；
+ * 语言只决定谁先发（简中先码云，其余先 GitHub）。
+ * 验签与「比本地旧就丢」仍是硬门槛，不属于镜像对比。
+ * ---------------------------------------------------------- */
+describe('拉取顺序（语言优先）', () => {
+  afterEach(() => setLocale('zh'));
+
+  it('简中先码云，其余语言先 GitHub', () => {
+    setLocale('zh');
+    expect(revokedOrder()[0]).toContain('gitee.com');
+    expect(revokedOrder()[1]).toContain('githubusercontent.com');
+    for (const lang of ['zh-TW', 'en', 'ja', 'de', 'fr', 'es', 'pt'] as const) {
+      setLocale(lang);
+      expect(revokedOrder()[0]).toContain('githubusercontent.com');
+      expect(revokedOrder()[1]).toContain('gitee.com');
+    }
+  });
+
+  it('兜底源仍在，只是顺序随语言变', () => {
+    expect(REVOKED_URLS).toHaveLength(2);
+    expect(revokedOrder().slice().sort()).toEqual(REVOKED_URLS.slice().sort());
+  });
+});
+
+describe.runIf(hasKey)('并发先到先用', () => {
+  let CODE = '';
+  beforeAll(() => {
+    CODE = issue({ v: 2, id: 'BZR-AF-2026-0021', name: '包仔', plan: 'lifetime' });
+  });
+  afterEach(() => setLocale('zh'));
+
+  it('快的那份先用：后到的更新名单不覆盖先到的结果', async () => {
+    setLocale('en'); // GitHub 先发、先回
+    const calls: string[] = [];
+    _setRevokedHttpForTests(async (url) => {
+      calls.push(url);
+      await new Promise((r) => setTimeout(r, url.includes('gitee') ? 300 : 40));
+      return url.includes('gitee')
+        ? signed(['BZR-AF-2026-0021'], [], 1_900_000_000_000)
+        : signed([], [], 1_800_000_000_000);
+    });
+    expect(await checkRevoked(CODE)).toBe('clear');
+    expect(revokedCode()).toBe('');
+    expect(calls).toHaveLength(2);
+  });
+
+  it('简中先发码云：码云先回就用码云那份', async () => {
+    setLocale('zh');
+    const calls: string[] = [];
+    _setRevokedHttpForTests(async (url) => {
+      calls.push(url);
+      await new Promise((r) => setTimeout(r, url.includes('gitee') ? 40 : 300));
+      return signed(url.includes('gitee') ? ['BZR-AF-2026-0021'] : [], [], 1_800_000_000_000);
+    });
+    expect(await checkRevoked(CODE)).toBe('hit');
+    expect(calls[0]).toContain('gitee.com');
+  });
+
+  it('优先源挂了：自动用另一源那份', async () => {
+    setLocale('zh');
+    _setRevokedHttpForTests(async (url) => {
+      if (url.includes('gitee')) return null;
+      await new Promise((r) => setTimeout(r, 40));
+      return signed(['BZR-AF-2026-0021']);
+    });
+    expect(await checkRevoked(CODE)).toBe('hit');
+  });
+
+  it('先到的旧名单不能把已封的码放出来：丢掉，等另一份', async () => {
+    markRevoked(CODE, 1_900_000_000_000);
+    setLocale('zh');
+    _setRevokedHttpForTests(async (url) => {
+      await new Promise((r) => setTimeout(r, url.includes('gitee') ? 40 : 200));
+      return signed([], [], url.includes('gitee') ? 1_800_000_000_000 : 1_900_000_000_000);
+    });
+    expect(await checkRevoked(CODE)).toBe('clear');
+  });
 });
 
 describe('名单解析', () => {
@@ -293,7 +376,7 @@ describe.runIf(hasKey)('后台刷新与持久化', () => {
       n += 1;
       return signed(['BZR-AF-2026-0099']);
     });
-    // 每份名单会被两个源各取一次
+    // 两源各自发一次（一起抓），先回的先采用
     expect(await refreshRevoked(CODE, { force: true })).toBe('clear');
     expect(n).toBe(2);
     // 24 小时内再自动查：不请求，直接 skipped（不是失败）
