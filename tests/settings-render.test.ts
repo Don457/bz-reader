@@ -1174,9 +1174,9 @@ describe('设置页 · 插件组三态', () => {
       review: { state: review, embed },
     });
 
-  it('bz 未安装：徽章「未安装」+「安装」按钮，不给启用', () => {
+  it('bz 未安装：徽章「未安装」+「去 GitHub 下载」，不给启用', () => {
     const src = pluginHtml('missing', 'missing');
-    expect(src).toContain('data-act="bzinstall"');
+    expect(src).toContain('data-act="bzgithub"');
     expect(src).not.toContain('data-act="bzenable"');
   });
 
@@ -1184,21 +1184,22 @@ describe('设置页 · 插件组三态', () => {
     const src = pluginHtml('disabled', 'missing');
     expect(src).toContain('已安装 · 未启用');
     expect(src).toContain('data-act="bzenable"');
-    expect(src).not.toContain('data-act="bzinstall"');
+    expect(src).not.toContain('data-act="bzgithub"');
   });
 
   it('bz 已启用：两颗按钮都不出现，版本号看得见', () => {
     const src = pluginHtml('enabled', 'missing');
     expect(src).toContain('已启用');
     expect(src).toContain('v1.44.6');
-    expect(src).not.toContain('data-act="bzinstall"');
+    expect(src).not.toContain('data-act="bzgithub"');
     expect(src).not.toContain('data-act="bzenable"');
   });
 
-  it('bz Review 未安装：徽章「未安装」+「安装」按钮', () => {
+  it('bz Review 未安装：徽章「未安装」+ 市场与 GitHub 两颗入口', () => {
     const src = pluginHtml('missing', 'missing');
     expect(src).toContain('未安装');
-    expect(src).toContain('data-act="reviewinstall"');
+    expect(src).toContain('data-act="reviewmarket"');
+    expect(src).toContain('data-act="reviewgithub"');
     expect(src).not.toContain('data-act="reviewenable"');
   });
 
@@ -1206,27 +1207,31 @@ describe('设置页 · 插件组三态', () => {
     const src = pluginHtml('missing', 'disabled');
     expect(src).toContain('已安装 · 未启用');
     expect(src).toContain('data-act="reviewenable"');
-    expect(src).not.toContain('data-act="reviewinstall"');
+    expect(src).not.toContain('data-act="reviewmarket"');
+    expect(src).not.toContain('data-act="reviewgithub"');
   });
 
   it('bz Review 已启用：两颗按钮都不出现', () => {
     const src = pluginHtml('missing', 'enabled', true);
     expect(src).toContain('已启用');
-    expect(src).not.toContain('data-act="reviewinstall"');
+    expect(src).not.toContain('data-act="reviewmarket"');
+    expect(src).not.toContain('data-act="reviewgithub"');
     expect(src).not.toContain('data-act="reviewenable"');
   });
 
   it('缺省（没探测）两张卡都按未安装画，不白屏', () => {
-    expect(html()).toContain('data-act="bzinstall"');
-    expect(html()).toContain('data-act="reviewinstall"');
+    expect(html()).toContain('data-act="bzgithub"');
+    expect(html()).toContain('data-act="reviewmarket"');
+    expect(html()).toContain('data-act="reviewgithub"');
   });
 
   it('bz 卡在 bz 组里、review 卡在 bz review 组里', () => {
     const src = pluginHtml('missing', 'missing');
     const bz = groupOf(src, 'bz');
     const review = groupOf(src, 'bz review');
-    expect(bz).toContain('data-act="bzinstall"');
-    expect(review).toContain('data-act="reviewinstall"');
+    expect(bz).toContain('data-act="bzgithub"');
+    expect(review).toContain('data-act="reviewmarket"');
+    expect(review).toContain('data-act="reviewgithub"');
   });
 
   /* 2026-11-22：没装 bz 时功能卡留在原位、灰着，整卡可点——点了滚回本组

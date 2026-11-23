@@ -45,12 +45,11 @@ import { toggleAll, togglePick } from './note-select';
 import { togglePicked } from './note-picker';
 import { addMarkToReview, addSelectionToReview, openBookReviewAdd } from './review-add';
 import { openReviewSettings } from './review-settings';
-import { findReviewApi, markCardKey, reviewEmbedReady } from '../data/review-bridge';
-import { enableInstalledReview, installReview, type ReviewInstallError } from '../data/review-install';
-import { enableInstalledBz, installBz } from '../data/bz-install';
-import type { PluginInstallError } from '../data/plugin-install';
+import { REVIEW_PLUGIN_ID, findReviewApi, markCardKey, reviewEmbedReady } from '../data/review-bridge';
+import { enableInstalledPlugin } from '../data/plugin-enable';
 import { markReviewPlanned } from './review-marks';
-import { notify, notifyProgress } from '../core/notice';
+import { openPluginMarket, watchPluginAppear } from '../core/plugin-market';
+import { notify } from '../core/notice';
 import { synthesizeFor, ttsEngineReady, ttsVoiceFor, type TtsRoute } from '../core/tts-engine';
 import { ttsDeployPrompt } from '../core/tts-deploy-prompt';
 import { pdfOcrDeployPrompt } from '../core/pdf-ocr-deploy-prompt';
@@ -149,7 +148,7 @@ import { aiPromptLabels } from './ai-labels';
 import { CARD_MORE_STEP } from './search-hits';
 import { kickBodySearch, refreshBodyHits, resetBodySearch, stopBodySearch } from './search-run';
 import { currentSearchSurface, kickSemanticSearch, resetSemanticSearch } from './search-semantic';
-import { bzClipbookUsed, bzEmbedder, bzNotesReady, openBzClipbook, openBzPreview, probeBz, openBzEntry, type BzEntryKind, type BzEmbedder } from '../data/bz-bridge';
+import { BZ_PLUGIN_ID, bzClipbookUsed, bzEmbedder, bzNotesReady, openBzClipbook, openBzPreview, probeBz, openBzEntry, type BzEntryKind, type BzEmbedder } from '../data/bz-bridge';
 import { isMobileEnv, isMobileShell } from '../core/mobile';
 import { SHELF_TAP_ATTR, SHELF_TAP_BOOK_ATTR, bindShelfTap } from './shelf-tap';
 import { AI_CHAT_TUTORIAL_URL, AI_TUTORIAL_URL, BZ_DOWNLOAD_MIRROR, BZ_DOWNLOAD_URL, BZ_INSTALL_TUTORIAL_URL, CLIP_TUTORIAL_URL, PDF_TUTORIAL_URL, REVIEW_DOWNLOAD_URL, REVIEW_DOWNLOAD_MIRROR, REVIEW_TUTORIAL_URL, TTS_TUTORIAL_URL, VIDEO_TUTORIAL_URL, openDownloadWithFallback } from '../core/links';
@@ -553,36 +552,6 @@ const SHELF_ERR_KEY: Record<string, MsgKey> = {
   reserved: 'shelves.err.reserved',
 };
 
-/** bz review 装不上时，把错误码翻成人话（网络 / 写盘 / 启用各一句） */
-const REVIEW_INSTALL_ERROR_KEY: Record<ReviewInstallError, MsgKey> = {
-  network: 'settings.plugin.review.fail.network',
-  write: 'settings.plugin.review.fail.write',
-  enable: 'settings.plugin.review.fail.enable',
-};
-
-/** bz 装不上时同一套人话（2026-11-22） */
-const BZ_INSTALL_ERROR_KEY: Record<PluginInstallError, MsgKey> = {
-  network: 'settings.plugin.fail.network',
-  write: 'settings.plugin.fail.write',
-  enable: 'settings.plugin.fail.enable',
-};
-
-/**
- * 一键安装按钮的「按下即锁」（2026-11-22）。
- *
- * 下载有几 MB、国内可能十几秒，连点会发两轮下载。按钮本身没有状态，
- * 就在原节点上禁用并把字换成「正在下载…」；完成或失败统一重绘恢复。
- * 拿不到真节点（测试桩 / 节点已随重绘消失）就跳过，不影响安装本身。
- */
-function lockInstallButton(el: HTMLElement, label: string): void {
-  try {
-    el.setAttribute('disabled', '');
-    el.textContent = label;
-  } catch {
-    /* 不是真的按钮：锁不住也不影响安装本身 */
-  }
-}
-
 /**
  * 菜单项标题：给「分类管理 / 新建分类…」挂一个触摸标记。
  *
@@ -606,6 +575,14 @@ function shelfTapTitle(text: string, kind: 'manage' | 'new', bookId?: string): D
 let unbindShelfTap: (() => void) | null = null;
 /** 手机上 touchend 刚开过弹层的时刻：宿主那次 click 若仍被派发，用它挡住重复打开 */
 let shelfOpenedAt = 0;
+
+/**
+ * 「去市场下载」之后等装完的那个监听（2026-11-23）。
+ *
+ * 用户是在宿主的市场模态里装的，装完关掉模态就回到设置页；卡片是点按钮时
+ * 画的，不会自己变。留着这一个句柄，重复点按钮先撤旧的，别叠出几条轮询。
+ */
+let reviewMarketWatch: (() => void) | null = null;
 
 /**
  * 书卡菜单「归入分类…」的下一层。
@@ -3801,32 +3778,18 @@ export function dispatchAction(
       notify(t('settings.bz.needInstall'), 'info');
       break;
     }
-    case 'bzinstall': {
-      /* 一键装 bz（2026-11-22）：与 bz Review 同一条路——后台下载三件套、
-         写插件目录、让宿主启用。下载几 MB，按钮先锁住防连点。
-         失败时打开下载页兜底（用户至少还有手动那条路）。 */
-      const src = getShellSource();
-      if (!src?.app) break;
-      lockInstallButton(el, t('settings.plugin.bz.installing'));
-      const progress = notifyProgress(t('settings.plugin.bz.installing'));
-      void installBz(src.app).then((res) => {
-        progress.hide();
-        if (res.ok) {
-          notify(t('settings.plugin.bz.installDone'));
-          rerender();
-          return;
-        }
-        notify(t('settings.plugin.bz.installFailed', { why: t(BZ_INSTALL_ERROR_KEY[res.error]) }), 'error');
-        rerender();
-        void openDownloadWithFallback(BZ_DOWNLOAD_URL, BZ_DOWNLOAD_MIRROR);
-      });
+    case 'bzgithub': {
+      /* 去 GitHub 下载 bz（2026-11-23）：本插件不再代下代装，只负责开门。
+         GitHub 主线路、码云备份由 openDownloadWithFallback 探测后选，国内
+         直连常失败，两条都摆给用户只会让人犹豫点哪颗。 */
+      void openDownloadWithFallback(BZ_DOWNLOAD_URL, BZ_DOWNLOAD_MIRROR);
       break;
     }
     case 'bzenable': {
-      /* 已经装好、只是没启用：不再下载，直接让宿主加载并写进启用名单 */
+      /* 已经装好、只是没启用：只让宿主加载并写进启用名单，不碰磁盘 */
       const src = getShellSource();
       if (!src?.app) break;
-      void enableInstalledBz(src.app).then((ok) => {
+      void enableInstalledPlugin(src.app, BZ_PLUGIN_ID).then((ok) => {
         if (ok) {
           notify(t('settings.plugin.bz.enabledDone'));
           rerender();
@@ -3881,32 +3844,26 @@ export function dispatchAction(
       target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       break;
     }
-    case 'reviewinstall': {
-      /* 一键安装（2026-11-21）：后台下载三件套 → 写插件目录 → 启用。
-         下载在国内可能十几秒，用常驻通知挂着，别让用户以为没点上。
-         失败时打开下载页兜底（用户至少还有手动那条路）。 */
+    case 'reviewmarket': {
+      /* 去市场下载 bz review（2026-11-23）：它在官方插件市场里，本插件只
+         负责把人送到搜索框，装与启用都归宿主。用户是在宿主的模态里装的，
+         装完关掉模态回到设置页——卡片不会自己变，所以挂一个便宜的轮询，
+         认到 bz-review 就重绘一次，两分钟没等到就放弃。 */
       const src = getShellSource();
       if (!src?.app) break;
-      lockInstallButton(el, t('settings.plugin.review.installing'));
-      const progress = notifyProgress(t('settings.plugin.review.installing'));
-      void installReview(src.app).then((res) => {
-        progress.hide();
-        if (res.ok) {
-          notify(t('settings.plugin.review.installDone'));
-          rerender();
-          return;
-        }
-        notify(t('settings.plugin.review.installFailed', { why: t(REVIEW_INSTALL_ERROR_KEY[res.error]) }), 'error');
+      openPluginMarket(src.app, 'bz review');
+      reviewMarketWatch?.();
+      reviewMarketWatch = watchPluginAppear(src.app, REVIEW_PLUGIN_ID, () => {
+        reviewMarketWatch = null;
         rerender();
-        void openDownloadWithFallback(REVIEW_DOWNLOAD_URL, REVIEW_DOWNLOAD_MIRROR);
       });
       break;
     }
     case 'reviewenable': {
-      /* 已经装好、只是没启用：不再下载，直接让宿主加载并写进启用名单 */
+      /* 已经装好、只是没启用：只让宿主加载并写进启用名单，不碰磁盘 */
       const src = getShellSource();
       if (!src?.app) break;
-      void enableInstalledReview(src.app).then((ok) => {
+      void enableInstalledPlugin(src.app, REVIEW_PLUGIN_ID).then((ok) => {
         if (ok) {
           notify(t('settings.plugin.review.enabledDone'));
           rerender();
@@ -3914,8 +3871,8 @@ export function dispatchAction(
       });
       break;
     }
-    case 'reviewdownload':
-      /* 手动兜底：打开 release 页，用户自己下三件套 */
+    case 'reviewgithub':
+      /* 市场里搜不到时的手动兜底：打开 release 页，用户自己下三件套 */
       void openDownloadWithFallback(REVIEW_DOWNLOAD_URL, REVIEW_DOWNLOAD_MIRROR);
       break;
     case 'ptpause':

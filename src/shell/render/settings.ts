@@ -1093,9 +1093,9 @@ export function viewSettings(v: SettingsView): string {
       </div>
     </div>`;
 
-  /* 「bz」组 = 状态卡（安装 / 启用 / 已启用）+ 两张功能卡。
+  /* 「bz」组 = 状态卡（下载 / 启用 / 已启用）+ 两张功能卡。
      功能卡在没装 bz 时灰着、整卡可点：点一下滚回本组顶部，那里就是
-     「安装」——不再把下载入口甩到另一个组里。 */
+     「去 GitHub 下载」——不再把下载入口甩到另一个组里。 */
   const bzBadge = bzOk
     ? chip(t('settings.plugin.bz.enabled'), true)
     : bzGrpState === 'disabled'
@@ -1111,7 +1111,7 @@ export function viewSettings(v: SettingsView): string {
     ? ''
     : bzGrpState === 'disabled'
       ? `<button class="bzs-btn sm pri" data-act="bzenable">${t('settings.plugin.bz.enable')}</button>`
-      : `<button class="bzs-btn sm pri" data-act="bzinstall">${t('settings.plugin.bz.install')}</button>`;
+      : `<button class="bzs-btn sm pri" data-act="bzgithub">${t('settings.plugin.bz.download')}</button>`;
   /* 装好之后把版本号摆出来：用户能一眼对上「我这是不是最新」。
      只在已启用时画——没装时没有版本号可报，装完重绘就有了。 */
   const bzVersionTag =
@@ -1141,11 +1141,14 @@ export function viewSettings(v: SettingsView): string {
       : reviewState === 'disabled'
         ? `<div class="bzs-capnote">${t('settings.plugin.review.disabledHint')}</div>`
         : '';
+  /* 未装时两颗：市场是主路（它在官方目录里），GitHub 留给市场里搜不到的人
+     （2026-11-23：本插件不再代下代装，见 AGENTS.md 的目录政策一节）。 */
   const reviewAction = reviewOk
     ? ''
     : reviewState === 'disabled'
       ? `<button class="bzs-btn sm pri" data-act="reviewenable">${t('settings.plugin.review.enable')}</button>`
-      : `<button class="bzs-btn sm pri" data-act="reviewinstall">${t('settings.plugin.review.install')}</button>`;
+      : `<button class="bzs-btn sm pri" data-act="reviewmarket">${t('settings.plugin.review.market')}</button>` +
+        `<button class="bzs-btn sm" data-act="reviewgithub">${t('settings.plugin.review.github')}</button>`;
   const reviewCard = `<div class="bzs-cap${reviewOk ? ' is-on' : ''}">
       <span class="bzs-capico${reviewOk ? '' : ' is-muted'}">${ico('listchecks')}</span>
       <div class="bzs-capmain">

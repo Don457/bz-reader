@@ -96,7 +96,7 @@ describe('设置页 bz 组 · 剪藏本', () => {
   it('没装 bz：组还在，功能卡灰着、可点回安装卡', () => {
     const out = html();
     const g = bzGroup(out);
-    expect(g).toContain('data-act="bzinstall"');
+    expect(g).toContain('data-act="bzgithub"');
     expect(g).toContain(CLIP_HINT);
     expect(g).not.toContain('data-k="clipBook"');
     expect((g.match(/data-act="bzjump"/g) ?? []).length).toBe(2);
@@ -144,12 +144,12 @@ describe('设置页 bz 组 · AI 知识盒', () => {
 describe('设置页 bz 组 · 没装 bz 时', () => {
   it('安装卡就在本组最上面，不用去别的组找', () => {
     const g = bzGroup(html());
-    expect(g).toContain('data-act="bzinstall"');
+    expect(g).toContain('data-act="bzgithub"');
     expect(g).toContain('未安装');
   });
 
   it('装了之后不再摆安装引导', () => {
-    expect(bzGroup(html(LINKED))).not.toContain('data-act="bzinstall"');
+    expect(bzGroup(html(LINKED))).not.toContain('data-act="bzgithub"');
   });
 
   /* 能力按门面探测判，不按版本号：老版本 bz 缺哪个接口就降级哪一项，
