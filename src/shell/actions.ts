@@ -89,7 +89,8 @@ import { userFacingActionIds, isMobileHiddenAction, type HeaderActionId } from '
 import { moveHeaderAction } from './header-order';
 import type { ReaderPrefs } from '../data/prefs';
 import { wikilinkOf, wikilinkOfMark } from '../data/wikilink';
-import { pdfLocatorPage } from '../engine/pdf/locator';
+import { aliasForCopy, isBuiltinTemplate, previewVars, renderExportItem } from '../data/link-template';
+import { isPdfLocator, pdfLocatorPage } from '../engine/pdf/locator';
 import { buildNotesBody, ensureDir, exportBookNotes, safeName } from '../data/export';
 import {
   aiSessionById,
@@ -2357,7 +2358,15 @@ export function dispatchAction(
         notify(t('notice.mark.notFound'), 'error');
         break;
       }
-      void copyText(wikilinkOfMark(b, h));
+      /* 别名模板（2026-11-23）：用户设了就当 display 传进去，只换链接的
+         显示文字，定位那一段仍由 wikilink 原样拼——点下去照旧跳回原文。
+         模板为空返回空串，wikilink 就用摘录原文，升级前后逐字一致。 */
+      const aliasTpl = shellSettings().aliasTemplate;
+      const page = h.cfiRange && isPdfLocator(h.cfiRange) ? pdfLocatorPage(h.cfiRange) ?? undefined : undefined;
+      const display = aliasForCopy(aliasTpl, b, {
+        chapter: h.chapterTitle || '', quote: h.text, createdAt: h.createdAt, page,
+      });
+      void copyText(wikilinkOfMark(b, h, { display }));
       /* 与「复制」同一条规矩：拿到东西就把浮层收掉 */
       closeOverlay();
       break;
@@ -2562,6 +2571,33 @@ export function dispatchAction(
          （auto → en，而宿主本来就是英文时 setLocale 返回 false）。 */
       repaint();
       if (changed) notify(t('notice.language.changed'));
+      break;
+    }
+    /**
+     * 双链导出模板：选内置档 / 自定义。写 settings + 重绘——模板一换，
+     * 自定义框的显隐和下面的预览都要跟着变。渲染层按 tplId 读同一份设置。
+     */
+    case 'setlinktpl': {
+      const src = getShellSource();
+      if (!src || !isBuiltinTemplate(d.v)) break;
+      src.setSettings({ exportTemplate: d.v });
+      repaint();
+      break;
+    }
+    /**
+     * 变量按钮：把 `{书名}` 这类占位符插到目标输入框的光标处。
+     * 纯 DOM 操作，不落盘——真正的值在输入框 change 时由 dispatchInput 收口。
+     */
+    case 'insertvar': {
+      const target = d.target ? document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        `[data-k="${d.target}"]`,
+      ) : null;
+      if (!target || !d.v) break;
+      const at = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? at;
+      target.value = target.value.slice(0, at) + d.v + target.value.slice(end);
+      target.focus();
+      target.selectionStart = target.selectionEnd = at + d.v.length;
       break;
     }
     case 'setocr': {
@@ -3376,6 +3412,12 @@ export function dispatchAction(
         break;
       }
       autoMarkSelection('selbilink');
+      /* 与「复制划线」同一套别名模板；没设就是空串，wikilink 仍用摘录原文。 */
+      const aliasTpl = shellSettings().aliasTemplate;
+      const page = sel.cfiRange && isPdfLocator(sel.cfiRange) ? pdfLocatorPage(sel.cfiRange) ?? undefined : undefined;
+      const display = aliasForCopy(aliasTpl, book, {
+        chapter: sel.chapterTitle || '', quote: sel.text, createdAt: 0, page,
+      });
       void copyText(
         wikilinkOf(book, {
           text: sel.text,
@@ -3383,6 +3425,7 @@ export function dispatchAction(
           chapterTitle: sel.chapterTitle,
           pdfSelection: sel.pdfSelection,
           pdfRect: sel.pdfRect,
+          display,
         }),
       );
       finishSelection('selbilink');
@@ -5350,6 +5393,13 @@ async function archiveAiFloat(): Promise<void> {
 
 /* ─────────── 输入与快捷键 ─────────── */
 
+/** 自定义模板输入时局部刷新预览，不重绘整页（否则光标/软键盘会被打断） */
+function updateLinkTplPreview(template: string): void {
+  const box = document.querySelector<HTMLElement>('[data-linktpl-preview]');
+  if (!box) return;
+  box.textContent = renderExportItem(template, previewVars());
+}
+
 export function dispatchInput(
   target: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
   ev?: Event,
@@ -5410,12 +5460,31 @@ export function dispatchInput(
     return;
   }
   if (role === 'setting' && k) {
-    const src = getShellSource();
-    if (!src) return;
     /* 输入期间（input）一个字节都不落盘：以前每敲一个字就 setSettings，
        移动端软键盘会在同步 IO 的间隙收起，表现成「打一个字就失焦」。
-       松手（change）或输入法上屏（compositionend）才收口。 */
-    if (dragging) return;
+       松手（change）或输入法上屏（compositionend）才收口。
+       必须放在所有 setSettings 分支之前——否则双链模板输入框逐字落盘，
+       软键盘照样收起、光标照样跳走。 */
+    if (dragging) {
+      /* 双链模板：输入途中只更新预览（不落盘、不重绘），落盘留到 change。 */
+      if (k === 'exportTemplateCustom') updateLinkTplPreview(value);
+      return;
+    }
+    const src = getShellSource();
+    if (!src) return;
+    /* 双链模板：自定义正文 / 别名，松手才落盘（normalize 会压平别名换行）。 */
+    if (k === 'exportTemplateCustom' || k === 'aliasTemplate') {
+      if (k === 'exportTemplateCustom') {
+        if (value === String(shellSettings().exportTemplateCustom ?? '')) return;
+        src.setSettings({ exportTemplateCustom: value });
+        updateLinkTplPreview(value);
+      } else {
+        const flat = value.replace(/\s*\n\s*/g, ' ').trim();
+        if (flat === String(shellSettings().aliasTemplate ?? '')) return;
+        src.setSettings({ aliasTemplate: flat });
+      }
+      return;
+    }
     /* AI 组（注册表移植后）：custom 的旧三件套 + 各家按 id 分表的覆盖值。
        切服务商 / 协议会改变这一组显示哪些行，落盘后要重绘。 */
     if (k.startsWith('ai.')) {

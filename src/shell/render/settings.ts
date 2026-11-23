@@ -33,6 +33,13 @@ import { ttsEngineReady, type TtsEngine } from '../../core/tts-engine';
 import { HIGHLIGHT_COLORS, colorLabel } from '../../data/notes';
 import { DEFAULT_SETTINGS, ocrEngineChoices, type ReaderSettings } from '../../data/settings';
 import {
+  ALIAS_PLACEHOLDERS,
+  PLACEHOLDERS,
+  builtinTemplate,
+  previewVars,
+  renderExportItem,
+} from '../../data/link-template';
+import {
   AI_PROVIDER_REGISTRY,
   DEFAULT_AI_PROVIDER,
   getProviderDescriptor,
@@ -428,6 +435,41 @@ export function viewSettings(v: SettingsView): string {
      任何控件，讲的双链能力在复制书摘时本来就有，2026-11-05 整行去掉。
      笔色五档走 bzs-seg-wrap：与语言、强调色同一套格子下限，窄窗不会叠字。
      2026-11-17：说明行去掉（用户定稿），色点本身就是「上次用的那个」。 */
+  /* 双链模板（2026-11-23）：四个 chip 选模板，自定义框可多行 + 变量按钮，
+     下面一块是「导出后长什么样」的预览（固定示例数据，不随时间变）。 */
+  const tplId = s.exportTemplate ?? 'simple';
+  const tplText = tplId === 'custom' ? s.exportTemplateCustom : builtinTemplate(tplId);
+  const previewText = renderExportItem(tplText, previewVars());
+  const tplChip = (id: string, label: string) =>
+    `<button class="${tplId === id ? 'on' : ''}" data-act="setlinktpl" data-v="${id}">${label}</button>`;
+  const tplBlock = `
+    <div class="bzs-setrow is-stack"><label>${t('settings.linkTpl')}</label>
+      <div class="hint">${t('settings.linkTpl.hint')}</div>
+      <div class="bzs-seg bzs-seg-wrap">
+        ${tplChip('simple', t('settings.linkTpl.simple'))}
+        ${tplChip('quote', t('settings.linkTpl.quote'))}
+        ${tplChip('detail', t('settings.linkTpl.detail'))}
+        ${tplChip('custom', t('settings.linkTpl.custom'))}
+      </div>
+    </div>
+    <div class="bzs-setrow is-stack" data-linktpl-custom${tplId === 'custom' ? '' : ' hidden'}>
+      <textarea class="bzs-tpl-custom" data-role="setting" data-k="exportTemplateCustom" rows="4" placeholder="${t('settings.linkTpl.custom.ph')}">${esc(s.exportTemplateCustom)}</textarea>
+      <div class="hint">${t('settings.linkTpl.vars')}</div>
+      <div class="bzs-tpl-vars">${PLACEHOLDERS.map(
+        (p) => `<button type="button" data-act="insertvar" data-target="exportTemplateCustom" data-v="${p}">${p}</button>`,
+      ).join('')}</div>
+    </div>
+    <div class="bzs-setrow is-stack"><label>${t('settings.linkTpl.preview')}</label>
+      <pre class="bzs-tpl-preview" data-linktpl-preview>${esc(previewText)}</pre>
+    </div>
+    <div class="bzs-setrow is-stack"><label>${t('settings.aliasTpl')}</label>
+      <div class="hint">${t('settings.aliasTpl.hint')}</div>
+      <input class="bzs-alias-tpl" type="text" data-role="setting" data-k="aliasTemplate" placeholder="${t('settings.aliasTpl.ph')}" value="${esc(s.aliasTemplate)}">
+      <div class="bzs-tpl-vars">${ALIAS_PLACEHOLDERS.map(
+        (p) => `<button type="button" data-act="insertvar" data-target="aliasTemplate" data-v="${p}">${p}</button>`,
+      ).join('')}</div>
+    </div>`;
+
   const marksGrp = grp(
     'marks',
     t('settings.grp.marks'),
@@ -439,7 +481,8 @@ export function viewSettings(v: SettingsView): string {
         <button class="bzs-pickdir" data-act="pickexportdir"><span class="bzs-sr-only">${t('settings.pickFromList')}</span>
           <span>${esc(s.exportDir)}/</span>${ico('folder') || ''}<i>${t('settings.pick')}</i>
         </button></div>
-      ${toggle('exportComments', s.exportComments, t('settings.exportComments'))}`,
+      ${toggle('exportComments', s.exportComments, t('settings.exportComments'))}
+      ${tplBlock}`,
   );
 
   /* 数据组分三块：目录 / 备份与恢复 / 排查。

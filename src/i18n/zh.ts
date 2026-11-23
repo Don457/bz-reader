@@ -1094,6 +1094,20 @@ export const ZH = {
   'settings.pick': '选择…',
   'settings.exportComments': '导出时带上想法',
 
+  /* ── 设置页：双链模板（2026-11-23） ─────────────────────── */
+  'settings.linkTpl': '双链导出模板',
+  'settings.linkTpl.hint': '整本导出每条摘录的格式；复制划线另用下面的别名模板。',
+  'settings.linkTpl.simple': '简洁',
+  'settings.linkTpl.quote': 'callout 引文',
+  'settings.linkTpl.detail': 'callout 详细',
+  'settings.linkTpl.custom': '自定义',
+  'settings.linkTpl.custom.ph': '用占位符拼模板，支持多行与 Obsidian callout',
+  'settings.linkTpl.vars': '点一下插入变量：',
+  'settings.linkTpl.preview': '效果预览：',
+  'settings.aliasTpl': '复制划线的别名',
+  'settings.aliasTpl.hint': '单条复制双链时的显示文字；留空则用摘录原文。',
+  'settings.aliasTpl.ph': '例：《{书名}》· {章节} · {时间}',
+
   /* ── 设置页：AI ──────────────────────────────────────────── */
   'settings.ai.baseUrl': '接口地址',
   'settings.ai.baseUrl.ph': '填写接口地址，以 https:// 开头',

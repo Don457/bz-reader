@@ -127,3 +127,29 @@ describe('扫描页识别设置', () => {
     expect(normalizeSettings({ pdfOcr: { engine: 'vision' } }).pdfOcr.engine).toBe('deepseek');
   });
 });
+
+/** 双链模板设置：老数据没有这三个字段 → 全部退回默认（导出格式不变） */
+describe('双链模板设置', () => {
+  it('老数据缺省 → 简洁模板 + 空自定义，导出格式与升级前一致', () => {
+    const s = normalizeSettings({});
+    expect(s.exportTemplate).toBe('simple');
+    expect(s.exportTemplateCustom).toBe('');
+    expect(s.aliasTemplate).toBe('');
+  });
+
+  it('导出模板只认四个 id，写坏了退回 simple', () => {
+    expect(normalizeSettings({ exportTemplate: 'quote' }).exportTemplate).toBe('quote');
+    expect(normalizeSettings({ exportTemplate: 'detail' }).exportTemplate).toBe('detail');
+    expect(normalizeSettings({ exportTemplate: 'custom' }).exportTemplate).toBe('custom');
+    expect(normalizeSettings({ exportTemplate: '乱写' }).exportTemplate).toBe('simple');
+  });
+
+  it('自定义模板保留原文（含换行），仅去掉首尾空白', () => {
+    const tpl = '\n> [!note] {书名}\n> {双链}\n  ';
+    expect(normalizeSettings({ exportTemplateCustom: tpl }).exportTemplateCustom).toBe('> [!note] {书名}\n> {双链}');
+  });
+
+  it('别名模板是单行，压平换行', () => {
+    expect(normalizeSettings({ aliasTemplate: '《{书名}》\n· {章节}' }).aliasTemplate).toBe('《{书名}》 · {章节}');
+  });
+});

@@ -1121,7 +1121,21 @@ describe('设置页 · 2026-11-17 重排', () => {
 
   it('语言与强调色这两行标签独占一行（9 档 / 8 档）', () => {
     const src = out();
-    expect((src.match(/class="bzs-setrow is-stack"/g) ?? []).length).toBe(2);
+    /* 2026-11-23 +4：双链模板的四行（选模板 / 自定义框 / 预览 / 别名）
+       也走 is-stack 整宽排——计数从 2 抬到 6，原来的语言与强调色两行仍在。 */
+    expect((src.match(/class="bzs-setrow is-stack"/g) ?? []).length).toBe(6);
+  });
+
+  it('标注组里有双链模板 UI：四个模板档 + 变量按钮 + 预览 + 别名输入', () => {
+    const src = out();
+    expect(src).toContain('data-act="setlinktpl" data-v="simple"');
+    expect(src).toContain('data-act="setlinktpl" data-v="quote"');
+    expect(src).toContain('data-act="setlinktpl" data-v="detail"');
+    expect(src).toContain('data-act="setlinktpl" data-v="custom"');
+    expect(src).toContain('data-linktpl-preview');
+    expect(src).toContain('data-role="setting" data-k="exportTemplateCustom"');
+    expect(src).toContain('data-role="setting" data-k="aliasTemplate"');
+    expect(src).toContain('data-act="insertvar"');
   });
 });
 

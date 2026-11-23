@@ -2136,6 +2136,72 @@
   flex: 1 1 100%;
 }
 
+/* ── 双链模板（2026-11-23）─────────────────────────────────
+   chip 选模板沿用 .bzs-seg；自定义框、变量按钮、预览、别名输入都收在
+   is-stack 行里整宽排。预览用 <pre> 展示导出后的真实 Markdown 文本。 */
+.bzs-setrow[data-linktpl-custom][hidden] {
+  display: none;
+}
+.bzs-tpl-custom {
+  width: 100%;
+  min-height: 76px;
+  flex: 1 1 100%;
+  font-family: var(--font-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11.5px;
+  line-height: 1.6;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--t1);
+}
+.bzs-tpl-vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex: 1 1 100%;
+}
+.bzs-tpl-vars button {
+  font-family: var(--font-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border: 1px solid var(--copper-line);
+  border-radius: 5px;
+  color: var(--copper);
+  background: var(--copper-soft);
+  cursor: pointer;
+}
+.bzs-tpl-vars button:hover {
+  background: var(--copper);
+  color: var(--bg);
+}
+.bzs-tpl-preview {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 10px 12px;
+  min-height: 40px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--t1);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.bzs-alias-tpl {
+  flex: 1 1 100%;
+  font-family: var(--font-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11.5px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--t1);
+}
+
 .bzs-setrow input[type="range"] {
   flex: 1;
   accent-color: var(--copper);

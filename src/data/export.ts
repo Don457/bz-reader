@@ -27,6 +27,8 @@ import type { ReaderSettings } from './settings';
 import { bookmarksOf, highlightsOf } from './notes';
 import { kbLinkMarkdown } from './kb-link';
 import { wikilinkOf, wikilinkTo } from './wikilink';
+import { builtinTemplate, renderExportItem, templateVarsOf } from './link-template';
+import { isPdfLocator, pdfLocatorPage } from '../engine/pdf/locator';
 import { t } from '../i18n';
 
 /** 导出文件第一行。再次导出靠它判断「这份是不是我们写的」 */
@@ -190,6 +192,11 @@ function ideaLine(comment: string): string {
  * 出去，排版和双链都得一模一样。
  */
 export function buildNotesBody(book: ReaderBook, settings: ReaderSettings): string {
+  /* 模板只算一次：custom 读用户字符串，其余读内置。默认 simple 保持老路径
+     （无 createdAt 时不写时间行），老用户升级后导出一个字节都不变。 */
+  const tplId = settings.exportTemplate ?? 'simple';
+  const tplText = tplId === 'custom' ? settings.exportTemplateCustom : builtinTemplate(tplId);
+  const useTemplate = tplId !== 'simple';
   const highlights = highlightsOf(book);
   const bookmarks = bookmarksOf(book);
   const percent = Math.round((book.reading.position.percent || 0) * 100);
@@ -248,11 +255,25 @@ export function buildNotesBody(book: ReaderBook, settings: ReaderSettings): stri
         chapterTitle: g.title,
         color: it.color,
       });
-      lines.push(`> ${link || it.text}`);
-      /* 划线创建时间（2026-11-18）：数据里本来就有 createdAt，以前只拿来
-         给同章排序。写进导出，换库后仍知道这条是哪天划的。 */
-      if (it.createdAt) {
-        lines.push(`> ↳ ${stamp(it.createdAt)}`);
+      if (useTemplate) {
+        /* 新模板：把这一条的全部变量交给纯函数渲染，PDF 有页码就带上，
+           EPUB 没有页码就退回章节名（见 templateVarsOf，不编假页码）。 */
+        const page = it.cfi && isPdfLocator(it.cfi) ? pdfLocatorPage(it.cfi) ?? undefined : undefined;
+        const vars = templateVarsOf({
+          book,
+          chapter: g.title,
+          quote: it.text,
+          link: link || it.text,
+          createdAt: it.createdAt,
+          page,
+        });
+        lines.push(renderExportItem(tplText, vars));
+      } else {
+        /* 默认路径原样保留：摘录双链一行 + 有时间才写时间行。 */
+        lines.push(`> ${link || it.text}`);
+        if (it.createdAt) {
+          lines.push(`> ↳ ${stamp(it.createdAt)}`);
+        }
       }
       if (settings.exportComments && it.comment) {
         lines.push('');

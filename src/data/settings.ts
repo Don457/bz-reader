@@ -22,6 +22,7 @@
  * ============================================================ */
 
 import { isLocale, type LanguagePref } from '../i18n';
+import { isBuiltinTemplate, type ExportTemplateId } from './link-template';
 import { normalizeFormat } from '../core/tts-local';
 import type { LocalTtsSettings, OnlineTtsSettings } from '../core/tts-engine';
 import { normalizeTtsResume, type TtsResumePoint } from '../core/tts-resume';
@@ -91,6 +92,16 @@ export interface ReaderSettings {
   exportDir: string;
   /** 导出时带上想法 */
   exportComments: boolean;
+  /**
+   * 双链模板（2026-11-23）。
+   *   exportTemplate：整本导出用的模板 id；custom 读 exportTemplateCustom。
+   *   exportTemplateCustom：用户自定义模板正文，可多行、可用 callout 与占位符。
+   *   aliasTemplate：单条复制划线时双链的显示文字模板，单行；空 = 摘录原文。
+   * 三者都是设备本地偏好，跟语言一样不跟库走。
+   */
+  exportTemplate: ExportTemplateId;
+  exportTemplateCustom: string;
+  aliasTemplate: string;
   /** 本地文件导入时写进哪个文件夹（vault 相对路径，默认 `bz-reader/books`；'/' = 库根目录） */
   importDir: string;
   /**
@@ -235,6 +246,9 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
      `notes` 是唯一要被用户当笔记编辑的：导出后它就归用户的笔记系统管了。 */
   exportDir: 'bz-reader/notes',
   exportComments: true,
+  exportTemplate: 'simple',
+  exportTemplateCustom: '',
+  aliasTemplate: '',
   importDir: 'bz-reader/books',
   language: 'auto',
   ai: {
@@ -484,6 +498,9 @@ export function normalizeSettings(raw: unknown): ReaderSettings {
   return {
     exportDir: cleanDir(str(s.exportDir, DEFAULT_SETTINGS.exportDir)),
     exportComments: s.exportComments !== false,
+    exportTemplate: isBuiltinTemplate(s.exportTemplate) ? s.exportTemplate : DEFAULT_SETTINGS.exportTemplate,
+    exportTemplateCustom: str(s.exportTemplateCustom, '').trim(),
+    aliasTemplate: str(s.aliasTemplate, '').replace(/\s*\n\s*/g, ' ').trim(),
     importDir: cleanDir(str(s.importDir, DEFAULT_SETTINGS.importDir), DEFAULT_SETTINGS.importDir),
     /* 只认八种语言 + auto：手改坏的 JSON、旧版本没有这个字段、写了别的语言，
        都退回 auto——宁可跟随宿主，也不要钉死一个用户没选过的语言。 */
