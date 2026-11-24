@@ -21,6 +21,7 @@
  * ============================================================ */
 import {
   buildScreens,
+  continuousCellSize,
   cropInsets,
   detectPanels,
   effectiveFit,
@@ -324,7 +325,8 @@ export class MangaView {
     this.film.classList.remove('is-paged');
     this.film.classList.toggle('is-row', flow === 'horizontal');
     this.film.classList.toggle('is-column', flow !== 'horizontal');
-    /* 连续模式不缩放：把上一页留下的 transform 清掉，否则整块被缩到看不见 */
+    /* 连续模式靠 cell 的真实布局尺寸缩放，film 不挂 transform：
+       挂了会把整条滚动内容一起缩放，滚动位置和内容尺寸全乱 */
     this.film.style.transform = '';
     const list = flow === 'webtoon'
       ? [{
@@ -483,21 +485,18 @@ export class MangaView {
     this.applyTransform(vw, vh, vw, maxH);
   }
 
-  private layoutContinuous(flow: string, vw: number, vh: number): void {
+  private layoutContinuous(
+    flow: 'vertical' | 'horizontal' | 'webtoon', vw: number, vh: number,
+  ): void {
     for (const cell of this.screenCells) {
       const d = this.dimsOf(cell.page);
-      if (flow === 'horizontal') {
-        const h = vh;
-        const w = d.h > 0 ? (d.w / d.h) * h : vw;
-        cell.wrap.style.width = `${w}px`;
-        cell.wrap.style.height = `${h}px`;
-      } else {
-        /* 连续向下 / 条漫长图：按视口宽度铺，高度按图片比例 */
-        const w = vw;
-        const h = d.w > 0 ? (d.h / d.w) * w : vh;
-        cell.wrap.style.width = `${w}px`;
-        cell.wrap.style.height = `${h}px`;
-      }
+      /* 适配档位和缩放倍数都要落到真实布局尺寸上，stage 的滚动条才会跟着变；
+         smart 默认按滚动主轴铺，zoom=1 的手感和修复前一致 */
+      const size = continuousCellSize(
+        this.prefs.fit, d.w, d.h, vw, vh, flow, this.prefs.zoom,
+      );
+      cell.wrap.style.width = `${size.w}px`;
+      cell.wrap.style.height = `${size.h}px`;
       cell.img.style.width = '100%';
       cell.img.style.height = '100%';
       cell.img.style.maxWidth = 'none';
@@ -592,7 +591,11 @@ export class MangaView {
   /* ─────────────── 缩放与平移 ─────────────── */
 
   private applyZoom(): void {
-    if (this.prefs.flow !== 'paged') return;
+    if (this.prefs.flow !== 'paged') {
+      /* 连续模式不用 film transform：重排 cell 尺寸，让滚动范围一起变 */
+      this.layout();
+      return;
+    }
     const vw = Math.max(1, this.stage.clientWidth);
     const vh = Math.max(1, this.stage.clientHeight);
     let contentW = 0;
@@ -1045,15 +1048,25 @@ export class MangaView {
     });
     this.stage.addEventListener('dblclick', () => this.zoomBy(ZOOM_STEP));
     this.stage.addEventListener('wheel', (ev) => {
-      /* Ctrl/⌘ + 滚轮仍是放大看图：拦掉默认行为，别把整个界面缩放。 */
+      /* Ctrl/⌘ + 滚轮统一放大看图（含连续排版）：拦掉默认行为，别把整个界面缩放。 */
       if (ev.ctrlKey || ev.metaKey) {
-        if (this.prefs.flow !== 'paged') return;
         ev.preventDefault();
         this.zoomBy(ev.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
         return;
       }
-      /* 连续 / 条漫档交给浏览器自然滚动，手机上本来就没有鼠标滚轮。
-         一屏一页档则滚轮翻页：和普通书一样按阈值翻，方向向下为下一页。 */
+      /* 横向排版的内容沿 x 轴铺，鼠标滚轮却只给 y 方向；而它的
+         overflow-y 是 hidden，浏览器自然滚动根本帮不上——必须转成 scrollLeft。
+         触控板横滑的 deltaX 也一并接住。 */
+      if (this.prefs.flow === 'horizontal') {
+        const d = Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
+        if (d) {
+          ev.preventDefault();
+          this.stage.scrollLeft += d;
+        }
+        return;
+      }
+      /* 连续向下 / 条漫长图交给浏览器自然滚动（overflow-y: auto）。
+         一屏一页档才走滚轮翻页：和普通书同手感，攒够阈值翻一屏。 */
       if (this.prefs.flow !== 'paged' || this.input.mobile) return;
       const main = wheelPixels(ev.deltaY, ev.deltaX, ev.deltaMode);
       if (!main) return;
@@ -1093,10 +1106,13 @@ export class MangaView {
         const boxes = this.film.querySelectorAll('.bzr-manga-screen');
         if (boxes.length) {
           const r = this.stage.getBoundingClientRect();
+          const horizontal = this.prefs.flow === 'horizontal';
           let best = 0;
           let min = Infinity;
           boxes.forEach((box, i) => {
-            const d = Math.abs(box.getBoundingClientRect().top - r.top);
+            const b = box.getBoundingClientRect();
+            /* 横向排版所有屏的 top 都一样，只比 top 会让进度永远停在第一屏 */
+            const d = horizontal ? Math.abs(b.left - r.left) : Math.abs(b.top - r.top);
             if (d < min) { min = d; best = i; }
           });
           if (best !== this.screen) { this.screen = best; this.emitRelocate(); }

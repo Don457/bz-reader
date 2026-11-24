@@ -10,6 +10,7 @@ import { resolveDirection } from '../src/engine/manga/settings';
 import {
   buildScreens,
   clampPan,
+  continuousCellSize,
   cropInsets,
   detectBands,
   detectPanels,
@@ -264,5 +265,54 @@ describe('长条图与方向优先级（2026-11-22 真机回归）', () => {
     /* 用户把方向定成右到左：文件写左到左也不改 */
     expect(resolveDirection('rtl', 'ltr')).toBe('rtl');
     expect(resolveDirection('ltr', 'rtl')).toBe('ltr');
+  });
+});
+
+describe('连续模式的适配与缩放（三种连续排版不再写死尺寸）', () => {
+  const vw = 1200;
+  const vh = 800;
+  const img = { w: 800, h: 1200 };
+
+  it('默认 smart：连续向下 / 条漫按宽度铺，连续横向按高度铺，zoom=1 与旧表现一致', () => {
+    const v = continuousCellSize('smart', img.w, img.h, vw, vh, 'vertical', 1);
+    expect(v.w).toBeCloseTo(vw, 4);
+    expect(v.h).toBeCloseTo(1800, 4);
+    const h = continuousCellSize('smart', img.w, img.h, vw, vh, 'horizontal', 1);
+    expect(h.h).toBeCloseTo(vh, 4);
+    expect(h.w).toBeCloseTo((img.w / img.h) * vh, 4);
+    const s = continuousCellSize('smart', img.w, img.h, vw, vh, 'webtoon', 1);
+    expect(s.w).toBeCloseTo(vw, 4);
+    expect(s.h).toBeCloseTo(1800, 4);
+  });
+
+  it('用户选的适配档位真的生效：screen 整张装进视口、original 原尺寸', () => {
+    const s = continuousCellSize('screen', img.w, img.h, vw, vh, 'vertical', 1);
+    expect(s.w).toBeCloseTo((img.w / img.h) * vh, 4);
+    expect(s.h).toBeCloseTo(vh, 4);
+    const o = continuousCellSize('original', img.w, img.h, vw, vh, 'vertical', 1);
+    expect(o).toEqual({ w: img.w, h: img.h });
+  });
+
+  it('缩放倍数真实改变布局尺寸：放大两倍、缩小一半', () => {
+    const big = continuousCellSize('smart', img.w, img.h, vw, vh, 'vertical', 2);
+    expect(big.w).toBeCloseTo(2400, 4);
+    expect(big.h).toBeCloseTo(3600, 4);
+    const small = continuousCellSize('smart', img.w, img.h, vw, vh, 'vertical', 0.5);
+    expect(small.w).toBeCloseTo(600, 4);
+    expect(small.h).toBeCloseTo(900, 4);
+  });
+
+  it('超长条图 smart 仍按宽度铺，不会被压成一条线', () => {
+    const s = continuousCellSize('smart', 700, 50000, vw, vh, 'webtoon', 1);
+    expect(s.w).toBeCloseTo(vw, 4);
+    expect(s.h).toBeCloseTo((50000 / 700) * vw, 2);
+  });
+
+  it('尺寸未知、缩放倍数坏掉时兜底，不产出 0 或 NaN', () => {
+    const z = continuousCellSize('smart', 0, 0, vw, vh, 'vertical', Number.NaN);
+    expect(Number.isFinite(z.w)).toBe(true);
+    expect(Number.isFinite(z.h)).toBe(true);
+    expect(z.w).toBeGreaterThan(0);
+    expect(z.h).toBeGreaterThan(0);
   });
 });

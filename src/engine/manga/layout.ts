@@ -343,6 +343,32 @@ export function effectiveFit(fit: MangaFit, imgW: number, imgH: number): MangaFi
   return imgW / imgH < 1 / 6 ? 'width' : fit;
 }
 
+/**
+ * 连续模式（连续向下 / 连续横向 / 条漫长图）里一张图的最终布局尺寸。
+ *
+ * 旧版直接把 cell 写成视口宽 / 视口高，适配档位和缩放倍数对它完全无效。
+ * 现在基准仍由 fit 决定，只是 smart 在连续模式下按「滚动主轴」铺：竖版按
+ * 宽度、横版按高度——zoom=1 的手感和以前一致（图沿主轴铺满），用户选了
+ * 别的档位就按档位算，最后再乘缩放倍数得到真实布局尺寸，滚动条跟着内容变。
+ */
+export function continuousCellSize(
+  fit: MangaFit,
+  imgW: number, imgH: number,
+  viewW: number, viewH: number,
+  flow: 'vertical' | 'horizontal' | 'webtoon',
+  zoom: number,
+): { w: number; h: number } {
+  const baseFit: MangaFit = fit === 'smart'
+    ? (flow === 'horizontal' ? 'height' : 'width')
+    : fit;
+  const base = fitScale(baseFit, imgW, imgH, viewW, viewH);
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return {
+    w: Math.max(1, imgW * base * z),
+    h: Math.max(1, imgH * base * z),
+  };
+}
+
 /** 放大后能拖动的边界：图片比视口小的时候不许拖出空白 */
 export function clampPan(
   x: number, y: number, scale: number,
