@@ -107,6 +107,7 @@ import {
   isClipAction,
   type HeaderActionId,
 } from './header-actions';
+import { attachHeaderTooltip } from './header-tooltip';
 import { planHeaderVisibility, roleOf } from './header-layout';
 import { pdfActionRun, type PanelAnchor } from './pdf-actions';
 import { faultHtml, loadingHtml, type FaultDiagLine } from './reader-fault';
@@ -1730,7 +1731,10 @@ export class ReaderView extends ItemView {
       const btn = createDiv();
       btn.className = 'clickable-icon view-action bzr-action';
       btn.dataset.bzrAction = item.id;
+      /* 读屏名字仍走视觉隐藏文本（2026-11-17 的禁悬停气泡规则）；气泡由唯一入口
+         单独挂，文案去键位、只覆盖白名单按钮，出现时机用 Obsidian 默认。 */
       btn.appendChild(Object.assign(createSpan(), { className: 'bzs-sr-only', textContent: item.label }));
+      attachHeaderTooltip(btn, item.id);
       btn.setAttribute('aria-label-position', 'top');
       setIcon(btn, item.icon);
       btn.addEventListener('click', (ev) => {

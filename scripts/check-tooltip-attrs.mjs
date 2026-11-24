@@ -10,22 +10,36 @@
  *   · el.setAttribute('aria-label'|'title', ...)
  *   · el.title = ... / el.setAttribute('title', ...)
  *   · .setTooltip(...)
+ *
+ * 2026-11-24 起唯一例外：src/view/header-tooltip.ts 是头栏图标气泡的合法入口，
+ * 只在该文件里放行 setTooltip（aria-label / title 仍照拦）。
+ * 放行按「文件 + 写法」两道判据，避免一处开口变成整仓免检。
  * 用法：node scripts/check-tooltip-attrs.mjs   （退出码 0=干净，1=有违规）
  * ============================================================ */
 import fs from 'node:fs';
 import path from 'node:path';
 
 const SRC = path.join(process.cwd(), 'src');
+/** 唯一允许调用 setTooltip 的文件（相对仓库根，正斜杠） */
+const SET_TOOLTIP_ALLOW = 'src/view/header-tooltip.ts';
 
-/** 给定源码文本，返回违规行号与命中片段。纯函数，供测试直接调用。 */
-export function findTooltipAttrs(code) {
+/**
+ * 给定源码文本，返回违规行号与命中片段。纯函数，供测试直接调用。
+ * @param code 源码文本
+ * @param file 相对仓库根的文件路径；仅 SET_TOOLTIP_ALLOW 会放行 setTooltip
+ */
+export function findTooltipAttrs(code, file = '') {
   const hits = [];
+  const normalized = String(file).replace(/\\/g, '/');
+  const allowSetTooltip = normalized === SET_TOOLTIP_ALLOW;
   const lines = code.split('\n');
   // DOM 元素变量命名习惯：以 el / btn / node / input / title 等结尾的接收者。
   // 为避免误伤 book.title / meta.title 等数据字段，只在明确的 DOM 写法上下手。
   const rules = [
     { re: /\bsetAttribute\(\s*['"](?:aria-label|title)['"]\s*,/, why: 'setAttribute tooltip attr' },
-    { re: /\.setTooltip\s*\(/, why: 'setTooltip' },
+    /* setTooltip 两种写法都拦：obsidian 全局函数 setTooltip(el, t) 与组件方法
+       btn.setTooltip(t)。放行文件里两种都放行。 */
+    { re: /(?<![\w])setTooltip\s*\(/, why: 'setTooltip', skip: allowSetTooltip },
     { re: /['"]aria-label['"]\s*:/, why: 'aria-label object key' },
     // 前面不是点号/连字符，且等号后紧跟引号：只认 HTML 属性写法，
     // 避免误伤 book.title = 'x' 和 data-title="..." 这类数据字段。
@@ -38,6 +52,7 @@ export function findTooltipAttrs(code) {
     const trimmed = line.trim();
     if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
     for (const r of rules) {
+      if (r.skip) continue;
       if (r.re.test(line)) hits.push({ line: idx + 1, why: r.why, text: trimmed });
     }
   });
@@ -55,14 +70,15 @@ function walk(dir, out = []) {
 
 const violations = [];
 for (const f of walk(SRC)) {
-  const hits = findTooltipAttrs(fs.readFileSync(f, 'utf8'));
-  for (const h of hits) violations.push({ file: path.relative(process.cwd(), f).replace(/\\/g, '/'), ...h });
+  const rel = path.relative(process.cwd(), f).replace(/\\/g, '/');
+  const hits = findTooltipAttrs(fs.readFileSync(f, 'utf8'), rel);
+  for (const h of hits) violations.push({ file: rel, ...h });
 }
 
 if (violations.length) {
   console.error(`发现 ${violations.length} 处悬停气泡属性（aria-label / title / setTooltip）：`);
   for (const v of violations) console.error(`  ${v.file}:${v.line}  [${v.why}]  ${v.text}`);
-  console.error('改用视觉隐藏文本（srText / .bzrv-sr-only），不要给 DOM 挂这些属性。');
+  console.error('气泡只有 src/view/header-tooltip.ts 一处合法入口；其余改用视觉隐藏文本（srText / .bzrv-sr-only）。');
   process.exit(1);
 }
-console.log('悬停气泡属性检查通过：src/ 下无 aria-label / title / setTooltip 的 DOM 写法。');
+console.log('悬停气泡属性检查通过：除 src/view/header-tooltip.ts 外，src/ 下无 aria-label / title / setTooltip 的 DOM 写法。');
