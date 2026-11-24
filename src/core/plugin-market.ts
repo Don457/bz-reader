@@ -154,7 +154,9 @@ export function watchPluginAppear(
   opts: WatchOptions = {},
 ): () => void {
   const intervalMs = opts.intervalMs ?? 800;
-  const timeoutMs = opts.timeoutMs ?? 120_000;
+  /* 30 秒：用户装完插件通常十几秒内就回到设置页；拖满两分钟只会在
+     他已经关掉页面之后继续空转 */
+  const timeoutMs = opts.timeoutMs ?? 30_000;
   const now = opts.now ?? Date.now;
   const started = now();
   let timer: number | null = null;

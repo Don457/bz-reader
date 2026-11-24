@@ -79,9 +79,12 @@ describe('组屏：单页 / 双页 / 封面单独 / 方向 / 错页校正', () =
       [0, 1], [2, 3], [4, 5],
     ]);
   });
-  it('条漫：全部页拼成一条，页间没有空隙', () => {
-    expect(buildScreens(pages(4), { ...OPT, webtoon: true })).toHaveLength(1);
-    expect(buildScreens(pages(4), { ...OPT, webtoon: true })[0].pages).toEqual([0, 1, 2, 3]);
+  it('条漫：一页一屏连续排，进度才能跟着滚动走', () => {
+    /* 2026-11-24：全卷拼成一整屏时当前页取自屏的首个原图序号，永远是第 1 页，
+       进度 / 书签 / 跳页全错。视觉上的「不留空隙」靠屏与屏没有间距，
+       不靠合成一个屏。 */
+    const s = buildScreens(pages(4), { ...OPT, webtoon: true });
+    expect(s.map((x) => x.pages)).toEqual([[0], [1], [2], [3]]);
   });
   it('宽图拆半：两半仍锚在同一张原图上，右到左时右半先读', () => {
     const wide: MangaPage[] = [

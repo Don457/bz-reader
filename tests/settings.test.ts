@@ -153,9 +153,11 @@ describe('双链模板设置', () => {
     expect(normalizeSettings({ copyTemplate: 'brief' }).copyTemplate).toBe('simple');
   });
 
-  it('自定义模板保留原文（含换行），仅去掉首尾空白', () => {
-    const tpl = '\n> [!note] {书名}\n> {双链}\n  ';
-    expect(normalizeSettings({ exportTemplateCustom: tpl }).exportTemplateCustom).toBe('> [!note] {书名}\n> {双链}');
+  /* 2026-11-24：不再 trim。嵌在列表项下的 callout 靠行首缩进成立，
+     首尾空行也是模板的一部分——吃掉一次，下次启动模板就悄悄变样。 */
+  it('自定义模板原样保留（含首尾空白与行首缩进）', () => {
+    const tpl = '\n  > [!note] {书名}\n  > {双链}\n  ';
+    expect(normalizeSettings({ exportTemplateCustom: tpl }).exportTemplateCustom).toBe(tpl);
     expect(normalizeSettings({ copyTemplateCustom: '《{书名}》\n· {章节}' }).copyTemplateCustom).toBe('《{书名}》\n· {章节}');
   });
 

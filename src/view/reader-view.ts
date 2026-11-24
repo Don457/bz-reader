@@ -1748,7 +1748,8 @@ export class ReaderView extends ItemView {
       /* 读屏名字仍走视觉隐藏文本（2026-11-17 的禁悬停气泡规则）；气泡由唯一入口
          单独挂，文案去键位、只覆盖白名单按钮，出现时机用 Obsidian 默认。 */
       btn.appendChild(Object.assign(createSpan(), { className: 'bzs-sr-only', textContent: item.label }));
-      attachHeaderTooltip(btn, item.id);
+      /* 手机上根本没有「悬停」：点一下按钮会先亮一下气泡，看着像多弹了层东西 */
+      if (!isMobileShell()) attachHeaderTooltip(btn, item.id);
       btn.setAttribute('aria-label-position', 'top');
       setIcon(btn, item.icon);
       btn.addEventListener('click', (ev) => {

@@ -114,14 +114,21 @@ export function giteeManifestUrl(json: string | null): string | null {
  * 只拉几百字节的清单。两条都不通返回 null——调用方**不许**把它当异常处理，
  * 离线用户不该看到任何提示。
  */
-export async function fetchLatestVersion(timeoutMs = FETCH_TIMEOUT_MS): Promise<string | null> {
+export async function fetchLatestVersion(
+  timeoutMs = FETCH_TIMEOUT_MS,
+  budgetMs = timeoutMs * 3,
+): Promise<string | null> {
+  /* 三个请求串行：不给总预算的话，「启动时等最新版」最坏要 12 秒才走完，
+     慢网 / 机场 WiFi 下首屏就一直白着。预算用完的请求给个下限，立刻失败。 */
+  const deadline = Date.now() + budgetMs;
+  const left = (): number => Math.max(300, deadline - Date.now());
   try {
-    const gh = versionFromManifest(await http(UPDATE_SOURCES.githubManifest, timeoutMs));
+    const gh = versionFromManifest(await http(UPDATE_SOURCES.githubManifest, Math.min(timeoutMs, left())));
     if (gh) return gh;
-    const release = await http(UPDATE_SOURCES.giteeApi, timeoutMs);
+    const release = await http(UPDATE_SOURCES.giteeApi, Math.min(timeoutMs, left()));
     const url = giteeManifestUrl(release);
     if (!url) return null;
-    return versionFromManifest(await http(url, timeoutMs));
+    return versionFromManifest(await http(url, Math.min(timeoutMs, left())));
   } catch {
     return null;
   }
@@ -207,7 +214,8 @@ export function ensureLatestVersion(now = Date.now()): Promise<string | null> {
     return Promise.resolve(state.latest);
   }
   latestInflight = (async () => {
-    const latest = await fetchLatestVersion();
+    /* 试过码的启动路径会 await 这一次：3 秒总预算，超时就按缓存 / 未知处理 */
+    const latest = await fetchLatestVersion(FETCH_TIMEOUT_MS, 3_000);
     if (!latest) return state.latest || null;
     writeUpdateState({ checkedAt: Date.now(), notified: state.notified, latest });
     return latest;

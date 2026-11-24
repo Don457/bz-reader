@@ -584,6 +584,12 @@ let shelfOpenedAt = 0;
  */
 let reviewMarketWatch: (() => void) | null = null;
 
+/** 插件卸载 / 视图关闭时撤掉轮询：两分钟的空转定时器不该留在进程里 */
+export function stopMarketWatch(): void {
+  reviewMarketWatch?.();
+  reviewMarketWatch = null;
+}
+
 /**
  * 书卡菜单「归入分类…」的下一层。
  *
@@ -2411,23 +2417,32 @@ export function dispatchAction(
         document.querySelector<HTMLInputElement>('[data-role="license"]');
       const code = (box?.value || '').trim();
       const src = getShellSource();
+      /* 一次激活要联网核对（停用名单最长 8 秒 + 最新版 3 秒），期间连点会
+         开出两轮请求、两次写码。按钮禁用兜住，无论成败都在 finally 放开。 */
+      const btn = el.closest<HTMLButtonElement>('button');
+      if (btn?.disabled) break;
+      if (btn) btn.disabled = true;
       void (async () => {
-        if (!src) return;
-        const res = await src.activate(code);
-        if (!res.ok) {
-          // 不重绘：重绘会把用户刚粘进去的那一长串码清掉，重来一遍很烦
-          notify(res.message, 'error');
-          return;
+        try {
+          if (!src) return;
+          const res = await src.activate(code);
+          if (!res.ok) {
+            // 不重绘：重绘会把用户刚粘进去的那一长串码清掉，重来一遍很烦
+            notify(res.message, 'error');
+            return;
+          }
+          notify(res.message);
+          /* 换码成功：退出「重新激活」态，授权组回到只读凭证 */
+          setState({ relicense: false });
+          /* 激活成功后强制重画一次弹层（P2-08）：`kind` / `mode` 都没变，
+             `overlayKey` 不变，弹层本来完全不动——用户只看到一条 toast，
+             界面上还是「未激活」。rev +1 让 key 变化，触发 sync()。 */
+          const o = getState().overlay;
+          if (o) setState({ overlay: { ...o, rev: (o.rev ?? 0) + 1 } });
+          else rerender();
+        } finally {
+          if (btn) btn.disabled = false;
         }
-        notify(res.message);
-        /* 换码成功：退出「重新激活」态，授权组回到只读凭证 */
-        setState({ relicense: false });
-        /* 激活成功后强制重画一次弹层（P2-08）：`kind` / `mode` 都没变，
-           `overlayKey` 不变，弹层本来完全不动——用户只看到一条 toast，
-           界面上还是「未激活」。rev +1 让 key 变化，触发 sync()。 */
-        const o = getState().overlay;
-        if (o) setState({ overlay: { ...o, rev: (o.rev ?? 0) + 1 } });
-        else rerender();
       })();
       break;
     }
@@ -2608,6 +2623,9 @@ export function dispatchAction(
       target.value = target.value.slice(0, at) + d.v + target.value.slice(end);
       target.focus();
       target.selectionStart = target.selectionEnd = at + d.v.length;
+      /* 程序改 value 不会触发 change：不补这一下，预览停在旧样子、
+         值也没落盘，离开设置页就白拼了。走统一收口，与用户手输同一条路径。 */
+      dispatchInput(target);
       break;
     }
     case 'setocr': {
@@ -3788,14 +3806,20 @@ export function dispatchAction(
       break;
     }
     case 'bzenable': {
-      /* 已经装好、只是没启用：只让宿主加载并写进启用名单，不碰磁盘 */
+      /* 已经装好、只是没启用：只让宿主加载并写进启用名单，不碰磁盘。
+         启用要重试 500ms 一轮，连点会并发两次、弹两条提示。 */
       const src = getShellSource();
       if (!src?.app) break;
+      const btn = el.closest<HTMLButtonElement>('button');
+      if (btn?.disabled) break;
+      if (btn) btn.disabled = true;
       void enableInstalledPlugin(src.app, BZ_PLUGIN_ID).then((ok) => {
         if (ok) {
           notify(t('settings.plugin.bz.enabledDone'));
           rerender();
         } else notify(t('settings.plugin.bz.enableFailed'), 'error');
+      }).finally(() => {
+        if (btn) btn.disabled = false;
       });
       break;
     }
@@ -3865,11 +3889,16 @@ export function dispatchAction(
       /* 已经装好、只是没启用：只让宿主加载并写进启用名单，不碰磁盘 */
       const src = getShellSource();
       if (!src?.app) break;
+      const btn = el.closest<HTMLButtonElement>('button');
+      if (btn?.disabled) break;
+      if (btn) btn.disabled = true;
       void enableInstalledPlugin(src.app, REVIEW_PLUGIN_ID).then((ok) => {
         if (ok) {
           notify(t('settings.plugin.review.enabledDone'));
           rerender();
         } else notify(t('settings.plugin.review.enableFailed'), 'error');
+      }).finally(() => {
+        if (btn) btn.disabled = false;
       });
       break;
     }

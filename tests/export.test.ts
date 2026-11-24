@@ -338,11 +338,15 @@ describe('导出模板接入', () => {
     expect(linksIn(md).filter((l) => l.parsed?.target.cfi?.startsWith('c'))).toHaveLength(3);
   });
 
-  it('callout 详细模板：位置进标题、时间写在末尾', () => {
+  /* 2026-11-24：EPUB 没有页码，位置退回章节名——标题里再写一遍就是
+     「第一章 · 第一章」；这些划线也没有时间，末尾那行不该留半截。
+     两处都只在有值时才写。 */
+  it('callout 详细模板：位置不重复、有时间才写时间行', () => {
     const { book } = bookWithNotes();
     const md = buildNotesBody(book, { ...DEFAULT_SETTINGS, exportTemplate: 'detail' });
-    expect(md).toContain('> [!note] 测试书 — 第一章 · 第一章');
-    expect(md).toContain('> 划线于 ');
+    expect(md).toContain('> [!note] 测试书 — 第一章');
+    expect(md).not.toContain('第一章 · 第一章');
+    expect(md).toContain('划线于 ');
   });
 
   it('自定义模板：用户字符串里的占位符被真实值替换，链接仍可解析', () => {

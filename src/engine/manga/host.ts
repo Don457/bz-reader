@@ -29,7 +29,12 @@ import {
   type MangaPrefs,
   type MangaViewState,
 } from './settings';
-import { parseMangaLocator, readingDirectionFromComicInfo, type MangaDirection } from './layout';
+import {
+  parseMangaLocator,
+  readingDirectionFromComicInfo,
+  sortPageNames,
+  type MangaDirection,
+} from './layout';
 import { MangaView, type MangaInput } from './view';
 import { NavHistory } from '../../core/nav-history';
 import { isMobileShell } from '../../core/mobile';
@@ -75,6 +80,8 @@ export class MangaEngineHost implements ReaderEngine {
   private view: MangaView | null = null;
   private opts: MountOptions | null = null;
   private mangaPrefs: MangaPrefs = DEFAULT_MANGA_PREFS;
+  /** 本里当前生效的那几项（用户调一次就更新）：设置页改全局时靠它保住 */
+  private viewState: MangaViewState = {};
   /** 传给视图的输入开关：同一个引用，设置面板改了立刻生效 */
   private readonly input: MangaInput = { mobile: isMobileShell(), desktopTurn: false };
   private direction: MangaDirection = 'rtl';
@@ -133,10 +140,10 @@ export class MangaEngineHost implements ReaderEngine {
     let comicDir: MangaDirection | null = null;
     if (isFolder) {
       const listed = await adapter.list(vaultPath);
-      const files = listed.files
+      /* 自然序：字典序会把 p10.jpg 排到 p2.jpg 前面，整卷从第二页起全错位 */
+      const files = sortPageNames(listed.files
         .filter((p) => isImageName(p))
-        .map((p) => p.split('/').pop() || p)
-        .sort();
+        .map((p) => p.split('/').pop() || p));
       if (!files.length) throw new Error('no images in comic folder');
       archive = new FolderArchive(this.app, vaultPath, files);
     } else {
@@ -154,6 +161,7 @@ export class MangaEngineHost implements ReaderEngine {
     this.comicDir = comicDir;
 
     const saved = normalizeMangaView(opts.mangaView);
+    this.viewState = saved;
     this.mangaPrefs = mangaSettingsOf(stored, saved);
     this.direction = resolveDirection(this.mangaPrefs.direction, comicDir);
 
@@ -194,6 +202,9 @@ export class MangaEngineHost implements ReaderEngine {
       },
       onViewState: (state) => {
         this.mangaPrefs = { ...this.mangaPrefs, ...state };
+        /* 本里的人调一次就记一次：设置页随后改全局偏好时，applyPrefs
+           要拿这份合并，而不是开书时的老快照 */
+        this.viewState = { ...this.viewState, ...state };
         opts.onMangaViewState?.(state);
       },
       onTurn: (dir) => { void this.turn(dir); },
@@ -262,7 +273,9 @@ export class MangaEngineHost implements ReaderEngine {
 
   applyPrefs(prefs: ReaderPrefs): void {
     const next = normalizeMangaPrefs(prefs.manga);
-    const merged = mangaSettingsOf(next, normalizeMangaView(this.opts?.mangaView));
+    /* 合并的是「本里当前生效的那几项」，不是开书时的快照：否则设置页
+       一改字号/常亮，这本单独调过的排版就被冲回开书时的样子 */
+    const merged = mangaSettingsOf(next, this.viewState);
     this.mangaPrefs = merged;
     /* 「点击翻页」是通用开关，不在漫画自己的偏好里；视图拿着同一个引用，
        这里一改，开着书切设置也立刻生效。 */
@@ -278,6 +291,7 @@ export class MangaEngineHost implements ReaderEngine {
   restoreMangaView(state: MangaViewState | null | undefined): void {
     if (!state) return;
     const saved = normalizeMangaView(state);
+    this.viewState = { ...this.viewState, ...saved };
     this.mangaPrefs = mangaSettingsOf(this.mangaPrefs, saved);
     this.direction = resolveDirection(this.mangaPrefs.direction, this.comicDir);
     this.view?.applyPrefs(this.mangaPrefs);
@@ -318,9 +332,8 @@ export class MangaEngineHost implements ReaderEngine {
 export async function folderComicPages(app: App, dir: string): Promise<string[]> {
   try {
     const listed = await app.vault.adapter.list(dir);
-    return listed.files
+    return sortPageNames(listed.files
       .filter((p) => isImageName(p))
-      .map((p) => p.split('/').pop() || p)
-      .sort();
+      .map((p) => p.split('/').pop() || p));
   } catch { return []; }
 }

@@ -28,13 +28,39 @@ function segments(v: string): number[] {
   return out;
 }
 
+interface ParsedVersion {
+  nums: number[];
+  /** 预发布标记（beta.1 / rc2），空串 = 正式版 */
+  pre: string;
+}
+
+/**
+ * 版本号拆成「数字段 + 预发布标记」。
+ *
+ * 不能把 `-beta.1` 当成多出来的一段数字：那样 `1.7.0-beta.1` 会比 `1.7.0`
+ * 大，试用码判定会把升级到正式版的用户锁在门外，更新检查还会催人升到
+ * 更旧的 beta。预发布标记只影响同号之间的大小：正式版更大。
+ */
+function parseVersion(v: string): ParsedVersion {
+  const s = normalizeVersion(v).split('+')[0];
+  const m = s.match(/^(\d+(?:\.\d+)*)(?:[-.](.*))?$/);
+  if (!m) return { nums: segments(s), pre: '' };
+  return {
+    nums: m[1].split('.').map((n) => Number(n)),
+    pre: (m[2] ?? '').trim().toLowerCase(),
+  };
+}
+
 export function compareVersions(a: string, b: string): number {
-  const pa = segments(normalizeVersion(a));
-  const pb = segments(normalizeVersion(b));
-  const len = Math.max(pa.length, pb.length);
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  const len = Math.max(pa.nums.length, pb.nums.length);
   for (let i = 0; i < len; i += 1) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    const diff = (pa.nums[i] ?? 0) - (pb.nums[i] ?? 0);
     if (diff) return diff > 0 ? 1 : -1;
   }
-  return 0;
+  if (pa.pre === pb.pre) return 0;
+  if (!pa.pre) return 1;
+  if (!pb.pre) return -1;
+  return pa.pre > pb.pre ? 1 : -1;
 }

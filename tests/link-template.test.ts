@@ -109,11 +109,17 @@ describe('导出模板渲染', () => {
     expect(out).not.toContain('1970-01-01 08:00');
   });
 
-  it('用户填的摘录带换行时压平，不破坏引用块结构（竖线在引用块里安全，保留原样）', () => {
+  /* 2026-11-24：摘录不再一律压平——自定义模板要放多行原文就得留换行。
+     引用块里自动续 `>`，结构照样不破；块外压成一行。 */
+  it('摘录带换行时在引用块里自动续 >，不破坏引用块结构', () => {
     const out = renderExportItem('> {摘录}\n> {双链}', vars({ quote: '上一行\n下一行 | 竖线' }));
-    expect(out.split('\n').length).toBe(2);
+    expect(out).toContain('> 上一行\n> 下一行 | 竖线');
     expect(out).not.toContain('\n下一行');
-    expect(out).toContain('上一行 下一行 | 竖线');
+  });
+
+  it('引用块外的摘录压成一行', () => {
+    const out = renderExportItem('{摘录}', vars({ quote: '上一行\n下一行' }));
+    expect(out).toBe('上一行 下一行');
   });
 
   it('占位符来自书与划线：EPUB 位置退回章节名，时间来自划线时间', () => {

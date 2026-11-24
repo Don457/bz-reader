@@ -1148,6 +1148,14 @@ export const ZH = {
   'settings.copyTpl.vars': '点一下插入变量：',
   'settings.copyTpl.preview': '效果预览：',
 
+  /* 双链模板的通用文案：页码 / 划线时间 / 预览示例 */
+  'export.page': '第 {n} 页',
+  'export.markedAt': '划线于 {time}',
+  'export.previewTitle': '示例书名',
+  'export.previewAuthor': '示例作者',
+  'export.previewChapter': '第三章 · 一个示例章节',
+  'export.previewQuote': '这是原文里的一段摘录，点一下双链就能跳回书中的这一句。',
+
   /* ── 设置页：AI ──────────────────────────────────────────── */
   'settings.ai.baseUrl': '接口地址',
   'settings.ai.baseUrl.ph': '填写接口地址，以 https:// 开头',

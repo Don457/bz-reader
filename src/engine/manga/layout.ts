@@ -154,10 +154,17 @@ function screenOf(units: readonly Unit[], direction: MangaDirection): MangaScree
  *  · 翻页按屏跳，双页一次跳两格，不能把另一页当场跳过；
  *  · 配对错了可以移一格校正，不用重排整本。
  */
-export function buildScreens(pages: readonly MangaPage[], o: SpreadOptions): MangaScreen[] {
+export function buildScreens(
+  pages: readonly MangaPage[],
+  o: SpreadOptions,
+  /** 每话第一张原图的序号：配对不许跨过它，否则上一话末页会和下一话首页凑一屏 */
+  chapterStarts?: ReadonlySet<number>,
+): MangaScreen[] {
   if (!pages.length) return [];
   const units = unitsOf(pages, o);
-  if (o.webtoon) return [screenOf(units, o.direction)];
+  /* 条漫也一页一屏：视觉上的「不断开」靠屏幕之间没有间距，拼成一整屏
+     的代价是进度、书签、跳页都只剩第 1 页（当前页取自屏的首个原图序号）。 */
+  if (o.webtoon) return units.map((u) => screenOf([u], o.direction));
   if (!o.spread) return units.map((u) => screenOf([u], o.direction));
 
   /* 配对相位：封面单独算一格，offset 让用户手动移一格 */
@@ -170,7 +177,11 @@ export function buildScreens(pages: readonly MangaPage[], o: SpreadOptions): Man
     i += 1;
   }
   while (i < units.length) {
-    const rest = units.slice(i, i + 2);
+    const a = units[i];
+    const b = units[i + 1];
+    /* 拆半的两个 unit 同属一页，照常配对；跨到下一话首页就单独成一屏 */
+    const crossChapter = b !== undefined && b.page !== a.page && chapterStarts?.has(b.page);
+    const rest = b !== undefined && !crossChapter ? [a, b] : [a];
     out.push(screenOf(rest, o.direction));
     i += rest.length;
   }

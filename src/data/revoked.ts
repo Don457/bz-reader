@@ -318,7 +318,10 @@ async function pull(timeoutMs: number): Promise<RevokedDoc | null> {
           if (text == null) return drop();
           const doc = parseRevoked(text);
           if (!doc) return drop();
-          if (doc.updatedAt < seen) return drop();
+          /* 只有在「本地已经记着某枚码被停用」时才拒绝更旧的名单（防旧名单
+             把已封的码救活）。作者回滚 / 重建名单时 updatedAt 会变小，本地没
+             命中还照旧拒收的话，首次激活会永久卡在「需要联网」。 */
+          if (doc.updatedAt < seen && revokedCode()) return drop();
           if (!(await verifyRevoked(doc))) return drop();
           finish(doc);
         })
@@ -349,8 +352,9 @@ export async function checkRevoked(
   if (!doc) return 'unknown';
 
   const seen = revokedSeenAt();
-  /* 旧名单：拿一份几天前的合法名单回来就能让已封的码复活，直接丢掉 */
-  if (doc.updatedAt < seen) return 'unknown';
+  /* 旧名单：拿一份几天前的合法名单回来就能让已封的码复活，直接丢掉。
+     本地没命中时没这层风险，照收——否则作者一回滚名单就永久卡死。 */
+  if (doc.updatedAt < seen && revokedCode()) return 'unknown';
 
   /* 拉到可用的名单 = 这次核对成功：版本号与「上次核对时间」一起更新。
      24 小时节流只看 checkedAt，所以失败（网络/验签/旧名单）不会把下一次
@@ -388,7 +392,9 @@ export async function refreshRevoked(
   if (!clean) return 'unknown';
 
   const now = Date.now();
-  if (!opts.force && now - revokedCheckedAt() < REVOKED_CHECK_GAP_MS) return 'skipped';
+  /* 已命中时缩短到 10 分钟：作者解封后用户不必等满 24 小时（重启即恢复） */
+  const gap = revokedCode() ? Math.min(REVOKED_CHECK_GAP_MS, 10 * 60_000) : REVOKED_CHECK_GAP_MS;
+  if (!opts.force && now - revokedCheckedAt() < gap) return 'skipped';
 
   inflight = (async () => {
     try {

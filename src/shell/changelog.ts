@@ -69,6 +69,119 @@ export interface ChangelogRelease {
  */
 export const CHANGELOG_RELEASES: readonly ChangelogRelease[] = [
   {
+    version: '1.7.0',
+    date: '2026-11-24',
+    added: [
+      {
+        domain: { zh: '漫画模式', en: 'Manga' },
+        text: {
+          zh: 'CBZ 漫画单独开一屏，分格、右到左、双页合页、跨页拆半、条漫长图都能调。',
+          en: 'CBZ manga gets its own view, with panel navigation, right-to-left, paired pages, spread splitting and webtoon strips.',
+        },
+      },
+      {
+        domain: { zh: '逐格导览', en: 'Panel guide' },
+        text: {
+          zh: '一页多格时逐格跳，白边自动裁掉，灰暗的扫描件能一键修复。',
+          en: 'Step through panels one by one, trim white margins automatically, and fix washed-out scans with one tap.',
+        },
+      },
+      {
+        domain: { zh: '双链模板', en: 'Link templates' },
+        text: {
+          zh: '整本导出与复制划线各备四档，简洁、引文、详细、自定义都能改。',
+          en: 'Whole-book export and highlight copying each get four presets — compact, quoted callout, detailed callout and your own.',
+        },
+        qq: 'https://pd.qq.com/s/Nb15xen1zz',
+      },
+      {
+        domain: { zh: '更新提醒', en: 'Update notice' },
+        text: {
+          zh: '启动时在后台看有没有新版本，有就弹一次，也可以忽略这一版。',
+          en: 'A new release is checked in the background at startup, shown once, and can be skipped.',
+        },
+      },
+      {
+        domain: { zh: '屏幕常亮模式', en: 'Stay awake' },
+        text: {
+          zh: '新增常亮模式，阅读时屏幕不锁，设置里可以开关。',
+          en: 'A new stay-awake mode keeps the screen on while reading; you can toggle it in settings.',
+        },
+      },
+      {
+        domain: { zh: '图标说明', en: 'Tooltips' },
+        text: {
+          zh: '头栏图标悬停给出说明，不再把键位写进设置里。',
+          en: 'Header icons now explain themselves on hover, without single-letter key hints.',
+        },
+        qq: 'https://pd.qq.com/s/Ny9zjevm',
+      },
+    ],
+    improved: [
+      {
+        domain: { zh: 'AI 配置', en: 'AI setup' },
+        text: {
+          zh: 'AI 配置向基础版开放，自定义通道能带上网关要求的附加请求头。',
+          en: 'AI settings are open on the free tier, and custom endpoints can carry extra request headers.',
+        },
+      },
+      {
+        domain: { zh: '权益下放', en: 'Free tier' },
+        text: {
+          zh: '导出、并排、剪藏、划词解释都进了基础版。',
+          en: 'Export, side-by-side reading, clipping and selection explain are now part of the free tier.',
+        },
+      },
+      {
+        domain: { zh: '插件安装', en: 'Plugin setup' },
+        text: {
+          zh: '设置里给出 bz 与 bz review 的安装入口，一个去市场、一个去 GitHub，装完回来点启用。',
+          en: 'Settings now has install entries for bz and bz review — one opens the marketplace, the other GitHub; enable it when you get back.',
+        },
+      },
+      {
+        domain: { zh: '字体档名', en: 'Font names' },
+        text: {
+          zh: '字体长名改叫「原生」「原书」，浮窗与设置页共用一张表。',
+          en: 'Long font names became “Native” and “Book”, with one shared table for the popup and settings.',
+        },
+      },
+    ],
+    fixed: [
+      {
+        domain: { zh: '书架分类', en: 'Shelves' },
+        text: {
+          zh: '分类只认手动指定的，不再被 EPUB 自带题材顶掉。',
+          en: 'Shelves now follow only what you assign, instead of falling back to subjects embedded in the EPUB.',
+        },
+        qq: 'https://pd.qq.com/s/N2mh8aj9ll',
+      },
+      {
+        domain: { zh: '高分屏留白', en: 'High-DPI padding' },
+        text: {
+          zh: '分页时上半屏那片留白没了，正文吃满高度。',
+          en: 'The blank band on the top half of paged reading on high-DPI screens is gone.',
+        },
+        qq: 'https://pd.qq.com/s/N9dspltqs9',
+      },
+      {
+        domain: { zh: 'AI 连接', en: 'AI connection' },
+        text: {
+          zh: '第三方服务商直连不通时改走 Obsidian 代发，能连上了。',
+          en: 'When a third-party provider cannot be reached directly, requests now go through Obsidian instead.',
+        },
+        qq: 'https://pd.qq.com/s/Ngur4srpmj',
+      },
+      {
+        domain: { zh: '外语界面', en: 'Non-Chinese UI' },
+        text: {
+          zh: '非简体中文不再显示 QQ 频道出处与更新日志里的群图标。',
+          en: 'Non-Chinese interfaces no longer show the QQ channel source links or the group icon in the changelog.',
+        },
+      },
+    ],
+  },
+  {
     version: '1.6.0',
     date: '2026-11-21',
     added: [

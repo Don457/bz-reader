@@ -505,14 +505,19 @@ export function normalizeSettings(raw: unknown): ReaderSettings {
      {双链}。现在复制档是完整 Markdown 模板，直接拿老别名当模板会复制出纯文本，
      所以迁到自定义档时补上双链那一行，老别名降为紧随其后的说明，双链不丢。 */
   const legacyAlias = str(s.aliasTemplate, '').trim();
-  const copyTemplateCustom = typeof s.copyTemplateCustom === 'string'
-    ? s.copyTemplateCustom.trim()
-    : (legacyAlias ? `> {双链}\n> ↳ ${legacyAlias}` : '');
+  /* 自定义模板**不能 trim**：嵌在列表项下的 callout 靠行首缩进才成立，
+     首尾空行也是模板的一部分。只截长度兜住脏 JSON。 */
+  const templateOf = (v: unknown, fallback = ''): string =>
+    (typeof v === 'string' ? v.slice(0, 4000) : fallback);
+  const copyTemplateCustom = templateOf(
+    s.copyTemplateCustom,
+    legacyAlias ? `> {双链}\n> ↳ ${legacyAlias}` : '',
+  );
   return {
     exportDir: cleanDir(str(s.exportDir, DEFAULT_SETTINGS.exportDir)),
     exportComments: s.exportComments !== false,
     exportTemplate: isBuiltinTemplate(s.exportTemplate) ? s.exportTemplate : DEFAULT_SETTINGS.exportTemplate,
-    exportTemplateCustom: str(s.exportTemplateCustom, '').trim(),
+    exportTemplateCustom: templateOf(s.exportTemplateCustom),
     /* 有老别名就必须走自定义档——否则默认的 simple 会把刚补好双链的模板吞掉 */
     copyTemplate: legacyAlias
       ? 'custom'

@@ -97,6 +97,10 @@ const ZOOM_STEP = 1.25;
 /** 滚轮翻页与普通书同手感：攒够一格才翻，翻完短暂冷却不连翻 */
 const WHEEL_TURN_THRESHOLD = 42;
 const WHEEL_COOLDOWN = 300;
+/** Ctrl+滚轮攒够这么多像素才缩放一档：触控板捏合是碎步连发 */
+const ZOOM_WHEEL_THRESHOLD = 60;
+/** 长按多久算「偷看整页」 */
+const HOLD_MS = 450;
 
 /**
  * 面板里的档位文案：直接指向语言包的 key。
@@ -187,7 +191,14 @@ export class MangaView {
   private urls = new Map<number, string>();
   private pan = { x: 0, y: 0 };
   private dragStart: { x: number; y: number; px: number; py: number } | null = null;
-  private thumbUrls = new Set<string>();
+  /** 本次手势已经消费（翻页 / 拖动）：随后的合成 click 不再翻页 */
+  private suppressClick = false;
+  /** 连续排版要等这一轮渲染完再滚：render 刚 replaceChildren，此刻 DOM 还是空的 */
+  private pendingScroll = false;
+  /** Ctrl+滚轮缩放累计位移：够阈值才走一档，触控板一次捏合不会顶到最大 */
+  private zoomAcc = 0;
+  /** 长按「看整页」的定时器，destroy 时要清掉 */
+  private hold: number | null = null;
   private destroyed = false;
   private resizeObserver: ResizeObserver | null = null;
   private gammaSvg: SVGSVGElement | null = null;
@@ -236,7 +247,9 @@ export class MangaView {
 
   private rebuild(keepPage = true): void {
     const anchor = keepPage ? this.currentPage() : 0;
-    this.screens = buildScreens(this.pages, this.spreadOptions());
+    /* 话边界：双页配对不许跨话，上一话末页与下一话首页不凑一屏 */
+    const starts = new Set(this.archive.groups.map((g) => g.page));
+    this.screens = buildScreens(this.pages, this.spreadOptions(), starts);
     this.screen = keepPage ? screenOfPage(this.screens, anchor) : 0;
     this.root.dataset.flow = this.prefs.flow;
     this.root.dataset.dir = this.direction;
@@ -302,6 +315,10 @@ export class MangaView {
       if (this.rebuildQueued && !this.destroyed) {
         this.rebuildQueued = false;
         this.rebuild();
+      } else if (this.pendingScroll && !this.destroyed) {
+        /* 渲染完才滚：跳页 / 恢复位置在连续排版下都走这里 */
+        this.pendingScroll = false;
+        this.scrollToCurrent();
       }
     }
   }
@@ -326,17 +343,16 @@ export class MangaView {
     this.film.classList.toggle('is-column', flow !== 'horizontal');
     /* 连续模式靠 cell 的真实布局尺寸缩放，film 不挂 transform：
        挂了会把整条滚动内容一起缩放，滚动位置和内容尺寸全乱 */
-    this.film.style.transform = '';
-    const list = flow === 'webtoon'
-      ? [{
-          units: this.pages.map((_, i) => ({ page: i, half: 'full' as const })),
-          pages: this.pages.map((_, i) => i),
-        }]
-      : this.screens;
-    for (const s of list) {
+    this.film.setCssProps({ transform: '' });
+    /* 连续模式也一屏一个 box（条漫同样）：进度 / 跳页 / 滚动定位都按屏算，
+       全卷拼成一屏的话 currentPage 永远是第 1 页。视觉上的连续靠
+       .bzr-manga-screen 之间没有间距保证，不靠合成一个 box。 */
+    for (const s of this.screens) {
       const box = el('div', 'bzr-manga-screen');
       for (const unit of s.units) {
-        const cell = await this.makeCell(unit.page, unit.half, s.units.length > 1);
+        /* 只搭骨架、不解压：连续排版整本驻留会在手机上 OOM，
+           图由 loadVisible 按视口补、滚走再回收 */
+        const cell = await this.makeCell(unit.page, unit.half, s.units.length > 1, true);
         if (cell) box.append(cell.wrap);
       }
       this.film.append(box);
@@ -346,7 +362,9 @@ export class MangaView {
     this.loadVisible();
   }
 
-  private async makeCell(page: number, half: Cell['half'], paired: boolean): Promise<Cell | null> {
+  private async makeCell(
+    page: number, half: Cell['half'], paired: boolean, lazy = false,
+  ): Promise<Cell | null> {
     const wrap = el('div', 'bzr-manga-cell');
     wrap.dataset.half = half;
     wrap.classList.toggle('is-paired', paired);
@@ -365,16 +383,30 @@ export class MangaView {
       this.setPageSize(page, img.naturalWidth, img.naturalHeight);
       if (this.prefs.crop) this.applyCrop(cell);
     });
-    const url = await this.urlFor(page);
-    if (this.destroyed) return null;
-    if (url) {
-      cell.url = url;
-      img.src = url;
-    } else {
+    /* 解码失败要留可见的「这一页坏了」，否则只剩一张按猜测尺寸占位的空白格 */
+    img.addEventListener('error', () => {
+      if (this.destroyed || !img.getAttribute('src')) return;
       wrap.classList.add('is-broken');
       wrap.textContent = String(page + 1);
+    });
+    if (!lazy) {
+      const url = await this.urlFor(page);
+      if (this.destroyed) return null;
+      this.paintCell(cell, url);
     }
     return cell;
+  }
+
+  /** 把一张图挂到格子上；拿不到就标坏页并显示页码 */
+  private paintCell(cell: Cell, url: string | null): void {
+    if (url) {
+      cell.url = url;
+      cell.img.src = url;
+      cell.wrap.classList.remove('is-broken');
+      return;
+    }
+    cell.wrap.classList.add('is-broken');
+    cell.wrap.textContent = String(cell.page + 1);
   }
 
   /** 只解压眼前 ±1 屏，其余滚走就释放；同一张图只解一次 */
@@ -390,6 +422,11 @@ export class MangaView {
     return url;
   }
 
+  /** 缩略图带开着时，当前页前后各留几张给它用（其余照常回收） */
+  private thumbKeep(page: number): boolean {
+    return this.prefs.thumbs && Math.abs(page - this.currentPage()) <= 3;
+  }
+
   private prefetch(): void {
     const near = new Set<number>();
     for (let d = -1; d <= 1; d += 1) {
@@ -398,13 +435,16 @@ export class MangaView {
     }
     for (const p of near) void this.urlFor(p);
     for (const [p, url] of this.urls) {
-      if (near.has(p) || this.prefs.thumbs) continue;
+      if (near.has(p) || this.thumbKeep(p)) continue;
+      const cell = this.cells.get(p);
+      if (cell) cell.img.removeAttribute('src');
       URL.revokeObjectURL(url);
       this.urls.delete(p);
     }
   }
 
   private loadVisible(): void {
+    if (this.destroyed) return;
     const boxes = Array.from(this.film.querySelectorAll<HTMLElement>('.bzr-manga-screen'));
     const r = this.stage.getBoundingClientRect();
     const near = new Set<number>();
@@ -420,7 +460,21 @@ export class MangaView {
     for (const p of near) {
       const cell = this.cells.get(p);
       if (!cell || cell.img.src) continue;
-      void this.urlFor(p).then((url) => { if (url && !this.destroyed) cell.img.src = url; });
+      void this.urlFor(p).then((url) => {
+        if (this.destroyed || !url) return;
+        this.paintCell(cell, url);
+      });
+    }
+    /* 滚出视口的图必须回收：objectURL 只解不还，几十页就能把手机撑爆 */
+    for (const [p, url] of [...this.urls]) {
+      if (near.has(p) || this.thumbKeep(p)) continue;
+      const cell = this.cells.get(p);
+      if (cell) {
+        cell.img.removeAttribute('src');
+        cell.url = '';
+      }
+      URL.revokeObjectURL(url);
+      this.urls.delete(p);
     }
   }
 
@@ -471,11 +525,7 @@ export class MangaView {
       const cellH = d.h * base;
       cell.wrap.style.width = `${cellW}px`;
       cell.wrap.style.height = `${cellH}px`;
-      /* 拆半：图片按整页宽画，cell 裁掉另一半（宽度 200% 用 CSS） */
-      cell.img.style.width = half === 'full' ? '100%' : '200%';
-      cell.img.style.height = '100%';
-      cell.img.style.maxWidth = 'none';
-      cell.img.style.maxHeight = 'none';
+      /* 拆半：图片按整页宽画、cell 裁掉另一半，尺寸全由 .bzr-manga-img 的 CSS 定 */
       this.base = base;
       maxH = Math.max(maxH, cellH);
     }
@@ -496,12 +546,8 @@ export class MangaView {
       );
       cell.wrap.style.width = `${size.w}px`;
       cell.wrap.style.height = `${size.h}px`;
-      cell.img.style.width = '100%';
-      cell.img.style.height = '100%';
-      cell.img.style.maxWidth = 'none';
-      cell.img.style.maxHeight = 'none';
     }
-    this.film.style.transform = '';
+    this.film.setCssProps({ transform: '' });
     this.pan = { x: 0, y: 0 };
   }
 
@@ -647,6 +693,13 @@ export class MangaView {
     this.panel = -1;
     this.panelRects = [];
     this.pan = { x: 0, y: 0 };
+    /* 连续排版不重建 DOM：整本重搭一次太贵，滚到目标屏就够了 */
+    if (this.prefs.flow !== 'paged') {
+      this.scrollToCurrent();
+      this.loadVisible();
+      this.emitRelocate();
+      return;
+    }
     void this.render();
   }
 
@@ -655,8 +708,12 @@ export class MangaView {
     this.screen = screenOfPage(this.screens, p);
     this.panel = panel;
     this.pan = { x: 0, y: 0 };
-    void this.render();
-    this.scrollToCurrent();
+    /* 连续排版里 render 会把 DOM 清空重搭，滚动必须等它走完（见 render 的 finally） */
+    this.pendingScroll = this.prefs.flow !== 'paged';
+    void this.render().then(() => {
+      if (this.destroyed) return;
+      if (this.prefs.flow === 'paged') this.scrollToCurrent();
+    });
   }
 
   goToPercent(fraction: number): void {
@@ -667,7 +724,11 @@ export class MangaView {
   private scrollToCurrent(): void {
     const boxes = this.film.querySelectorAll<HTMLElement>('.bzr-manga-screen');
     const box = boxes[this.screen];
-    if (box) box.scrollIntoView({ block: 'start' });
+    if (!box) return;
+    /* 直接写滚动容器的偏移：scrollIntoView 在嵌套布局里会连带滚外层，
+       连续排版下表现为整页被顶上去、顶栏跑到看不见 */
+    if (this.prefs.flow === 'horizontal') this.stage.scrollLeft = box.offsetLeft;
+    else this.stage.scrollTop = box.offsetTop;
   }
 
   /* ─────────────── 排版面板 / 缩略图 ─────────────── */
@@ -882,8 +943,6 @@ export class MangaView {
 
   private async renderThumbs(): Promise<void> {
     if (!this.prefs.thumbs) {
-      for (const u of this.thumbUrls) URL.revokeObjectURL(u);
-      this.thumbUrls.clear();
       this.thumbs.replaceChildren();
       return;
     }
@@ -909,7 +968,15 @@ export class MangaView {
 
   private setPref<K extends keyof MangaPrefs>(key: K, value: MangaPrefs[K]): void {
     (this.prefs as Mutable<MangaPrefs>)[key] = value;
-    if (key === 'flow') this.pan = { x: 0, y: 0 };
+    if (key === 'flow') {
+      this.pan = { x: 0, y: 0 };
+      /* 逐格状态属于「一屏一页」：切到连续排版还留着，下一次 turn 会先命中
+         逐格分支，把整条滚动的画面 scale 掉而且不翻页 */
+      this.panel = -1;
+      this.panelRects = [];
+      this.panelSeq = [];
+      this.panelLayer.replaceChildren();
+    }
     this.rebuild();
     /* 面板开着时同步选中态；关着时这里是空操作 */
     this.renderLayoutPanel();
@@ -1029,7 +1096,11 @@ export class MangaView {
 
   private bind(): void {
     this.stage.addEventListener('click', (ev) => {
-      if (this.dragStart) return;
+      /* 刚翻过页 / 刚拖过：浏览器随后补发的 click 不能再翻一页 */
+      if (this.suppressClick) {
+        this.suppressClick = false;
+        return;
+      }
       /* 桌面默认不靠点击翻页（跟普通书一致），只有设置里开了才翻；
          手机上点按仍是最自然的翻页手势，一直可用。 */
       if (!clickTurns(this.input.mobile, this.input.desktopTurn)) return;
@@ -1047,10 +1118,18 @@ export class MangaView {
     });
     this.stage.addEventListener('dblclick', () => this.zoomBy(ZOOM_STEP));
     this.stage.addEventListener('wheel', (ev) => {
-      /* Ctrl/⌘ + 滚轮统一放大看图（含连续排版）：拦掉默认行为，别把整个界面缩放。 */
+      /* Ctrl/⌘ + 滚轮统一放大看图（含连续排版）：拦掉默认行为，别把整个界面缩放。
+         触控板捏合会以很小的 delta 连发几十个事件，一事件一档会直接顶到
+         最大倍数并连带几十次重排——按累计位移凑够一档再走。 */
       if (ev.ctrlKey || ev.metaKey) {
         ev.preventDefault();
-        this.zoomBy(ev.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+        const step = wheelPixels(ev.deltaY, ev.deltaX, ev.deltaMode);
+        if (!step) return;
+        this.zoomAcc += step;
+        if (Math.abs(this.zoomAcc) < ZOOM_WHEEL_THRESHOLD) return;
+        const factor = this.zoomAcc < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+        this.zoomAcc = 0;
+        this.zoomBy(factor);
         return;
       }
       /* 横向排版的内容沿 x 轴铺，鼠标滚轮却只给 y 方向；而它的
@@ -1080,24 +1159,53 @@ export class MangaView {
     }, { passive: false });
     this.stage.addEventListener('pointerdown', (ev) => {
       this.dragStart = { x: ev.clientX, y: ev.clientY, px: this.pan.x, py: this.pan.y };
+      this.suppressClick = false;
+      /* 手指移出舞台时也要收得到 up：不捕获就会丢这一段拖动 */
+      try { this.stage.setPointerCapture(ev.pointerId); } catch { /* 合成事件没有指针 id */ }
+      this.clearHold();
+      this.hold = window.setTimeout(() => {
+        this.hold = null;
+        this.showWholePage();
+      }, HOLD_MS);
+    });
+    this.stage.addEventListener('pointermove', (ev) => {
+      const d = this.dragStart;
+      if (!d) return;
+      const dx = ev.clientX - d.x;
+      const dy = ev.clientY - d.y;
+      if (Math.abs(dx) + Math.abs(dy) > 6) this.clearHold();
+      /* 只有放大后才拖得动：连续排版是原生滚动，改 pan 会把内容顶飞 */
+      if (this.prefs.flow !== 'paged' || this.prefs.zoom <= 1.001) return;
+      this.pan = { x: d.px + dx, y: d.py + dy };
+      this.applyZoom();
     });
     this.stage.addEventListener('pointerup', (ev) => {
       const d = this.dragStart;
       this.dragStart = null;
+      this.clearHold();
+      try { this.stage.releasePointerCapture(ev.pointerId); } catch { /* 同上 */ }
       if (!d) return;
       const dx = ev.clientX - d.x;
       const dy = ev.clientY - d.y;
       /* 未放大时横向滑动 = 翻页；放大后 = 拖动看图 */
       if (Math.abs(dx) > 48 && this.prefs.flow === 'paged' && this.prefs.zoom <= 1.001) {
+        this.suppressClick = true;
         const rtl = this.direction === 'rtl';
         const dir = (dx < 0 ? 'next' : 'prev') === 'next' ? (rtl ? 'prev' : 'next') : (rtl ? 'next' : 'prev');
         this.hooks.onTurn(dir);
         return;
       }
       if (Math.abs(dx) + Math.abs(dy) > 6) {
-        this.pan = { x: d.px + dx, y: d.py + dy };
-        this.applyZoom();
+        this.suppressClick = true;
+        if (this.prefs.flow === 'paged' && this.prefs.zoom > 1.001) {
+          this.pan = { x: d.px + dx, y: d.py + dy };
+          this.applyZoom();
+        }
       }
+    });
+    this.stage.addEventListener('pointercancel', () => {
+      this.dragStart = null;
+      this.clearHold();
     });
     this.stage.addEventListener('scroll', () => {
       if (this.prefs.flow !== 'paged') {
@@ -1118,13 +1226,8 @@ export class MangaView {
         }
       }
     }, { passive: true });
-    /* 长按：偷看整页，松手回到当前格 */
-    let hold: number | null = null;
-    this.stage.addEventListener('pointerdown', () => {
-      hold = window.setTimeout(() => this.showWholePage(), 450);
-    });
-    this.stage.addEventListener('pointerup', () => { if (hold !== null) window.clearTimeout(hold); });
-    this.stage.addEventListener('pointerleave', () => { if (hold !== null) window.clearTimeout(hold); });
+    /* 长按「偷看整页」的定时器在 pointerdown 里起、在 up / cancel /
+       滑出 / 开始拖动时清（见上面的指针事件），不另挂监听 */
 
     if ('ResizeObserver' in window) {
       this.resizeObserver = new ResizeObserver(() => {
@@ -1138,14 +1241,20 @@ export class MangaView {
 
   /* ─────────────── 生命周期 ─────────────── */
 
+  private clearHold(): void {
+    if (this.hold !== null) {
+      window.clearTimeout(this.hold);
+      this.hold = null;
+    }
+  }
+
   async destroy(): Promise<void> {
     this.destroyed = true;
+    this.clearHold();
     this.closeLayoutPanel();
     this.resizeObserver?.disconnect();
     for (const url of this.urls.values()) URL.revokeObjectURL(url);
-    for (const url of this.thumbUrls) URL.revokeObjectURL(url);
     this.urls.clear();
-    this.thumbUrls.clear();
     this.root.remove();
   }
 }

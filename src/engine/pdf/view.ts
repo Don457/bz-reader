@@ -231,12 +231,22 @@ export class PdfView {
   private lastWidth = 0;
   /** 两指轻按（切沉浸）正在判的这一轮；判定完 / 手势作废时清空 */
   private twoFinger: TwoFingerTapState | null = null;
+  /** Ctrl+滚轮累计位移：触控板捏合是碎步连发，一事件一档会直接顶到 8× */
+  private zoomAcc = 0;
   /** Ctrl/⌘ + 滚轮缩放，跟漫画一致；普通滚轮仍交给页面滚动 */
   private readonly onWheelZoom = (ev: WheelEvent): void => {
     if (!ev.ctrlKey && !ev.metaKey) return;
     ev.preventDefault();
-    if (ev.deltaY < 0) this.zoomIn();
-    else if (ev.deltaY > 0) this.zoomOut();
+    const unit = ev.deltaMode === 1 ? 32 : ev.deltaMode === 2 ? 800 : 1;
+    const step = ev.deltaY * unit;
+    if (!step) return;
+    this.zoomAcc += step;
+    /* 一格鼠标滚轮约 100px，捏合一次给的更碎：攒够 60px 才走一档 */
+    if (Math.abs(this.zoomAcc) < 60) return;
+    const dir = this.zoomAcc < 0 ? 1 : -1;
+    this.zoomAcc = 0;
+    if (dir > 0) this.zoomIn();
+    else this.zoomOut();
   };
 
   /* ── 框选（矩形） ── */

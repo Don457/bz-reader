@@ -653,7 +653,7 @@ async function postChatByHost(
     error?: { message?: string };
   };
   try {
-    data = JSON.parse(resp.text);
+    data = JSON.parse(resp.text) as typeof data;
   } catch {
     throw new Error(`${label} 接口没有返回 JSON`);
   }

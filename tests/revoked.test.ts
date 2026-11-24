@@ -213,17 +213,21 @@ describe.runIf(hasKey)('并发先到先用', () => {
 });
 
 describe('名单解析', () => {
-  it('合法名单原样收下', () => {
-    const doc = parseRevoked(signed(['BZR-AF-2026-0021']));
-    expect(doc?.ids).toEqual(['BZR-AF-2026-0021']);
-    expect(doc?.updatedAt).toBe(1_800_000_000_000);
-    expect(doc?.sig).toBeTruthy();
-  });
+  /* 前两条要真签名：私钥在 scripts/keys（gitignore），干净检出 / worktree
+     里没有，跑了只会拿空 key 撞 OpenSSL。有 key 才跑，与下面几组同口径。 */
+  describe.runIf(hasKey)('带签名的名单', () => {
+    it('合法名单原样收下', () => {
+      const doc = parseRevoked(signed(['BZR-AF-2026-0021']));
+      expect(doc?.ids).toEqual(['BZR-AF-2026-0021']);
+      expect(doc?.updatedAt).toBe(1_800_000_000_000);
+      expect(doc?.sig).toBeTruthy();
+    });
 
-  it('空数组合法（还没人被封）', () => {
-    const doc = parseRevoked(signed([]));
-    expect(doc?.ids).toEqual([]);
-    expect(doc?.hashes).toEqual([]);
+    it('空数组合法（还没人被封）', () => {
+      const doc = parseRevoked(signed([]));
+      expect(doc?.ids).toEqual([]);
+      expect(doc?.hashes).toEqual([]);
+    });
   });
 
   it('结构不对整份作废', () => {

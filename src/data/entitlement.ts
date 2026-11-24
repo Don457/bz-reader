@@ -40,7 +40,7 @@ import {
   type LicensePayload,
 } from './license';
 import { ensureLatestVersion } from './plugin-update';
-import { checkRevoked, revokedCode } from './revoked';
+import { checkRevoked, clearRevoked, revokedCode } from './revoked';
 import type { BookFormat } from './schema';
 
 /** 高级能力。只有能判断的地方才列进来，别造没人问的开关。 */
@@ -783,7 +783,10 @@ export function clearLicense(): boolean {
   e.license = '';
   e.checkedTs = 0;
   save();
-  /* 码没了，档位成因跟着变「没码」；停用标记也一并清干净 */
+  /* 码没了，档位成因跟着变「没码」；停用标记也一并清干净。
+     本地 revoked 记的是码本身：换码 / 降级后不清，把同一枚已解封的码
+     贴回来会在联网成功前就被直接拦下。 */
+  clearRevoked();
   clearRevokedMark();
   refreshFacts();
   return had;

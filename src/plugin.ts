@@ -64,7 +64,7 @@ import { loadAiLog } from './data/ai-log';
 /* 壳层 */
 import { StudyView, VIEW_TYPE_STUDY } from './shell/study-view';
 import { OverlayLayer } from './shell/overlay';
-import { attachAiContext, dispatchAction, requireCap } from './shell/actions';
+import { attachAiContext, dispatchAction, requireCap, stopMarketWatch } from './shell/actions';
 import { findCollapsibleAncestor } from './shell/drawer-collapse';
 import { clampDailyGoal } from './shell/checkin';
 import {
@@ -721,6 +721,7 @@ export function createPlugin(cfg: PluginConfig) {
            以前只关视图，任务照跑——禁用插件后网络面板里还有请求在走。 */
         RT.aiAbort?.abort();
         portraitBuilder().cancel();
+        stopMarketWatch();
         this.offShell?.();
         this.overlay?.destroy();
         for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_READER)) {

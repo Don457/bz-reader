@@ -351,8 +351,8 @@ const STAT_ICON_SHIELD =
  * 外壳带描边 + 悬停反馈 + 右侧小箭头，让人一眼看出是能点的。
  */
 const PIN_REWARD = 6;
-const PIN_PRO = 55;
-const PIN_PATRONS = 10;
+const PIN_PRO = 60;
+const PIN_PATRONS = 12;
 function statsHtml(_data: BzrData | null): string {
   const c = copy();
   const reward = PIN_REWARD.toLocaleString();

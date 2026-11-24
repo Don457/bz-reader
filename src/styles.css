@@ -2115,6 +2115,11 @@ body.is-mobile .bzr-pdf-toolbar {
 }
 
 /* 跨页拆半：同一张图画成两倍宽，由 cell 裁掉另一半 */
+.bzr-manga-cell[data-half="left"] .bzr-manga-img,
+.bzr-manga-cell[data-half="right"] .bzr-manga-img {
+  width: 200%;
+}
+
 .bzr-manga-cell[data-half="right"] .bzr-manga-img {
   margin-left: -100%;
 }
