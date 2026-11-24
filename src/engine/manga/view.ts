@@ -48,6 +48,7 @@ import { imageMime, type MangaSource } from './archive';
 import { autoTone, type MangaFlow, type MangaPrefs, type MangaViewState } from './settings';
 import { anchoredBelowRightIn } from '../../shell/anchored-style';
 import { t, type MsgKey } from '../../i18n';
+import { clickTurns, turnReady, wheelPixels, wheelTurn } from './gesture';
 
 export interface MangaViewHooks {
   /** 位置变了：cfi 是 `manga/<原图序号>/<分格序号>` */
@@ -68,6 +69,15 @@ export interface MangaViewHooks {
   onReady(): void;
 }
 
+/**
+ * 宿主传进来的输入开关。用同一个对象引用：设置面板里切了「点击翻页」，
+ * 宿主改一下字段视图立刻生效，不用重建整本书。
+ */
+export interface MangaInput {
+  mobile: boolean;
+  desktopTurn: boolean;
+}
+
 interface Cell {
   page: number;
   half: 'full' | 'left' | 'right';
@@ -83,6 +93,9 @@ const GUESS_H = 1500;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 8;
 const ZOOM_STEP = 1.25;
+/** 滚轮翻页与普通书同手感：攒够一格才翻，翻完短暂冷却不连翻 */
+const WHEEL_TURN_THRESHOLD = 42;
+const WHEEL_COOLDOWN = 300;
 
 /**
  * 面板里的档位文案：直接指向语言包的 key。
@@ -155,7 +168,10 @@ export class MangaView {
   private readonly panelLayer: HTMLElement;
   private readonly archive: MangaSource;
   private readonly hooks: MangaViewHooks;
+  private readonly input: MangaInput;
 
+  private wheelAcc = 0;
+  private lastWheelTurnAt = 0;
   private prefs: MangaPrefs;
   private direction: MangaDirection;
   private pages: MangaPage[];
@@ -182,9 +198,10 @@ export class MangaView {
   /** 渲染期间收到重排请求：这一轮走完再排，别开出两轮并发 render */
   private rebuildQueued = false;
 
-  constructor(container: HTMLElement, archive: MangaSource, prefs: MangaPrefs, hooks: MangaViewHooks) {
+  constructor(container: HTMLElement, archive: MangaSource, prefs: MangaPrefs, input: MangaInput, hooks: MangaViewHooks) {
     this.archive = archive;
     this.prefs = prefs;
+    this.input = input;
     this.hooks = hooks;
     this.direction = prefs.direction === 'ltr' ? 'ltr' : 'rtl';
     this.pages = archive.pages.map((name) => ({ name, width: 0, height: 0 }));
@@ -1011,6 +1028,9 @@ export class MangaView {
   private bind(): void {
     this.stage.addEventListener('click', (ev) => {
       if (this.dragStart) return;
+      /* 桌面默认不靠点击翻页（跟普通书一致），只有设置里开了才翻；
+         手机上点按仍是最自然的翻页手势，一直可用。 */
+      if (!clickTurns(this.input.mobile, this.input.desktopTurn)) return;
       const r = this.stage.getBoundingClientRect();
       const x = (ev.clientX - r.left) / Math.max(1, r.width);
       const left = x < 0.33;
@@ -1025,9 +1045,26 @@ export class MangaView {
     });
     this.stage.addEventListener('dblclick', () => this.zoomBy(ZOOM_STEP));
     this.stage.addEventListener('wheel', (ev) => {
-      if (this.prefs.flow !== 'paged' || !ev.ctrlKey) return;
+      /* Ctrl/⌘ + 滚轮仍是放大看图：拦掉默认行为，别把整个界面缩放。 */
+      if (ev.ctrlKey || ev.metaKey) {
+        if (this.prefs.flow !== 'paged') return;
+        ev.preventDefault();
+        this.zoomBy(ev.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+        return;
+      }
+      /* 连续 / 条漫档交给浏览器自然滚动，手机上本来就没有鼠标滚轮。
+         一屏一页档则滚轮翻页：和普通书一样按阈值翻，方向向下为下一页。 */
+      if (this.prefs.flow !== 'paged' || this.input.mobile) return;
+      const main = wheelPixels(ev.deltaY, ev.deltaX, ev.deltaMode);
+      if (!main) return;
       ev.preventDefault();
-      this.zoomBy(ev.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+      const now = Date.now();
+      if (!turnReady(now, this.lastWheelTurnAt, WHEEL_COOLDOWN)) return;
+      const res = wheelTurn(this.wheelAcc, main, WHEEL_TURN_THRESHOLD);
+      this.wheelAcc = res.acc;
+      if (!res.dir) return;
+      this.lastWheelTurnAt = now;
+      this.hooks.onTurn(res.dir);
     }, { passive: false });
     this.stage.addEventListener('pointerdown', (ev) => {
       this.dragStart = { x: ev.clientX, y: ev.clientY, px: this.pan.x, py: this.pan.y };

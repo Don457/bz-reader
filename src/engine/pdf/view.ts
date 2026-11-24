@@ -231,6 +231,13 @@ export class PdfView {
   private lastWidth = 0;
   /** 两指轻按（切沉浸）正在判的这一轮；判定完 / 手势作废时清空 */
   private twoFinger: TwoFingerTapState | null = null;
+  /** Ctrl/⌘ + 滚轮缩放，跟漫画一致；普通滚轮仍交给页面滚动 */
+  private readonly onWheelZoom = (ev: WheelEvent): void => {
+    if (!ev.ctrlKey && !ev.metaKey) return;
+    ev.preventDefault();
+    if (ev.deltaY < 0) this.zoomIn();
+    else if (ev.deltaY > 0) this.zoomOut();
+  };
 
   /* ── 框选（矩形） ── */
   private frameStart: { pageEl: HTMLElement; page: number; x: number; y: number; forced: boolean } | null =
@@ -1405,6 +1412,7 @@ export class PdfView {
     this.scroller.removeEventListener('touchmove', this.onTouchMove);
     this.scroller.removeEventListener('touchend', this.onTouchEnd);
     this.scroller.removeEventListener('touchcancel', this.onTouchCancel);
+    this.scroller.removeEventListener('wheel', this.onWheelZoom);
     this.twoFinger = null;
     this.clearFrame();
     this.clearLiveSelection();
@@ -1575,6 +1583,9 @@ export class PdfView {
     this.scroller.addEventListener('touchmove', this.onTouchMove, { passive: true });
     this.scroller.addEventListener('touchend', this.onTouchEnd, { passive: true });
     this.scroller.addEventListener('touchcancel', this.onTouchCancel, { passive: true });
+    /* 缩放只吃 Ctrl/⌘ + 滚轮：拦掉浏览器整页缩放，走 PDF 自己的档位。
+       passive:false 是必须的，否则 preventDefault 不生效。 */
+    this.scroller.addEventListener('wheel', this.onWheelZoom, { passive: false });
   }
 
   private onScroll(): void {

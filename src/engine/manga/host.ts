@@ -30,8 +30,9 @@ import {
   type MangaViewState,
 } from './settings';
 import { parseMangaLocator, readingDirectionFromComicInfo, type MangaDirection } from './layout';
-import { MangaView } from './view';
+import { MangaView, type MangaInput } from './view';
 import { NavHistory } from '../../core/nav-history';
+import { isMobileShell } from '../../core/mobile';
 
 /** 文件夹形式的漫画：一个目录就是一卷，目录里的图片自然序排页 */
 export class FolderArchive implements MangaSource {
@@ -74,6 +75,8 @@ export class MangaEngineHost implements ReaderEngine {
   private view: MangaView | null = null;
   private opts: MountOptions | null = null;
   private mangaPrefs: MangaPrefs = DEFAULT_MANGA_PREFS;
+  /** 传给视图的输入开关：同一个引用，设置面板改了立刻生效 */
+  private readonly input: MangaInput = { mobile: isMobileShell(), desktopTurn: false };
   private direction: MangaDirection = 'rtl';
   /** ComicInfo.xml 标的方向：applyPrefs 重算时必须带着它，否则被默认值冲掉 */
   private comicDir: MangaDirection | null = null;
@@ -114,6 +117,7 @@ export class MangaEngineHost implements ReaderEngine {
     this.comicDir = null;
     const stored = normalizeMangaPrefs(opts.prefs.manga);
     this.mangaPrefs = stored;
+    this.input.desktopTurn = opts.prefs.desktopTapTurn === true;
     this.phase = 'read';
     /* 上层先画了「正在打开…」占位；漫画视图自己接管整个容器，
        不清掉的话那条加载态会一直留在 DOM 里（2026-11-22 真机发现）。 */
@@ -169,7 +173,7 @@ export class MangaEngineHost implements ReaderEngine {
     };
 
     this.phase = 'render';
-    this.view = new MangaView(container, archive, this.mangaPrefs, {
+    this.view = new MangaView(container, archive, this.mangaPrefs, this.input, {
       onRelocate: (info) => {
         if (this.phase !== 'ready') this.phase = 'ready';
         this.page = info.page;
@@ -260,6 +264,9 @@ export class MangaEngineHost implements ReaderEngine {
     const next = normalizeMangaPrefs(prefs.manga);
     const merged = mangaSettingsOf(next, normalizeMangaView(this.opts?.mangaView));
     this.mangaPrefs = merged;
+    /* 「点击翻页」是通用开关，不在漫画自己的偏好里；视图拿着同一个引用，
+       这里一改，开着书切设置也立刻生效。 */
+    this.input.desktopTurn = prefs.desktopTapTurn === true;
     /* 方向必须带上开书时从 ComicInfo.xml 读到的值：mount 之后 ReaderView
        会再调一次 applyPrefs 套全局偏好，这里传 null 的话，文件里写的
        右到左/左到右会被一句「默认」冲掉（2026-11-22 真机发现）。 */
