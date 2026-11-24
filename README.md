@@ -432,6 +432,15 @@ The free edition covers everyday reading. Pro features require a paid license ke
 - Follow-up: source text ≤2000 chars plus optional 3 chunks / 1200 chars; query = 120 chars before the highlight + the current question.
 - Sidebar context: 1200 chars per item, 6000 in total.
 
+### Scanned PDFs: what works, what needs OCR
+
+A scanned PDF is a stack of page images with no text layer. It is not read-only in bz Reader:
+
+- **Reading**: pages turn, zoom and rotate as usual. The contents panel uses the PDF's own outline, or page-range entries when the file has none; bookmarks and reading progress are kept by page, so they work on scans too.
+- **Marking and notes**: on desktop, dragging across a page with no text layer frames a rectangle instead of selecting text. Give it a colour and it becomes a highlight; you can also write a comment on it and link it into your notes, like any other highlight — only the quoted text stays empty until the page is recognized.
+- **Not without OCR**: there is no text to select or copy, in-book search finds nothing on unrecognized pages, and read-aloud and the AI features have no text to work with.
+- **After OCR**: recognized pages behave like a text PDF — select, highlight, search (see the next section). If a recognition result comes back without line positions, the page can still be searched and read aloud, but not selected.
+
 ### Scanned PDF: markup and search
 
 - **OCR**: the "Recognize scanned pages" menu offers this page / next 20 / whole book / retry failed pages. Serial processing, 20 pages per batch. A vision model or a self-hosted / LAN OCR service (mobile: vision only); whole-book runs ask for confirmation because pages are billed.
