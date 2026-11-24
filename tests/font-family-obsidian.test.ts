@@ -54,9 +54,11 @@ describe('字体档：跟随 Obsidian', () => {
 
   it('中文界面显示中文，英文界面显示英文', () => {
     setLocale('zh');
-    expect(fontLabel('obsidian')).toBe('跟随 Obsidian');
+    expect(fontLabel('obsidian')).toBe('原生');
+    expect(fontLabel('book')).toBe('原书');
     setLocale('en');
-    expect(fontLabel('obsidian')).toBe('Follow Obsidian');
+    expect(fontLabel('obsidian')).toBe('Native');
+    expect(fontLabel('book')).toBe('Book');
   });
 
   it('八种语言各有自己的文案，拉丁语系不出现汉字', () => {
@@ -97,7 +99,7 @@ describe('字体档：跟随 Obsidian', () => {
     expect(serif).toContain('font-family: "Songti SC"');
   });
 
-  it('设置页和排版浮窗都列出这一档，且都在「跟随书籍」前面', () => {
+  it('设置页和排版浮窗的字体档文案完全一致，且这一档排在「原书」前面', () => {
     const settingsHtml = viewSettings({
       prefs: { ...DEFAULT_PREFS, fontFamily: 'obsidian' },
       settings: DEFAULT_SETTINGS,
@@ -107,12 +109,17 @@ describe('字体档：跟随 Obsidian', () => {
       version: '0.0.0',
     });
     const popupHtml = typographyFormHtml();
-    for (const html of [settingsHtml, popupHtml]) {
-      const i = html.indexOf('data-v="obsidian"');
-      const j = html.indexOf('data-v="book"');
-      expect(i).toBeGreaterThan(-1);
-      expect(i).toBeLessThan(j);
-      expect(html).toContain('跟随 Obsidian');
-    }
+    /* 从按钮上取真实渲染出来的四个名字，而不是各查一个子串——
+       这样浮窗漏改一档、设置页多改一档，都会当场红。 */
+    const labels = (html: string) =>
+      (['obsidian', 'book', 'serif', 'sans'] as const).map((v) => {
+        const at = html.indexOf(`data-v="${v}"`);
+        if (at < 0) return '';
+        const gt = html.indexOf('>', at);
+        const lt = html.indexOf('<', gt + 1);
+        return html.slice(gt + 1, lt);
+      });
+    expect(labels(settingsHtml)).toEqual(['原生', '原书', '宋体', '黑体']);
+    expect(labels(popupHtml)).toEqual(labels(settingsHtml));
   });
 });
