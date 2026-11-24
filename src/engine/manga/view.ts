@@ -189,7 +189,6 @@ export class MangaView {
   private dragStart: { x: number; y: number; px: number; py: number } | null = null;
   private thumbUrls = new Set<string>();
   private destroyed = false;
-  private awakeLock: WakeLockSentinel | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private gammaSvg: SVGSVGElement | null = null;
   /** 当前屏按 fit 算出的基准缩放（zoom=1 即此值） */
@@ -1135,18 +1134,6 @@ export class MangaView {
       });
       this.resizeObserver.observe(this.stage);
     }
-    void this.setAwake(this.prefs.keepAwake);
-  }
-
-  private async setAwake(on: boolean): Promise<void> {
-    try {
-      if (on && !this.awakeLock && 'wakeLock' in navigator) {
-        this.awakeLock = await navigator.wakeLock.request('screen');
-      } else if (!on && this.awakeLock) {
-        await this.awakeLock.release();
-        this.awakeLock = null;
-      }
-    } catch { /* 不支持就算了，不该因为常亮失败挡住看书 */ }
   }
 
   /* ─────────────── 生命周期 ─────────────── */
@@ -1155,7 +1142,6 @@ export class MangaView {
     this.destroyed = true;
     this.closeLayoutPanel();
     this.resizeObserver?.disconnect();
-    try { await this.awakeLock?.release(); } catch { /* ignore */ }
     for (const url of this.urls.values()) URL.revokeObjectURL(url);
     for (const url of this.thumbUrls) URL.revokeObjectURL(url);
     this.urls.clear();

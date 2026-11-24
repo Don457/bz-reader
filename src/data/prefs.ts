@@ -227,6 +227,12 @@ export interface ReaderPrefs {
   pdfBacklinks: boolean;
   /** 导出本页为图片时的倍率（1×/2×/3×）。默认 2× —— 1× 放大了糊 */
   pdfExportScale: number;
+  /**
+   * 阅读时屏幕常亮（2026-11-24 通用化）。从 manga 偏好抽到顶层，所有书共用。
+   * 老数据里若只有 manga.keepAwake=true，归一化时搬到顶层——升级不能把用户
+   * 开过的功能悄悄关掉。设备偏好，落在 prefs 与书无关。
+   */
+  keepAwake: boolean;
   /** 漫画阅读偏好（整份归一化，见 engine/manga/settings.ts） */
   manga: MangaPrefs;
 }
@@ -270,6 +276,7 @@ export const DEFAULT_PREFS: ReaderPrefs = {
   pdfAnnots: true,
   pdfBacklinks: false,
   pdfExportScale: 2,
+  keepAwake: false,
   manga: DEFAULT_MANGA_PREFS,
 };
 
@@ -527,6 +534,12 @@ export function normalizePrefs(raw: unknown): ReaderPrefs {
        反链只认显式 true：新默认是关，老数据里开着的照旧开（不覆盖）。 */
     pdfAnnots: p.pdfAnnots !== false,
     pdfBacklinks: p.pdfBacklinks === true,
+    /* 常亮：顶层显式值优先；老数据没有顶层值时从 manga 搬过来（白名单 true）。
+       manga.keepAwake 是历史落点，只在这里读一次，不再进 manga 偏好。 */
+    keepAwake:
+      typeof p.keepAwake === 'boolean'
+        ? p.keepAwake
+        : (p.manga as { keepAwake?: unknown } | undefined)?.keepAwake === true,
     pdfExportScale: exportScaleOf(p.pdfExportScale),
     /* 整份走自己的归一化：老数据没有这一项时拿到全套默认值，
        手改坏的漫画配置不会把渲染层带成 NaN */

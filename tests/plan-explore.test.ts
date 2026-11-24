@@ -60,10 +60,10 @@ describe('对照表 · 路线图段的位置与内容', () => {
     expect(names.has('路线图')).toBe(false);
   });
 
-  it('路线行不计入已实现项：基础版 22、高级版 54、共 58 行', () => {
-    expect(PLAN_TABLE.filter((r) => r.pro === 'yes')).toHaveLength(54);
-    expect(PLAN_TABLE.filter((r) => r.free === 'yes')).toHaveLength(22);
-    expect(PLAN_TABLE).toHaveLength(58);
+  it('路线行不计入已实现项：基础版 23、高级版 55、共 59 行', () => {
+    expect(PLAN_TABLE.filter((r) => r.pro === 'yes')).toHaveLength(55);
+    expect(PLAN_TABLE.filter((r) => r.free === 'yes')).toHaveLength(23);
+    expect(PLAN_TABLE).toHaveLength(59);
   });
 
   it('知识库之后是听书段，再往后才是路线图', () => {

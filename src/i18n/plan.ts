@@ -26,6 +26,7 @@ import { locale, type Locale } from './index';
 export type PlanKey =
   /* ── 阅读（免费） ── */
   | 'reading'
+  | 'keepAwake'
   | 'marks'
   | 'card'
   | 'inbookSearch'
@@ -135,6 +136,17 @@ const PLAN_TEXT: Record<PlanKey, Record<Locale, string>> = {
     fr: 'EPUB / TXT prêts à lire',
     es: 'EPUB / TXT listos para leer',
     pt: 'EPUB / TXT prontos para ler',
+  },
+  /* 2026-11-24 屏幕常亮从漫画抽成通用偏好，基础版也开。 */
+  keepAwake: {
+    zh: '阅读时屏幕常亮',
+    'zh-TW': '閱讀時螢幕常亮',
+    en: 'Keep the screen awake while reading',
+    ja: 'Keep the screen awake while reading',
+    de: 'Keep the screen awake while reading',
+    fr: 'Keep the screen awake while reading',
+    es: 'Keep the screen awake while reading',
+    pt: 'Keep the screen awake while reading',
   },
   columns: {
     zh: '单栏 / 双栏排版',

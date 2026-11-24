@@ -33,8 +33,6 @@ export interface MangaPrefs {
   background: string;
   /** 点按分区左右翻转（有人习惯点左边往后） */
   tapReverse: boolean;
-  /** 阅读时屏幕常亮 */
-  keepAwake: boolean;
   /** 缩略图带 */
   thumbs: boolean;
 }
@@ -55,7 +53,6 @@ export const DEFAULT_MANGA_PREFS: MangaPrefs = {
   gamma: 1,
   background: '',
   tapReverse: false,
-  keepAwake: false,
   thumbs: false,
 };
 
@@ -102,7 +99,6 @@ export function normalizeMangaPrefs(raw: unknown): MangaPrefs {
     gamma: finite(p.gamma, 1, 0.3, 3),
     background: typeof p.background === 'string' ? p.background.slice(0, 40) : '',
     tapReverse: p.tapReverse === true,
-    keepAwake: p.keepAwake === true,
     thumbs: p.thumbs === true,
   };
 }

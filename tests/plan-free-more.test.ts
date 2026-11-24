@@ -75,8 +75,8 @@ describe('对照表 · 追问单独成行', () => {
 });
 
 describe('对照表 · 合计与行数', () => {
-  it('基础版 22 项、高级版 54 项，全表 58 行', () => {
-    expect(planTotals()).toEqual({ free: 22, pro: 54 });
-    expect(PLAN_TABLE.length).toBe(58);
+  it('基础版 23 项、高级版 55 项，全表 58 行', () => {
+    expect(planTotals()).toEqual({ free: 23, pro: 55 });
+    expect(PLAN_TABLE.length).toBe(59);
   });
 });

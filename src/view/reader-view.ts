@@ -28,6 +28,7 @@ import {
   toggleBookmark,
 } from '../data/notes';
 import { ActivityTracker, attachChapter } from '../engine/activity';
+import { createWakeLock, type WakeLockController } from '../core/wake-lock';
 import { shouldMarkComplete } from '../engine/progress-fraction';
 import { ClipOwnerRegistry } from './clip-owner';
 import { applyEngineMeta } from '../data/book-meta';
@@ -648,6 +649,10 @@ export class ReaderView extends ItemView {
   private offNotes: (() => void) | null = null;
   private lastTapAt = 0;
 
+  /* 阅读时屏幕常亮（2026-11-24 通用化）：所有书共用一个控制器，开书时按
+     prefs.keepAwake 申请，关书释放；切后台由浏览器自动放、回前台重申请。 */
+  private readonly wakeLock: WakeLockController;
+
   /* 扫描页识别：编排在壳层（shell/pdf-ocr），引擎只负责出图与铺层 */
   private readonly ocr: PdfOcrRunner;
   /** 「这本是扫描件」只提醒一次，别每次开书都弹 */
@@ -667,6 +672,7 @@ export class ReaderView extends ItemView {
     super(leaf);
     this.api = api;
     this.host = new EngineHost(api.app);
+    this.wakeLock = createWakeLock(navigator);
     this.ocr = new PdfOcrRunner({
       app: api.app,
       book: () => this.book,
@@ -1254,10 +1260,18 @@ export class ReaderView extends ItemView {
   async onOpen(): Promise<void> {
     this.buildShell();
     this.syncStatusPage();
+    /* 常亮：切后台浏览器会自动释放，回前台重申请（见 core/wake-lock）。
+       用 registerDomEvent，宿主卸载视图时自动摘监听，不用手写 teardown。 */
+    this.registerDomEvent(document, 'visibilitychange', () => {
+      this.wakeLock.onVisibilityChange(document.visibilityState === 'visible');
+    });
+    if (this.prefs.keepAwake) void this.wakeLock.enable();
     await this.maybeMount();
   }
 
   async onClose(): Promise<void> {
+    /* 关书放掉屏幕锁：不然 Obsidian 关了 tab 屏幕还亮着 */
+    void this.wakeLock.disable();
     /* 图片查看器盖在本视图上，关 tab 必须一起收，别留个孤儿浮层 */
     closeImageViewer();
     /* 关掉 tab 还在跑的识别要停：它每页都要发一次请求，人已经走了 */
@@ -6774,6 +6788,8 @@ export class ReaderView extends ItemView {
   updatePrefs(next: ReaderPrefs): void {
     const prev = this.prefs;
     this.prefs = normalizePrefs(next);
+    /* 设置页改常亮开关：立即生效，不用关书重开 */
+    void (this.prefs.keepAwake ? this.wakeLock.enable() : this.wakeLock.disable());
     this.host.applyPrefs(this.prefs);
     /* 副卷是另一份引擎、另一份样式：只给主卷 push 的话，调字号/行距/主题
        时并排的右半边一直不动，看起来像「设置只对左半边生效」。 */

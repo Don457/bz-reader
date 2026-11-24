@@ -375,7 +375,8 @@ export function viewSettings(v: SettingsView): string {
            只有桌面有这一项——手机那儿点按就是唯一的翻页手势，没有开关可关。 */
         mobile ? '' : prefToggle('desktopTapTurn', p.desktopTapTurn === true, t('settings.desktopTapTurn'))
       }
-      ${prefToggle('imageZoom', p.imageZoom === true, t('settings.imageZoom'))}`,
+      ${prefToggle('imageZoom', p.imageZoom === true, t('settings.imageZoom'))}
+      ${prefToggle('keepAwake', p.keepAwake === true, t('settings.keepAwake'))}`,
       ),
   );
 
@@ -727,7 +728,6 @@ export function viewSettings(v: SettingsView): string {
       ${mangaSwitch('crop', mp.crop, 'settings.manga.crop')}
       ${mangaSwitch('thumbs', mp.thumbs, 'settings.manga.thumbs')}
       ${mangaSwitch('tapReverse', mp.tapReverse, 'settings.manga.tapReverse')}
-      ${mangaSwitch('keepAwake', mp.keepAwake, 'settings.manga.keepAwake')}
       <div class="bzs-mini" style="margin-top:2px">${t('settings.manga.hint')}</div>
     </div>`;
 

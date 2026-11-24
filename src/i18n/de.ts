@@ -1746,7 +1746,6 @@ export const DE: Record<MsgKey, string> = {
   'settings.manga.fit.smart': '[TODO] settings.manga.fit.smart',
   'settings.manga.thumbs': '[TODO] settings.manga.thumbs',
   'settings.manga.tapReverse': '[TODO] settings.manga.tapReverse',
-  'settings.manga.keepAwake': '[TODO] settings.manga.keepAwake',
   'settings.manga.hint': '[TODO] settings.manga.hint',
   'manga.fitName': '[TODO] manga.fitName {fit}',
   'manga.zoomIn': '[TODO] manga.zoomIn',
@@ -1804,4 +1803,5 @@ export const DE: Record<MsgKey, string> = {
   'settings.plugin.bz.download': '[TODO] settings.plugin.bz.download',
   'settings.plugin.review.market': '[TODO] settings.plugin.review.market',
   'settings.plugin.review.github': '[TODO] settings.plugin.review.github',
+  'settings.keepAwake': '[TODO] settings.keepAwake',
 };

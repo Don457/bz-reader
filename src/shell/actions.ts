@@ -2704,6 +2704,8 @@ export function dispatchAction(
       if (d.k === 'desktopTapTurn') src.setPrefs({ desktopTapTurn: !el.classList.contains('on') });
       /* 点书里的图片放大查看（2026-11-17）：默认关，要用的人自己开 */
       if (d.k === 'imageZoom') src.setPrefs({ imageZoom: !el.classList.contains('on') });
+      /* 阅读时屏幕常亮（2026-11-24）：所有书共用，默认关 */
+      if (d.k === 'keepAwake') src.setPrefs({ keepAwake: !el.classList.contains('on') });
       /* 预生成时顺手写离线包（2026-11-14）：默认开，关掉就只填本机缓存 */
       if (d.k === 'ttsOfflineSave') src.setPrefs({ ttsOfflineSave: !el.classList.contains('on') });
       repaint();
@@ -4444,7 +4446,6 @@ function withMangaBool(cur: ReaderPrefs['manga'], field: string, on: boolean): R
     case 'crop': return { ...cur, crop: on };
     case 'thumbs': return { ...cur, thumbs: on };
     case 'tapReverse': return { ...cur, tapReverse: on };
-    case 'keepAwake': return { ...cur, keepAwake: on };
     default: return null;
   }
 }

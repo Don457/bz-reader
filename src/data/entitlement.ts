@@ -1102,6 +1102,9 @@ export const PLAN_TABLE: PlanRow[] = [
    * 2026-11-21 重排：单栏 / 双栏挪去「排版」段——它和竖排、并排是同一类事，
    * 留在阅读段里会让人以为「阅读基础能力」，其实只是排版的一种。 */
   row('reading', 'yes', 'yes'),
+  /* 2026-11-24 阅读时屏幕常亮：从漫画偏好抽成通用偏好，所有书共用。基础版
+     也开——它只是拦住息屏，不产生任何成本，锁在门外纯粹是把功能藏起来。 */
+  row('keepAwake', 'yes', 'yes'),
   /* 2026-11-09 书摘图片下放基础版（1.0.0 定稿），紧跟划线：它属于「读的
      时候就想要」的东西，排在付费段里会让人以为要买。 */
   row('marks', 'yes', 'yes'),
@@ -1296,7 +1299,7 @@ export interface PlanGroup {
 export const PLAN_GROUPS: PlanGroup[] = [
   {
     key: 'read',
-    rows: ['reading', 'marks', 'card', 'inbookSearch', 'back', 'footnote', 'classify'],
+    rows: ['reading', 'keepAwake', 'marks', 'card', 'inbookSearch', 'back', 'footnote', 'classify'],
   },
   {
     key: 'layout',
